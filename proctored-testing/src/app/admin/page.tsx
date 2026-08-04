@@ -6,6 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
+import Image from 'next/image';
 
 import { Settings, Users, Zap, Award } from 'lucide-react';
 
@@ -31,7 +32,9 @@ function AdminHomeContent() {
       {/* Navbar */}
       <nav className="navbar" style={{ marginBottom: 'var(--space-2xl)', borderRadius: 'var(--radius-lg)' }}>
         <div className="brand">
-          <span style={{ fontSize: '1.5rem' }}></span>
+          <div style={{ width: 32, height: 32, borderRadius: '4px', overflow: 'hidden' }}>
+            <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={32} height={32} style={{ objectFit: 'cover' }} />
+          </div>
           <div>
             <div className="brand-name">AeroSoc Admin</div>
             <div className="brand-sub">BIT Mesra · Examination Control</div>

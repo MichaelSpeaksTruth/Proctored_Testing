@@ -6,7 +6,7 @@ import { auth, db } from '@/lib/firebase';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { isAdmin } from '@/lib/adminUtils';
-import { Rocket } from 'lucide-react';
+import Image from 'next/image';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -97,9 +97,10 @@ export default function LoginPage() {
             margin: '0 auto var(--space-lg)',
             background: 'var(--bg-card)',
             fontSize: '2rem',
+            overflow: 'hidden',
           }}
         >
-          <Rocket size={32} color="var(--white)" />
+          <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={72} height={72} style={{ objectFit: 'cover' }} />
         </div>
         <div
           style={{

@@ -6,7 +6,8 @@ import { auth, rtdb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue } from 'firebase/database';
 import StudentGuard from '@/components/StudentGuard';
-import { Hourglass, Clock, CheckCircle, XCircle, Check } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Check } from 'lucide-react';
+import Image from 'next/image';
 
 function WaitingRoomContent() {
   const router = useRouter();
@@ -48,8 +49,8 @@ function WaitingRoomContent() {
     >
       <div className="card" style={{ maxWidth: 520, width: '100%', textAlign: 'center' }}>
         {/* Brand mark */}
-        <div style={{ marginBottom: 'var(--space-md)' }}>
-          <Hourglass size={48} color="var(--text-muted)" />
+        <div style={{ marginBottom: 'var(--space-md)', width: 72, height: 72, margin: '0 auto var(--space-md)', borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--border-light)' }}>
+          <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={72} height={72} style={{ objectFit: 'cover' }} />
         </div>
         <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-sm)' }}>Waiting Room</h1>
         <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--space-xl)' }}>
