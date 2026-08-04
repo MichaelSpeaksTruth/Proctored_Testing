@@ -81,11 +81,16 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, calibrat
         const cocoSsd = await import('@tensorflow-models/coco-ssd');
         const model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
         
+        let isDetecting = false;
+        
         cocoIntervalId = setInterval(async () => {
-          if (!mounted || !videoRef.current || videoRef.current.readyState !== 4) return;
+          if (!mounted || !videoRef.current || videoRef.current.readyState !== 4 || isDetecting) return;
           try {
+            isDetecting = true;
             const predictions = await model.detect(videoRef.current);
-            const phoneDetected = predictions.some(p => p.class === 'cell phone' && p.score > 0.6);
+            const phoneDetected = predictions.some(p => 
+              (p.class === 'cell phone' || p.class === 'remote' || p.class === 'laptop') && p.score > 0.55
+            );
             if (phoneDetected) {
               startInfraction('PHONE_DETECTED', 'critical');
             } else {
@@ -93,8 +98,10 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, calibrat
             }
           } catch (e) {
             // Ignore inference errors
+          } finally {
+            isDetecting = false;
           }
-        }, 1500); // Check slightly faster to catch quick glances
+        }, 3000); // Check every 3 seconds to vastly reduce CPU/GPU load
       } catch (err) {
         console.warn('COCO-SSD failed to load:', err);
       }
@@ -132,14 +139,19 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, calibrat
 
         faceMeshInstance = faceMesh;
 
+        let isProcessingFace = false;
+
         if (videoRef.current) {
           camera = new Camera(videoRef.current, {
             onFrame: async () => {
-              if (videoRef.current && mounted) {
+              if (videoRef.current && mounted && !isProcessingFace) {
                 try {
+                  isProcessingFace = true;
                   await faceMesh.send({ image: videoRef.current });
                 } catch (e) {
                   // Catch frame errors
+                } finally {
+                  isProcessingFace = false;
                 }
               }
             },
