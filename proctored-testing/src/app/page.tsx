@@ -6,6 +6,7 @@ import { auth, db } from '@/lib/firebase';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { isAdmin } from '@/lib/adminUtils';
+import { Rocket } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -98,7 +99,7 @@ export default function LoginPage() {
             fontSize: '2rem',
           }}
         >
-          
+          <Rocket size={32} color="var(--white)" />
         </div>
         <div
           style={{

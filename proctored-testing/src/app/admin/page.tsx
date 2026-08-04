@@ -7,11 +7,13 @@ import { useRouter } from 'next/navigation';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 
+import { Settings, Users, Zap, Award } from 'lucide-react';
+
 const ADMIN_TABS = [
-  { label: 'Test Setup', href: '/admin/setup', icon: '', desc: 'Create sections, questions, and timers' },
-  { label: 'Participants', href: '/admin/participants', icon: '', desc: 'Upload and manage examinee emails' },
-  { label: 'Control Panel', href: '/admin/control', icon: '', desc: 'Start, monitor, and end the live test' },
-  { label: 'Results & Grading', href: '/admin/results', icon: '', desc: 'Upload answer key, declare results, and review AI proctoring reports' },
+  { label: 'Test Setup', href: '/admin/setup', icon: <Settings size={24} color="var(--text-muted)" />, desc: 'Create sections, questions, and timers' },
+  { label: 'Participants', href: '/admin/participants', icon: <Users size={24} color="var(--text-muted)" />, desc: 'Upload and manage examinee emails' },
+  { label: 'Control Panel', href: '/admin/control', icon: <Zap size={24} color="var(--accent-red)" />, desc: 'Start, monitor, and end the live test' },
+  { label: 'Results & Grading', href: '/admin/results', icon: <Award size={24} color="var(--accent-amber)" />, desc: 'Upload answer key, declare results, and review AI proctoring reports' },
 ];
 
 function AdminHomeContent() {
