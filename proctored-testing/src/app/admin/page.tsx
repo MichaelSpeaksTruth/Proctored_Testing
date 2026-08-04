@@ -1,0 +1,107 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
+import AdminGuard from '@/components/AdminGuard';
+import Link from 'next/link';
+
+const ADMIN_TABS = [
+  { label: 'Test Setup', href: '/admin/setup', icon: '📝', desc: 'Create sections, questions, and timers' },
+  { label: 'Participants', href: '/admin/participants', icon: '👥', desc: 'Upload and manage examinee emails' },
+  { label: 'Control Panel', href: '/admin/control', icon: '⚡', desc: 'Start, monitor, and end the live test' },
+  { label: 'Results & Grading', href: '/admin/results', icon: '🏆', desc: 'Upload answer key, declare results, and review AI proctoring reports' },
+];
+
+function AdminHomeContent() {
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setEmail(u?.email || null);
+    });
+    return () => unsub();
+  }, []);
+
+  return (
+    <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
+      {/* Navbar */}
+      <nav className="navbar" style={{ marginBottom: 'var(--space-2xl)', borderRadius: 'var(--radius-lg)' }}>
+        <div className="brand">
+          <span style={{ fontSize: '1.5rem' }}>✈</span>
+          <div>
+            <div className="brand-name">AeroSoc Admin</div>
+            <div className="brand-sub">BIT Mesra · Examination Control</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-md">
+          <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+            {email}
+          </span>
+          <button
+            id="admin-signout"
+            className="btn btn-outline btn-sm"
+            onClick={() => auth.signOut()}
+          >
+            Sign Out
+          </button>
+        </div>
+      </nav>
+
+      <div className="container">
+        <div style={{ marginBottom: 'var(--space-2xl)' }}>
+          <h1 style={{ marginBottom: 'var(--space-sm)' }}>Admin Dashboard</h1>
+          <p>Manage the examination lifecycle from setup to results declaration.</p>
+        </div>
+
+        <div className="grid-2" style={{ gap: 'var(--space-lg)' }}>
+          {ADMIN_TABS.map((tab) => (
+            <Link key={tab.href} href={tab.href} style={{ textDecoration: 'none' }}>
+              <div
+                className="card"
+                id={`admin-nav-${tab.label.toLowerCase().replace(/\s+/g, '-')}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-lg)',
+                  cursor: 'pointer',
+                  transition: 'border-color 200ms ease',
+                }}
+              >
+                <div
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.5rem',
+                    flexShrink: 0,
+                  }}
+                >
+                  {tab.icon}
+                </div>
+                <div>
+                  <h3 style={{ marginBottom: 4 }}>{tab.label}</h3>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>{tab.desc}</p>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </main>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <AdminGuard>
+      <AdminHomeContent />
+    </AdminGuard>
+  );
+}

@@ -1,0 +1,14 @@
+{
+  "rules": {
+    "testState": {
+      ".read": "auth != null",
+      ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'"
+    },
+    "proctoringFlags": {
+      "$uid": {
+        ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
+        ".write": "$uid == auth.uid"
+      }
+    }
+  }
+}
