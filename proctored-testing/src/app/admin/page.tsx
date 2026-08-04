@@ -8,9 +8,10 @@ import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 import Image from 'next/image';
 
-import { Settings, Users, Zap, Award } from 'lucide-react';
+import { Settings, Users, Zap, Award, Activity } from 'lucide-react';
 
 const ADMIN_TABS = [
+  { label: 'System Calibration', href: '/admin/calibration', icon: <Activity size={24} color="var(--accent-green)" />, desc: 'Test AI proctoring models and sensors' },
   { label: 'Test Setup', href: '/admin/setup', icon: <Settings size={24} color="var(--text-muted)" />, desc: 'Create sections, questions, and timers' },
   { label: 'Participants', href: '/admin/participants', icon: <Users size={24} color="var(--text-muted)" />, desc: 'Upload and manage examinee emails' },
   { label: 'Control Panel', href: '/admin/control', icon: <Zap size={24} color="var(--accent-red)" />, desc: 'Start, monitor, and end the live test' },
