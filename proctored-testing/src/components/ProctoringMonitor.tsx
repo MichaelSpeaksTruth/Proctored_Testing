@@ -1,56 +1,54 @@
 'use client';
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { ref, push } from 'firebase/database';
 import { rtdb } from '@/lib/firebase';
-import { ProctoringEvent, Severity } from '@/lib/proctoring';
+import { ProctoringEvent, Severity, DurationFlag } from '@/lib/proctoring';
 
 interface Props {
   uid: string;
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  onViolation?: (event: ProctoringEvent) => void;
-  onLockTest?: () => void;
+  onViolation?: (flag: DurationFlag) => void;
   calibrationMode?: boolean;
 }
 
-export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTest, calibrationMode = false }: Props) {
-  const pendingFlags = useRef<Map<ProctoringEvent, { severity: Severity; ts: string }>>(new Map());
-  const flushRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  
-  // States for fullscreen warning
-  const [showFullscreenWarning, setShowFullscreenWarning] = useState(false);
-  const fullscreenExits = useRef(0);
-  
-  // Ref for camera covered logic
-  const darkSinceRef = useRef<number | null>(null);
+export default function ProctoringMonitor({ uid, videoRef, onViolation, calibrationMode = false }: Props) {
+  // Track ongoing infractions to log their duration. event -> { startTime, severity }
+  const activeInfractions = useRef<Map<ProctoringEvent, { startTime: number; severity: Severity }>>(new Map());
 
-  const queueFlag = useCallback(
-    (event: ProctoringEvent, severity: Severity) => {
-      pendingFlags.current.set(event, { severity, ts: new Date().toISOString() });
-      onViolation?.(event);
-    },
-    [onViolation]
-  );
+  const startInfraction = useCallback((event: ProctoringEvent, severity: Severity) => {
+    if (!activeInfractions.current.has(event)) {
+      activeInfractions.current.set(event, { startTime: Date.now(), severity });
+    }
+  }, []);
 
-  useEffect(() => {
-    // Flush buffered flags to RTDB every 5 seconds
-    flushRef.current = setInterval(() => {
-      if (pendingFlags.current.size === 0) return;
+  const endInfraction = useCallback((event: ProctoringEvent) => {
+    const record = activeInfractions.current.get(event);
+    if (record) {
+      const endTimeMs = Date.now();
+      const durationInSeconds = Math.round((endTimeMs - record.startTime) / 1000);
       
-      if (!calibrationMode) {
-        const flagsRef = ref(rtdb, `proctoringFlags/${uid}`);
-        pendingFlags.current.forEach(({ severity, ts }, event) => {
-          push(flagsRef, { event, severity, timestamp: ts });
-        });
+      activeInfractions.current.delete(event);
+      
+      // Only log if it lasted at least 1 second (filters out blips)
+      if (durationInSeconds >= 1) {
+        const flag: DurationFlag = {
+          event,
+          severity: record.severity,
+          startTime: new Date(record.startTime).toISOString(),
+          endTime: new Date(endTimeMs).toISOString(),
+          durationInSeconds
+        };
+        
+        onViolation?.(flag);
+        
+        if (!calibrationMode) {
+          const flagsRef = ref(rtdb, `proctoringFlags/${uid}`);
+          push(flagsRef, flag);
+        }
       }
-      
-      pendingFlags.current.clear();
-    }, 5000);
-
-    return () => {
-      if (flushRef.current) clearInterval(flushRef.current);
-    };
-  }, [uid]);
+    }
+  }, [uid, onViolation, calibrationMode]);
 
   useEffect(() => {
     let camera: { start: () => void; stop: () => void } | null = null;
@@ -63,25 +61,13 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTe
 
     // ── 1. Fullscreen & Visibility ────────────────────────────────────
     const handleVisibility = () => {
-      if (document.hidden) queueFlag('TAB_SWITCHED', 'high');
+      if (document.hidden) startInfraction('TAB_SWITCHED', 'critical');
+      else endInfraction('TAB_SWITCHED');
     };
     
     const handleFullscreen = () => {
-      if (!document.fullscreenElement) {
-        queueFlag('EXITED_FULLSCREEN', 'high');
-        fullscreenExits.current += 1;
-        
-        if (!calibrationMode) {
-          if (fullscreenExits.current >= 2) {
-             queueFlag('REPEATED_FULLSCREEN_EXIT', 'critical');
-             if (onLockTest) onLockTest();
-          } else {
-             setShowFullscreenWarning(true);
-          }
-        }
-      } else {
-        setShowFullscreenWarning(false);
-      }
+      if (!document.fullscreenElement) startInfraction('LEFT_FULLSCREEN', 'high');
+      else endInfraction('LEFT_FULLSCREEN');
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
@@ -101,12 +87,14 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTe
             const predictions = await model.detect(videoRef.current);
             const phoneDetected = predictions.some(p => p.class === 'cell phone' && p.score > 0.6);
             if (phoneDetected) {
-              queueFlag('PHONE_DETECTED', 'critical');
+              startInfraction('PHONE_DETECTED', 'critical');
+            } else {
+              endInfraction('PHONE_DETECTED');
             }
           } catch (e) {
-            // Ignore inference errors on corrupted frames
+            // Ignore inference errors
           }
-        }, 2000);
+        }, 1500); // Check slightly faster to catch quick glances
       } catch (err) {
         console.warn('COCO-SSD failed to load:', err);
       }
@@ -135,10 +123,10 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTe
         faceMesh.onResults((results: { multiFaceLandmarks: unknown[][] }) => {
           if (!mounted) return;
           const count = results.multiFaceLandmarks.length;
-          if (count === 0) {
-            queueFlag('NO_FACE_DETECTED', 'high');
-          } else if (count > 1) {
-            queueFlag('MULTIPLE_FACES', 'critical');
+          if (count !== 1) {
+            startInfraction('INVALID_FACE_COUNT', count === 0 ? 'medium' : 'critical');
+          } else {
+            endInfraction('INVALID_FACE_COUNT');
           }
         });
 
@@ -148,7 +136,11 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTe
           camera = new Camera(videoRef.current, {
             onFrame: async () => {
               if (videoRef.current && mounted) {
-                await faceMesh.send({ image: videoRef.current });
+                try {
+                  await faceMesh.send({ image: videoRef.current });
+                } catch (e) {
+                  // Catch frame errors
+                }
               }
             },
             width: 320,
@@ -157,7 +149,7 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTe
           camera.start();
         }
       } catch (err) {
-        console.warn('MediaPipe failed to load, skipping face detection:', err);
+        console.warn('MediaPipe failed to load:', err);
       }
     };
     initFaceMesh();
@@ -181,6 +173,8 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTe
         const bufLen = analyser.frequencyBinCount;
         const dataArr = new Float32Array(bufLen);
 
+        let framesSinceLoud = 0;
+
         const checkAudioAndLuminance = () => {
           if (!mounted) return;
           
@@ -189,7 +183,15 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTe
           let sumSq = 0;
           for (let i = 0; i < bufLen; i++) sumSq += dataArr[i] * dataArr[i];
           const rms = Math.sqrt(sumSq / bufLen);
-          if (rms > 0.15) queueFlag('LOUD_AUDIO', 'medium');
+          
+          if (rms > 0.15) {
+            startInfraction('LOUD_AUDIO', 'medium');
+            framesSinceLoud = 0;
+          } else {
+            framesSinceLoud++;
+            // Delay ending the audio infraction slightly to bundle words together
+            if (framesSinceLoud > 60) endInfraction('LOUD_AUDIO'); 
+          }
           
           // Camera Covered Check (Luminance)
           if (ctx && videoRef.current && videoRef.current.readyState === 4) {
@@ -202,13 +204,9 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTe
              const avgBrightness = totalBrightness / (64 * 64);
              
              if (avgBrightness < 15) {
-                if (!darkSinceRef.current) {
-                  darkSinceRef.current = Date.now();
-                } else if (Date.now() - darkSinceRef.current > 3000) {
-                  queueFlag('CAMERA_COVERED', 'critical');
-                }
+                startInfraction('CAMERA_COVERED', 'critical');
              } else {
-                darkSinceRef.current = null;
+                endInfraction('CAMERA_COVERED');
              }
           }
 
@@ -225,6 +223,19 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTe
       mounted = false;
       document.removeEventListener('visibilitychange', handleVisibility);
       document.removeEventListener('fullscreenchange', handleFullscreen);
+      
+      // Cleanup infractions that were active when unmounted
+      const endMs = Date.now();
+      activeInfractions.current.forEach((val, event) => {
+         const dur = Math.round((endMs - val.startTime) / 1000);
+         if (dur >= 1 && !calibrationMode) {
+           push(ref(rtdb, `proctoringFlags/${uid}`), {
+             event, severity: val.severity, startTime: new Date(val.startTime).toISOString(), endTime: new Date(endMs).toISOString(), durationInSeconds: dur
+           });
+         }
+      });
+      activeInfractions.current.clear();
+
       if (rafId !== null) cancelAnimationFrame(rafId);
       if (cocoIntervalId !== null) clearInterval(cocoIntervalId);
       if (camera) camera.stop();
@@ -232,33 +243,7 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTe
       if (audioContext) audioContext.close();
       if (audioStream) audioStream.getTracks().forEach((t) => t.stop());
     };
-  }, [uid, videoRef, queueFlag, onLockTest]);
-
-  if (showFullscreenWarning) {
-     return (
-       <div style={{
-         position: 'fixed', inset: 0, zIndex: 99998,
-         background: 'var(--bg-primary)',
-         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-         padding: 'var(--space-xl)', textAlign: 'center'
-       }}>
-          <h2 style={{ color: 'var(--accent-red-light)', fontSize: '2rem', marginBottom: 'var(--space-md)' }}>
-            Fullscreen Exited
-          </h2>
-          <p style={{ fontSize: '1.125rem', color: 'var(--text-primary)', marginBottom: 'var(--space-xl)', maxWidth: 500 }}>
-            You have left fullscreen mode. Please return to fullscreen immediately. 
-            <br/><br/>
-            <strong>1 warning remaining.</strong> If you exit again, your exam will be terminated.
-          </p>
-          <button 
-             className="btn btn-danger btn-lg" 
-             onClick={() => document.documentElement.requestFullscreen().catch(console.error)}
-          >
-             Return to Fullscreen
-          </button>
-       </div>
-     );
-  }
+  }, [uid, videoRef, startInfraction, endInfraction, calibrationMode]);
 
   return null;
 }

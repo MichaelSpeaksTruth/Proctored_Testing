@@ -2,28 +2,24 @@ import { ref, push } from 'firebase/database';
 import { rtdb } from './firebase';
 
 export type ProctoringEvent =
-  | 'NO_FACE_DETECTED'
-  | 'MULTIPLE_FACES'
+  | 'INVALID_FACE_COUNT'
   | 'TAB_SWITCHED'
-  | 'EXITED_FULLSCREEN'
-  | 'REPEATED_FULLSCREEN_EXIT'
+  | 'LEFT_FULLSCREEN'
   | 'LOUD_AUDIO'
   | 'CAMERA_COVERED'
   | 'PHONE_DETECTED';
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 
-export interface ProctoringFlag {
+export interface DurationFlag {
   event: ProctoringEvent;
   severity: Severity;
-  timestamp: string;
+  startTime: string;
+  endTime: string;
+  durationInSeconds: number;
 }
 
-export function reportFlag(uid: string, event: ProctoringEvent, severity: Severity) {
+export function reportFlag(uid: string, flag: DurationFlag) {
   const flagsRef = ref(rtdb, `proctoringFlags/${uid}`);
-  push(flagsRef, {
-    event,
-    severity,
-    timestamp: new Date().toISOString(),
-  });
+  push(flagsRef, flag);
 }
