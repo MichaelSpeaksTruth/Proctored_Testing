@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import AdminGuard from '@/components/AdminGuard';
 import WebcamFeed from '@/components/WebcamFeed';
 import ProctoringMonitor from '@/components/ProctoringMonitor';
-import { ProctoringEvent } from '@/lib/proctoring';
+import { ProctoringEvent, DurationFlag } from '@/lib/proctoring';
 import Link from 'next/link';
 
 function CalibrationContent() {
@@ -15,7 +15,7 @@ function CalibrationContent() {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   
-  const [flags, setFlags] = useState<{ id: number; time: string; event: ProctoringEvent }[]>([]);
+  const [flags, setFlags] = useState<{ id: number; flag: DurationFlag }[]>([]);
   const flagsEndRef = useRef<HTMLDivElement>(null);
 
   const requestPermissions = async () => {
@@ -33,10 +33,10 @@ function CalibrationContent() {
     }
   };
 
-  const handleViolation = useCallback((event: ProctoringEvent) => {
+  const handleViolation = useCallback((flag: DurationFlag) => {
     setFlags(prev => [
       ...prev,
-      { id: Date.now() + Math.random(), time: new Date().toLocaleTimeString(), event }
+      { id: Date.now() + Math.random(), flag }
     ]);
   }, []);
 
@@ -91,7 +91,7 @@ function CalibrationContent() {
             {/* Left: Camera Feed */}
             <div className="card" style={{ padding: 'var(--space-md)' }}>
               <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3', background: '#000', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-                <WebcamFeed ref={videoRef} stream={stream} />
+                <WebcamFeed ref={videoRef} stream={stream} embedded={true} />
                 
                 {/* Mount the monitor locally! */}
                 <ProctoringMonitor
@@ -103,7 +103,7 @@ function CalibrationContent() {
               </div>
               <div style={{ marginTop: 'var(--space-md)', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
                 <strong>Active Models:</strong> FaceMesh, Web Audio API, COCO-SSD.<br/>
-                <em>Note: To test fullscreen exit, press F11 or use your browser's fullscreen toggle.</em>
+                <em>Note: To test fullscreen or tab switching, use F11 or change tabs. Since this is calibration mode, your screen won't be locked out.</em>
               </div>
             </div>
 
@@ -123,16 +123,21 @@ function CalibrationContent() {
                 }}
               >
                 {flags.length === 0 ? (
-                  <div style={{ color: 'var(--text-muted)' }}>Waiting for proctoring events... Try covering the camera, talking loudly, or showing a phone.</div>
+                  <div style={{ color: 'var(--text-muted)' }}>Waiting for proctoring events... Try covering the camera, talking loudly, or showing a phone. Note: Events are now logged only after the infraction finishes.</div>
                 ) : (
-                  flags.map(f => (
-                    <div key={f.id} style={{ marginBottom: 4, display: 'flex', gap: 'var(--space-sm)' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>[{f.time}]</span>
-                      <span style={{ color: f.event.includes('PHONE') || f.event.includes('MULTIPLE') || f.event.includes('COVERED') ? 'var(--accent-red-light)' : 'var(--accent-amber-light)' }}>
-                        {f.event}
-                      </span>
-                    </div>
-                  ))
+                  flags.map(f => {
+                    const timeStr = new Date(f.flag.endTime).toLocaleTimeString();
+                    const isCritical = f.flag.severity === 'critical';
+                    return (
+                      <div key={f.id} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--border-light)', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
+                        <span style={{ color: 'var(--text-muted)', width: 100 }}>[{timeStr}]</span>
+                        <span style={{ color: isCritical ? 'var(--accent-red-light)' : 'var(--accent-amber-light)', fontWeight: 600, width: 180 }}>
+                          {f.flag.event}
+                        </span>
+                        <span style={{ color: 'var(--text-primary)' }}>Duration: {f.flag.durationInSeconds}s</span>
+                      </div>
+                    );
+                  })
                 )}
                 <div ref={flagsEndRef} />
               </div>
