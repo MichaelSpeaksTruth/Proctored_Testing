@@ -11,6 +11,7 @@ import ProctoringMonitor from '@/components/ProctoringMonitor';
 import WebcamFeed from '@/components/WebcamFeed';
 import CountdownTimer from '@/components/CountdownTimer';
 import QuestionPanel, { Question } from '@/components/QuestionPanel';
+import { Lock, Camera, Monitor } from 'lucide-react';
 
 interface Section {
   id: string;
@@ -160,7 +161,9 @@ function TestContent() {
     handleSubmit(true);
     return (
       <div className="lock-overlay">
-        <div style={{ fontSize: '3rem' }}></div>
+        <div style={{ marginBottom: 'var(--space-md)' }}>
+          <Lock size={48} color="var(--accent-red)" />
+        </div>
         <h2>Examination Ended</h2>
         <p style={{ color: 'var(--text-muted)', textAlign: 'center', maxWidth: 400 }}>
           The test has been locked (either by the administrator or due to repeated proctoring violations). Your answers have been auto-submitted. Please wait
@@ -184,7 +187,9 @@ function TestContent() {
         }}
       >
         <div className="card" style={{ maxWidth: 480, width: '100%', textAlign: 'center' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-md)' }}></div>
+          <div style={{ marginBottom: 'var(--space-md)' }}>
+            <Camera size={40} color="var(--text-primary)" />
+          </div>
           <h2 style={{ marginBottom: 'var(--space-sm)' }}>Camera & Microphone Required</h2>
           <p style={{ marginBottom: 'var(--space-xl)' }}>
             This proctored examination requires access to your camera and microphone. Your video is
@@ -218,7 +223,9 @@ function TestContent() {
     return (
       <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)' }}>
         <div className="card" style={{ maxWidth: 480, width: '100%', textAlign: 'center' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-md)' }}>️</div>
+          <div style={{ marginBottom: 'var(--space-md)' }}>
+            <Monitor size={40} color="var(--text-primary)" />
+          </div>
           <h2 style={{ marginBottom: 'var(--space-sm)' }}>Ready to Begin</h2>
           <p style={{ marginBottom: 'var(--space-xl)', color: 'var(--text-muted)' }}>
             Your camera and microphone are configured. This test must be taken in full-screen mode.

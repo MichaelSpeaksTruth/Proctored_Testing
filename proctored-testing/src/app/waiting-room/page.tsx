@@ -6,6 +6,7 @@ import { auth, rtdb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue } from 'firebase/database';
 import StudentGuard from '@/components/StudentGuard';
+import { Hourglass, Clock, CheckCircle, XCircle, Check } from 'lucide-react';
 
 function WaitingRoomContent() {
   const router = useRouter();
@@ -47,7 +48,9 @@ function WaitingRoomContent() {
     >
       <div className="card" style={{ maxWidth: 520, width: '100%', textAlign: 'center' }}>
         {/* Brand mark */}
-        <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-md)' }}></div>
+        <div style={{ marginBottom: 'var(--space-md)' }}>
+          <Hourglass size={48} color="var(--text-muted)" />
+        </div>
         <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-sm)' }}>Waiting Room</h1>
         <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--space-xl)' }}>
           Welcome, <strong style={{ color: 'var(--text-primary)' }}>{user?.displayName || user?.email}</strong>.
@@ -79,11 +82,15 @@ function WaitingRoomContent() {
               fontSize: '1.25rem',
               fontWeight: 700,
               color: testStatus === 'active' ? '#52b788' : 'var(--text-primary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
             }}
           >
-            {testStatus === 'pending' && ' Waiting for Admin'}
-            {testStatus === 'active' && '🟢 Test Active — Redirecting...'}
-            {testStatus === 'ended' && ' Test Ended'}
+            {testStatus === 'pending' && <><Clock size={20} /> Waiting for Admin</>}
+            {testStatus === 'active' && <><CheckCircle size={20} /> Test Active — Redirecting...</>}
+            {testStatus === 'ended' && <><XCircle size={20} /> Test Ended</>}
           </div>
 
           {scheduledStart && testStatus === 'pending' && (
@@ -114,7 +121,7 @@ function WaitingRoomContent() {
               'Multiple faces in the frame will be flagged',
             ].map((rule, i) => (
               <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
-                <span style={{ color: 'var(--accent-green-light)', fontWeight: 700, flexShrink: 0 }}></span>
+                <div style={{ marginTop: 2 }}><Check size={16} color="var(--accent-green-light)" /></div>
                 {rule}
               </li>
             ))}

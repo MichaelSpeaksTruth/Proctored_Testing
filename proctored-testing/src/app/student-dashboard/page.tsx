@@ -5,6 +5,7 @@ import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import StudentGuard from '@/components/StudentGuard';
+import { Trophy } from 'lucide-react';
 
 interface Result {
   score: number;
@@ -60,7 +61,9 @@ function StudentDashboardContent() {
       <div className="container-narrow" style={{ paddingTop: 'var(--space-2xl)' }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 'var(--space-2xl)' }}>
-          <div style={{ fontSize: '2rem', marginBottom: 'var(--space-md)' }}></div>
+          <div style={{ marginBottom: 'var(--space-md)' }}>
+            <Trophy size={48} color="var(--accent-amber)" />
+          </div>
           <h1>My Results</h1>
           <p style={{ marginTop: 'var(--space-sm)' }}>
             {user?.displayName || user?.email}
