@@ -258,7 +258,7 @@ function ResultsContent() {
               onClick={declareResults}
               disabled={loading || !selectedTestId}
             >
-              {loading ? 'Calculating...' : '✓ Declare Results'}
+              {loading ? 'Calculating...' : ' Declare Results'}
             </button>
           </div>
 

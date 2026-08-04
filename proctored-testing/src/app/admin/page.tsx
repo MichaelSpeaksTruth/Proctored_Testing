@@ -8,10 +8,10 @@ import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 
 const ADMIN_TABS = [
-  { label: 'Test Setup', href: '/admin/setup', icon: '📝', desc: 'Create sections, questions, and timers' },
-  { label: 'Participants', href: '/admin/participants', icon: '👥', desc: 'Upload and manage examinee emails' },
-  { label: 'Control Panel', href: '/admin/control', icon: '⚡', desc: 'Start, monitor, and end the live test' },
-  { label: 'Results & Grading', href: '/admin/results', icon: '🏆', desc: 'Upload answer key, declare results, and review AI proctoring reports' },
+  { label: 'Test Setup', href: '/admin/setup', icon: '', desc: 'Create sections, questions, and timers' },
+  { label: 'Participants', href: '/admin/participants', icon: '', desc: 'Upload and manage examinee emails' },
+  { label: 'Control Panel', href: '/admin/control', icon: '', desc: 'Start, monitor, and end the live test' },
+  { label: 'Results & Grading', href: '/admin/results', icon: '', desc: 'Upload answer key, declare results, and review AI proctoring reports' },
 ];
 
 function AdminHomeContent() {
@@ -29,7 +29,7 @@ function AdminHomeContent() {
       {/* Navbar */}
       <nav className="navbar" style={{ marginBottom: 'var(--space-2xl)', borderRadius: 'var(--radius-lg)' }}>
         <div className="brand">
-          <span style={{ fontSize: '1.5rem' }}>✈</span>
+          <span style={{ fontSize: '1.5rem' }}></span>
           <div>
             <div className="brand-name">AeroSoc Admin</div>
             <div className="brand-sub">BIT Mesra · Examination Control</div>

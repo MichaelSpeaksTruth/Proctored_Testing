@@ -39,9 +39,9 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing }: Prop
   };
 
   const rankStyle = (rank: number) => {
-    if (rank === 1) return { className: 'rank-1', symbol: '🥇' };
-    if (rank === 2) return { className: 'rank-2', symbol: '🥈' };
-    if (rank === 3) return { className: 'rank-3', symbol: '🥉' };
+    if (rank === 1) return { className: 'rank-1', symbol: '' };
+    if (rank === 2) return { className: 'rank-2', symbol: '' };
+    if (rank === 3) return { className: 'rank-3', symbol: '' };
     return { className: '', symbol: String(rank) };
   };
 
