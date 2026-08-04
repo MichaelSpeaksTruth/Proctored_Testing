@@ -10,9 +10,10 @@ interface Props {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onViolation?: (event: ProctoringEvent) => void;
   onLockTest?: () => void;
+  calibrationMode?: boolean;
 }
 
-export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTest }: Props) {
+export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTest, calibrationMode = false }: Props) {
   const pendingFlags = useRef<Map<ProctoringEvent, { severity: Severity; ts: string }>>(new Map());
   const flushRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
@@ -35,10 +36,14 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTe
     // Flush buffered flags to RTDB every 5 seconds
     flushRef.current = setInterval(() => {
       if (pendingFlags.current.size === 0) return;
-      const flagsRef = ref(rtdb, `proctoringFlags/${uid}`);
-      pendingFlags.current.forEach(({ severity, ts }, event) => {
-        push(flagsRef, { event, severity, timestamp: ts });
-      });
+      
+      if (!calibrationMode) {
+        const flagsRef = ref(rtdb, `proctoringFlags/${uid}`);
+        pendingFlags.current.forEach(({ severity, ts }, event) => {
+          push(flagsRef, { event, severity, timestamp: ts });
+        });
+      }
+      
       pendingFlags.current.clear();
     }, 5000);
 
@@ -66,11 +71,13 @@ export default function ProctoringMonitor({ uid, videoRef, onViolation, onLockTe
         queueFlag('EXITED_FULLSCREEN', 'high');
         fullscreenExits.current += 1;
         
-        if (fullscreenExits.current >= 2) {
-           queueFlag('REPEATED_FULLSCREEN_EXIT', 'critical');
-           if (onLockTest) onLockTest();
-        } else {
-           setShowFullscreenWarning(true);
+        if (!calibrationMode) {
+          if (fullscreenExits.current >= 2) {
+             queueFlag('REPEATED_FULLSCREEN_EXIT', 'critical');
+             if (onLockTest) onLockTest();
+          } else {
+             setShowFullscreenWarning(true);
+          }
         }
       } else {
         setShowFullscreenWarning(false);
