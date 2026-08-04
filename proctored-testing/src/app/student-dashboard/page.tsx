@@ -60,7 +60,7 @@ function StudentDashboardContent() {
       <div className="container-narrow" style={{ paddingTop: 'var(--space-2xl)' }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 'var(--space-2xl)' }}>
-          <div style={{ fontSize: '2rem', marginBottom: 'var(--space-md)' }}>✈</div>
+          <div style={{ fontSize: '2rem', marginBottom: 'var(--space-md)' }}></div>
           <h1>My Results</h1>
           <p style={{ marginTop: 'var(--space-sm)' }}>
             {user?.displayName || user?.email}

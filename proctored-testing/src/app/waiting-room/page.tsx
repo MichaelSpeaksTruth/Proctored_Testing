@@ -47,7 +47,7 @@ function WaitingRoomContent() {
     >
       <div className="card" style={{ maxWidth: 520, width: '100%', textAlign: 'center' }}>
         {/* Brand mark */}
-        <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-md)' }}>✈</div>
+        <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-md)' }}></div>
         <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-sm)' }}>Waiting Room</h1>
         <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--space-xl)' }}>
           Welcome, <strong style={{ color: 'var(--text-primary)' }}>{user?.displayName || user?.email}</strong>.
@@ -81,9 +81,9 @@ function WaitingRoomContent() {
               color: testStatus === 'active' ? '#52b788' : 'var(--text-primary)',
             }}
           >
-            {testStatus === 'pending' && '⏳ Waiting for Admin'}
+            {testStatus === 'pending' && ' Waiting for Admin'}
             {testStatus === 'active' && '🟢 Test Active — Redirecting...'}
-            {testStatus === 'ended' && '🔴 Test Ended'}
+            {testStatus === 'ended' && ' Test Ended'}
           </div>
 
           {scheduledStart && testStatus === 'pending' && (
@@ -114,7 +114,7 @@ function WaitingRoomContent() {
               'Multiple faces in the frame will be flagged',
             ].map((rule, i) => (
               <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
-                <span style={{ color: 'var(--accent-green-light)', fontWeight: 700, flexShrink: 0 }}>✓</span>
+                <span style={{ color: 'var(--accent-green-light)', fontWeight: 700, flexShrink: 0 }}></span>
                 {rule}
               </li>
             ))}

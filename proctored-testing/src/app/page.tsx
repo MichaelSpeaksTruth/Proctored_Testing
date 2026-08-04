@@ -98,7 +98,7 @@ export default function LoginPage() {
             fontSize: '2rem',
           }}
         >
-          ✈
+          
         </div>
         <div
           style={{

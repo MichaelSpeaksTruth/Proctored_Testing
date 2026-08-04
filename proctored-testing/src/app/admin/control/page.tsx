@@ -136,7 +136,7 @@ function ControlContent() {
               onClick={scheduleTest}
               disabled={loading || !selectedTestId || !scheduledStart}
             >
-              🗓 Schedule Test
+               Schedule Test
             </button>
           </div>
 
@@ -154,7 +154,7 @@ function ControlContent() {
               onClick={forceEnd}
               disabled={loading || testStatus !== 'active'}
             >
-              🔴 Force End Test
+               Force End Test
             </button>
           </div>
         </div>
