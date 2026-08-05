@@ -46,6 +46,7 @@ function TestContent() {
   const [violation, setViolation] = useState<string | null>(null);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [examStarted, setExamStarted] = useState(false);
+  const [testStartedAt, setTestStartedAt] = useState<string | null>(null);
   const [requestingPermissions, setRequestingPermissions] = useState(false);
   const [permError, setPermError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -78,6 +79,9 @@ function TestContent() {
       if (!data) return;
       if (data.status === 'ended') {
         setLocked(true);
+      }
+      if (data.startedAt) {
+        setTestStartedAt(data.startedAt);
       }
     });
     return () => unsub();
@@ -423,7 +427,24 @@ function TestContent() {
           </div>
           {currentSection && (
             <CountdownTimer
-              durationSeconds={currentSection.timeLimit}
+              durationSeconds={(() => {
+                // Determine elapsed time using the server's test start time.
+                // This prevents the timer from resetting to the full duration on page reload.
+                if (testStartedAt) {
+                  const elapsedSeconds = Math.floor((Date.now() - new Date(testStartedAt).getTime()) / 1000);
+                  // Calculate the total time allowed for all sections *up to* the current one.
+                  // For a single-section test, this is just 0.
+                  let previousSectionsTime = 0;
+                  for (let i = 0; i < currentSectionIdx; i++) {
+                    previousSectionsTime += testData!.sections[i].timeLimit;
+                  }
+                  // The elapsed time spent on *this specific section*
+                  const sectionElapsed = Math.max(0, elapsedSeconds - previousSectionsTime);
+                  // The remaining time for this section
+                  return Math.max(0, currentSection.timeLimit - sectionElapsed);
+                }
+                return currentSection.timeLimit;
+              })()}
               label=""
               onExpire={() => {
                 if (currentSectionIdx < totalSections - 1) {

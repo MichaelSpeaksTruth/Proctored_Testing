@@ -30,6 +30,10 @@ import { getAdminDb, getAdminAuth } from '@/lib/firebaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
+export async function GET() {
+  return NextResponse.json({ success: true, message: 'Grade test route is reachable' });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as {
