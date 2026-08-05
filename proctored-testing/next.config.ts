@@ -4,9 +4,7 @@ const nextConfig: NextConfig = {
   // Turbopack is the default bundler in Next.js 16
   turbopack: {},
 
-  // firebase-admin uses Node.js built-ins (fs, net, tls) that must not be
-  // bundled by the client-side webpack. Declaring it here keeps it server-only.
-  serverExternalPackages: ['firebase-admin'],
+  // turbopack: {},
 
   async headers() {
     return [
