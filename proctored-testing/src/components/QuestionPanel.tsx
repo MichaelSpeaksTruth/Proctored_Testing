@@ -96,6 +96,7 @@ export default function QuestionPanel({
           id={`answer-${question.id}`}
           value={answer}
           onChange={(e) => onChange(e.target.value)}
+          onPaste={(e) => e.preventDefault()}
           placeholder="Type your answer here..."
           rows={4}
           style={{ resize: 'vertical' }}

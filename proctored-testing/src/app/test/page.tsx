@@ -4,15 +4,16 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, rtdb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { ref, onValue, get, set } from 'firebase/database';
+import { ref, onValue, get } from 'firebase/database';
 import StudentGuard from '@/components/StudentGuard';
 import ProctoringMonitor from '@/components/ProctoringMonitor';
 import WebcamFeed from '@/components/WebcamFeed';
 import CountdownTimer from '@/components/CountdownTimer';
 import QuestionPanel, { Question } from '@/components/QuestionPanel';
-import { Lock, Camera, Monitor, CheckCircle2, XCircle } from 'lucide-react';
+import { Lock, Camera, Monitor, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
 import { ProctoringEvent, DurationFlag } from '@/lib/proctoring';
 import { MonitorStatus } from '@/components/ProctoringMonitor';
+import { useTestState } from '@/lib/useTestState';
 
 interface Section {
   id: string;
@@ -37,7 +38,9 @@ function TestContent() {
   const [testId, setTestId] = useState<string | null>(null);
   const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  // ── Offline-resilient answer state (synced to localStorage) ────
+  const { answers, setAnswer, clearPersistedState, wasRestored } = useTestState(testId, uid);
+  const [showRestoredBanner, setShowRestoredBanner] = useState(false);
   const [locked, setLocked] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [violation, setViolation] = useState<string | null>(null);
@@ -64,36 +67,45 @@ function TestContent() {
     return () => unsub();
   }, []);
 
-  // ── Load active test ─────────────────────────────────────────
+  // ── Load active test (edge-cached via /api/get-test-questions) ──
+  // The first request hits Firebase Admin once; Vercel Edge caches the
+  // response globally for 1 hour. Every subsequent load costs 0 DB reads.
   useEffect(() => {
+    // Still listen for test status changes (ended / locked)
     const stateRef = ref(rtdb, 'testState');
-    const unsub = onValue(stateRef, async (snap) => {
+    const unsub = onValue(stateRef, (snap) => {
       const data = snap.val();
       if (!data) return;
       if (data.status === 'ended') {
         setLocked(true);
-      } else if (data.status === 'active' && data.activeTestId) {
-        setTestId(data.activeTestId);
-        const testSnap = await get(ref(rtdb, `tests/${data.activeTestId}`));
-        if (testSnap.exists()) {
-          const raw = testSnap.val();
-          // RTDB returns arrays as numbered objects; normalise back to real arrays
-          const toArr = <T,>(v: unknown): T[] => {
-            if (!v) return [];
-            if (Array.isArray(v)) return v as T[];
-            if (typeof v === 'object') return Object.values(v as Record<string, T>);
-            return [];
-          };
-          const sections = toArr<Section>(raw.sections).map((s: Section) => ({
-            ...s,
-            questions: toArr<Question>(s.questions),
-          }));
-          setTestData({ ...raw, sections });
-        }
       }
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    // Fetch questions from the edge-cached API route
+    fetch('/api/get-test-questions')
+      .then(async (res) => {
+        if (!res.ok) return; // No active test or error — handled elsewhere
+        const payload = await res.json() as { testId: string; title: string; sections: Section[] };
+        setTestId(payload.testId);
+        setTestData({ title: payload.title, sections: payload.sections });
+      })
+      .catch(() => {
+        // Network failure during question load — student sees the spinner.
+        // They can refresh; localStorage will restore their answers.
+      });
+  }, []);
+
+  // ── Show restoration banner when answers are hydrated from localStorage ──
+  useEffect(() => {
+    if (wasRestored) {
+      setShowRestoredBanner(true);
+      const t = setTimeout(() => setShowRestoredBanner(false), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [wasRestored]);
 
   // ── Check if already submitted ─────────────────────────────
   useEffect(() => {
@@ -160,18 +172,39 @@ function TestContent() {
 
 
   // ── Submit ────────────────────────────────────────────────
+  // Sends answers to the server-side /api/grade-test relay instead of
+  // writing directly from the client. The API verifies the user's ID token
+  // before writing, preventing any spoofed or replayed submissions.
   const handleSubmit = useCallback(
     async (autoSubmit = false) => {
       if (submitted || !uid || !testId) return;
       setSubmitted(true);
       try {
-        await set(ref(rtdb, `submissions/${testId}/${uid}`), {
-          answers,
-          submittedAt: new Date().toISOString(),
-          autoSubmitted: autoSubmit,
-          email: auth.currentUser?.email || '',
-          name: auth.currentUser?.displayName || '',
+        // Get a fresh Firebase ID token to authenticate the server request.
+        const idToken = await auth.currentUser?.getIdToken();
+        if (!idToken) throw new Error('Could not retrieve ID token.');
+
+        const res = await fetch('/api/grade-test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            testId,
+            uid,
+            answers,
+            idToken,
+            email: auth.currentUser?.email ?? '',
+            name: auth.currentUser?.displayName ?? '',
+            autoSubmitted: autoSubmit,
+          }),
         });
+
+        if (!res.ok) {
+          const { error } = await res.json().catch(() => ({ error: 'Unknown error' })) as { error: string };
+          throw new Error(error);
+        }
+
+        // Clear localStorage only after confirmed server write
+        clearPersistedState();
         if (document.fullscreenElement) document.exitFullscreen();
         router.replace('/student-dashboard');
       } catch (err) {
@@ -179,7 +212,7 @@ function TestContent() {
         setSubmitted(false);
       }
     },
-    [submitted, uid, testId, answers, router]
+    [submitted, uid, testId, answers, clearPersistedState, router]
   );
 
   // Cleanup media stream on unmount
@@ -320,9 +353,61 @@ function TestContent() {
     );
   }
 
+  // ── Block exam cheating shortcuts (copy, right-click, print) ──────────
+  useEffect(() => {
+    if (!examStarted) return;
+    const blockCopy = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        ['c', 'C', 'a', 'A', 's', 'S', 'p', 'P', 'u', 'U'].includes(e.key)
+      ) {
+        e.preventDefault();
+      }
+    };
+    const blockContext = (e: MouseEvent) => e.preventDefault();
+    const blockPrint = () => window.print = () => {};
+    document.addEventListener('keydown', blockCopy);
+    document.addEventListener('contextmenu', blockContext);
+    blockPrint();
+    return () => {
+      document.removeEventListener('keydown', blockCopy);
+      document.removeEventListener('contextmenu', blockContext);
+    };
+  }, [examStarted]);
+
   // ── Main test interface ───────────────────────────────────
   return (
-    <main style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
+    <main className="exam-secure-zone" style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
+      {/* Hidden element shown only when printing — blocks print-to-PDF screenshot */}
+      <div className="no-print-notice">📵 Printing is not allowed during the exam.</div>
+      {/* Restoration banner — slides in when progress is recovered from localStorage */}
+      {showRestoredBanner && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 'var(--space-lg)',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 9999,
+            background: 'rgba(45,106,79,0.95)',
+            border: '1px solid rgba(82,183,136,0.4)',
+            borderRadius: 'var(--radius-md)',
+            padding: '10px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            fontSize: '0.875rem',
+            color: '#d8f3dc',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+            animation: 'fadeSlideUp 0.3s ease',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <RotateCcw size={15} />
+          Progress restored — your previous answers have been recovered.
+        </div>
+      )}
+
       {/* Top bar */}
       <div className="test-topbar">
         <div className="brand">
@@ -401,9 +486,7 @@ function TestContent() {
                 questionIndex={currentQuestionIdx}
                 totalQuestions={totalQuestions}
                 answer={answers[currentQuestion.id] || ''}
-                onChange={(val) =>
-                  setAnswers((prev) => ({ ...prev, [currentQuestion.id]: val }))
-                }
+                onChange={(val) => setAnswer(currentQuestion.id, val)}
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--space-md)' }}>
                 <button
@@ -458,24 +541,17 @@ function TestContent() {
             {currentSection?.questions.map((q, idx) => {
               const isAnswered = !!answers[q.id];
               const isCurrent = idx === currentQuestionIdx;
+              const cls = [
+                'q-nav-btn',
+                isCurrent ? 'q-nav-current' : '',
+                isAnswered ? 'q-nav-answered' : '',
+              ].filter(Boolean).join(' ');
               return (
                 <button
                   key={q.id}
                   id={`q-nav-${idx}`}
+                  className={cls}
                   onClick={() => setCurrentQuestionIdx(idx)}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 'var(--radius-sm)',
-                    border: `1px solid ${isCurrent ? 'var(--white)' : isAnswered ? 'var(--accent-green)' : 'var(--border)'}`,
-                    background: isCurrent ? 'rgba(255,255,255,0.1)' : isAnswered ? 'rgba(45,106,79,0.2)' : 'var(--bg-input)',
-                    color: isCurrent ? 'var(--white)' : isAnswered ? '#52b788' : 'var(--text-muted)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '0.8125rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    transition: 'all 100ms ease',
-                  }}
                 >
                   {idx + 1}
                 </button>

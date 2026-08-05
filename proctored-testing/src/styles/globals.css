@@ -558,6 +558,11 @@ tr:last-child td { border-bottom: none; }
   to { transform: translateY(0); }
 }
 
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 /* ===== LOCK SCREEN ===== */
 .lock-overlay {
   position: fixed;
@@ -595,6 +600,47 @@ tr:last-child td { border-bottom: none; }
 .gap-sm { gap: var(--space-sm); }
 .gap-md { gap: var(--space-md); }
 .gap-lg { gap: var(--space-lg); }
+
+/* ===== EXAM SECURITY: block text selection, print/screenshot, paste ===== */
+.exam-secure-zone {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Allow selection only inside the short-answer textarea */
+.exam-secure-zone textarea {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* Disable drag-to-copy on images/text */
+.exam-secure-zone img,
+.exam-secure-zone p,
+.exam-secure-zone button {
+  -webkit-user-drag: none;
+  pointer-events: auto;
+}
+
+/* Hide page content on print (blocks screenshot-via-print and print-to-PDF) */
+@media print {
+  body > * { visibility: hidden !important; }
+  .no-print-notice {
+    visibility: visible !important;
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #000;
+    background: #fff;
+  }
+}
 
 /* ===== TEST PAGE LAYOUT ===== */
 .test-topbar {
@@ -637,7 +683,48 @@ tr:last-child td { border-bottom: none; }
 .q-nav-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 6px;
+  gap: 7px;
+}
+
+/* Question nav buttons — cleaner, more distinct look */
+.q-nav-btn {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 120ms ease;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  line-height: 1;
+  padding: 0;
+}
+.q-nav-btn:hover {
+  border-color: var(--border-focus);
+  color: var(--text-secondary);
+  background: rgba(255,255,255,0.04);
+}
+.q-nav-btn.q-nav-current {
+  border-color: rgba(255,255,255,0.35);
+  background: rgba(255,255,255,0.08);
+  color: var(--white);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
+}
+.q-nav-btn.q-nav-answered {
+  border-color: rgba(64,145,108,0.45);
+  background: rgba(45,106,79,0.18);
+  color: #52b788;
+}
+.q-nav-btn.q-nav-current.q-nav-answered {
+  border-color: #40916c;
+  background: rgba(45,106,79,0.3);
+  color: #74c69d;
 }
 
 /* ===== RESPONSIVE ===== */
@@ -681,6 +768,9 @@ tr:last-child td { border-bottom: none; }
     grid-template-columns: repeat(8, 1fr);
     gap: 6px;
     overflow-x: auto;
+  }
+  .q-nav-btn {
+    font-size: 0.6875rem;
   }
 
   /* Webcam smaller on mobile */
