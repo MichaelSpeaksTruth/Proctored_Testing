@@ -12,6 +12,7 @@ import WebcamFeed from '@/components/WebcamFeed';
 import CountdownTimer from '@/components/CountdownTimer';
 import QuestionPanel, { Question } from '@/components/QuestionPanel';
 import { Lock, Camera, Monitor } from 'lucide-react';
+import { ProctoringEvent, DurationFlag } from '@/lib/proctoring';
 
 interface Section {
   id: string;
@@ -25,7 +26,7 @@ interface TestData {
   sections: Section[];
 }
 
-type ProctoringEvent = 'NO_FACE_DETECTED' | 'MULTIPLE_FACES' | 'TAB_SWITCHED' | 'EXITED_FULLSCREEN' | 'LOUD_AUDIO' | 'REPEATED_FULLSCREEN_EXIT' | 'CAMERA_COVERED' | 'PHONE_DETECTED';
+
 
 function TestContent() {
   const router = useRouter();
@@ -103,18 +104,16 @@ function TestContent() {
   };
 
   // ── Violation handler (shows banner for 3s) ──────────────────
-  const handleViolation = useCallback((event: ProctoringEvent) => {
+  const handleViolation = useCallback((flag: DurationFlag) => {
     const messages: Record<ProctoringEvent, string> = {
-      NO_FACE_DETECTED: 'WARNING: Your face is not visible. Please look at the camera.',
-      MULTIPLE_FACES: 'CRITICAL: Multiple faces detected. This has been logged.',
-      TAB_SWITCHED: 'WARNING: Tab switching detected. This has been logged.',
-      EXITED_FULLSCREEN: 'WARNING: Please return to fullscreen immediately.',
-      REPEATED_FULLSCREEN_EXIT: 'CRITICAL: Repeated fullscreen exits. Test will be locked.',
-      LOUD_AUDIO: 'WARNING: Loud audio detected. Please maintain silence.',
-      CAMERA_COVERED: 'CRITICAL: Camera appears to be covered. This has been logged.',
-      PHONE_DETECTED: 'CRITICAL: Mobile device detected. This has been logged.',
+      INVALID_FACE_COUNT: `WARNING: Face visibility issue logged (${flag.durationInSeconds}s).`,
+      TAB_SWITCHED: `WARNING: Tab switching logged (${flag.durationInSeconds}s).`,
+      LEFT_FULLSCREEN: `WARNING: Exited fullscreen logged (${flag.durationInSeconds}s).`,
+      LOUD_AUDIO: `WARNING: Loud audio logged (${flag.durationInSeconds}s).`,
+      CAMERA_COVERED: `CRITICAL: Camera covered logged (${flag.durationInSeconds}s).`,
+      PHONE_DETECTED: `CRITICAL: Mobile device detected (${flag.durationInSeconds}s).`,
     };
-    setViolation(messages[event] || 'WARNING: Proctoring violation logged.');
+    setViolation(messages[flag.event] || 'WARNING: Proctoring violation logged.');
     if (violationTimeoutRef.current) clearTimeout(violationTimeoutRef.current);
     violationTimeoutRef.current = setTimeout(() => setViolation(null), 3000);
   }, []);
