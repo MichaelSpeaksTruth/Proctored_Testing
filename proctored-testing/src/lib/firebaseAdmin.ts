@@ -44,7 +44,7 @@ function getAdminApp(): App {
   // If the private key newlines were not escaped properly in the JSON string
   serviceAccountKey = serviceAccountKey.replace(/\\n/g, '\\n'); // Ensure it stays escaped for JSON.parse
 
-  let serviceAccount: ServiceAccount;
+  let serviceAccount: any;
   try {
     serviceAccount = JSON.parse(serviceAccountKey);
     // In case the private key still has escaped newlines after parsing
@@ -56,7 +56,7 @@ function getAdminApp(): App {
   }
 
   _app = initializeApp({
-    credential: cert(serviceAccount),
+    credential: cert(serviceAccount as ServiceAccount),
     databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
   });
 
