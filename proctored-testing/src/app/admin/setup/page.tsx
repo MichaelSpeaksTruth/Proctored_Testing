@@ -47,7 +47,11 @@ function SetupContent() {
       setTests([]);
       return;
     }
-    const parsed = Object.keys(val).map(key => ({ id: key, ...val[key] }));
+    const parsed = Object.keys(val).map(key => ({ 
+      id: key, 
+      ...val[key],
+      sections: val[key].sections || []
+    }));
     setTests(parsed);
   };
 

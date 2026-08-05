@@ -66,7 +66,9 @@ function TestContent() {
         setTestId(data.activeTestId);
         const testSnap = await get(ref(rtdb, `tests/${data.activeTestId}`));
         if (testSnap.exists()) {
-          setTestData(testSnap.val() as TestData);
+          const t = testSnap.val() as TestData;
+          t.sections = t.sections || [];
+          setTestData(t);
         }
       }
     });
