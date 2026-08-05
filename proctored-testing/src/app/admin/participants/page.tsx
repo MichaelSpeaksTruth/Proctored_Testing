@@ -20,6 +20,8 @@ function ParticipantsContent() {
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [editingEmail, setEditingEmail] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', email: '' });
   const PAGE_SIZE = 25;
 
   const encodeEmail = (e: string) => e.replace(/\./g, ',');
@@ -108,6 +110,33 @@ function ParticipantsContent() {
     setParticipants((prev) => prev.filter((p) => p.email !== email));
   };
 
+  const handleSaveEdit = async (oldEmail: string) => {
+    const newEmailTrimmed = editForm.email.trim().toLowerCase();
+    const newNameTrimmed = editForm.name.trim();
+
+    if (!newEmailTrimmed || !newEmailTrimmed.includes('@')) {
+      setError('Invalid email format during edit.');
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    setMsg(null);
+    
+    if (newEmailTrimmed !== oldEmail) {
+      const oldKey = encodeEmail(oldEmail);
+      await remove(ref(rtdb, `participants/${oldKey}`));
+    }
+    
+    const newKey = encodeEmail(newEmailTrimmed);
+    await set(ref(rtdb, `participants/${newKey}`), { email: newEmailTrimmed, name: newNameTrimmed, allowed: true });
+    
+    setEditingEmail(null);
+    setMsg('Participant updated successfully.');
+    await fetchParticipants();
+    setLoading(false);
+  };
+
   const totalPages = Math.ceil(participants.length / PAGE_SIZE);
   const pageData = participants.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
@@ -179,24 +208,82 @@ function ParticipantsContent() {
               </tr>
             </thead>
             <tbody>
-              {pageData.map((p, idx) => (
-                <tr key={p.email}>
-                  <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{page * PAGE_SIZE + idx + 1}</td>
-                  <td style={{ fontWeight: 500 }}>{p.name || '—'}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)' }}>{p.email}</td>
-                  <td><span className="badge badge-green">Approved</span></td>
-                  <td>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      id={`remove-${p.email}`}
-                      style={{ color: 'var(--accent-red-light)' }}
-                      onClick={() => handleRemove(p.email)}
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {pageData.map((p, idx) => {
+                const isEditing = editingEmail === p.email;
+                return (
+                  <tr key={p.email}>
+                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{page * PAGE_SIZE + idx + 1}</td>
+                    {isEditing ? (
+                      <>
+                        <td>
+                          <input
+                            type="text"
+                            value={editForm.name}
+                            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                            className="input"
+                            style={{ padding: '4px 8px', width: '100%' }}
+                            placeholder="Name"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={editForm.email}
+                            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                            className="input"
+                            style={{ padding: '4px 8px', width: '100%', fontFamily: 'var(--font-mono)' }}
+                          />
+                        </td>
+                        <td><span className="badge badge-amber">Editing</span></td>
+                        <td>
+                          <div className="flex gap-sm">
+                            <button
+                              className="btn btn-primary btn-sm"
+                              onClick={() => handleSaveEdit(p.email)}
+                              disabled={loading}
+                            >
+                              Save
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setEditingEmail(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td style={{ fontWeight: 500 }}>{p.name || '—'}</td>
+                        <td style={{ fontFamily: 'var(--font-mono)' }}>{p.email}</td>
+                        <td><span className="badge badge-green">Approved</span></td>
+                        <td>
+                          <div className="flex gap-sm">
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => {
+                                setEditingEmail(p.email);
+                                setEditForm({ name: p.name || '', email: p.email });
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              id={`remove-${p.email}`}
+                              style={{ color: 'var(--accent-red-light)' }}
+                              onClick={() => handleRemove(p.email)}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 
