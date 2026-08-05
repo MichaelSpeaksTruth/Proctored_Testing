@@ -130,9 +130,8 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {/* Login Card */}
+      {/* Login Section */}
       <div
-        className="card"
         style={{
           width: '100%',
           maxWidth: 420,

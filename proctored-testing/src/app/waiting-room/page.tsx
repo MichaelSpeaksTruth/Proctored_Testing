@@ -47,7 +47,7 @@ function WaitingRoomContent() {
         padding: 'var(--space-xl)',
       }}
     >
-      <div className="card" style={{ maxWidth: 520, width: '100%', textAlign: 'center' }}>
+      <div style={{ maxWidth: 520, width: '100%', textAlign: 'center' }}>
         {/* Brand mark */}
         <div style={{ marginBottom: 'var(--space-md)', width: 72, height: 72, margin: '0 auto var(--space-md)', borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--border-light)' }}>
           <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={72} height={72} style={{ objectFit: 'cover' }} />
@@ -60,10 +60,7 @@ function WaitingRoomContent() {
 
         <div
           style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-md)',
-            padding: 'var(--space-xl)',
+            padding: 'var(--space-xl) 0',
             marginBottom: 'var(--space-xl)',
           }}
         >
