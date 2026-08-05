@@ -116,21 +116,26 @@ function TestContent() {
     }
   };
 
-  const handleViolation = useCallback((flag: DurationFlag) => {
+  const handleViolationStart = useCallback((event: ProctoringEvent) => {
     const messages: Record<ProctoringEvent, string> = {
-      NO_FACE:            `🚨 No face detected in frame (${flag.durationInSeconds}s).`,
-      MULTIPLE_FACES:     `🚨 Multiple faces detected (${flag.durationInSeconds}s).`,
-      TAB_SWITCHED:       `🚨 Tab switching logged (${flag.durationInSeconds}s).`,
-      LEFT_FULLSCREEN:    `⚠ Exited fullscreen logged (${flag.durationInSeconds}s).`,
-      LOUD_AUDIO:         `⚠ Loud audio detected (${flag.durationInSeconds}s).`,
-      CAMERA_COVERED:     `🚨 Camera covered logged (${flag.durationInSeconds}s).`,
-      MIC_MUTED:          `🚨 Microphone muted/silent (${flag.durationInSeconds}s).`,
-      PHONE_DETECTED:     `🚨 Mobile device detected (${flag.durationInSeconds}s).`,
-      GAZE_AWAY:          `⚠ Looking away from screen logged (${flag.durationInSeconds}s).`,
+      NO_FACE:            `🚨 No face detected in frame.`,
+      MULTIPLE_FACES:     `🚨 Multiple faces detected.`,
+      TAB_SWITCHED:       `🚨 Tab switching detected.`,
+      LEFT_FULLSCREEN:    `⚠ Exited fullscreen.`,
+      LOUD_AUDIO:         `⚠ Loud audio detected.`,
+      CAMERA_COVERED:     `🚨 Camera covered.`,
+      MIC_MUTED:          `🚨 Microphone muted/silent.`,
+      PHONE_DETECTED:     `🚨 Mobile device detected.`,
+      GAZE_AWAY:          `⚠ Looking away from screen.`,
     };
-    setViolation(messages[flag.event] || '⚠ Proctoring violation logged.');
+    setViolation(messages[event] || '⚠ Proctoring violation detected.');
     if (violationTimeoutRef.current) clearTimeout(violationTimeoutRef.current);
     violationTimeoutRef.current = setTimeout(() => setViolation(null), 3500);
+  }, []);
+
+  const handleViolation = useCallback((flag: DurationFlag) => {
+    // This fires when the violation ends and is logged to the DB.
+    // We already showed the banner on start, but we can update it with duration if needed.
   }, []);
 
 
@@ -488,6 +493,7 @@ function TestContent() {
           testId={testId ?? undefined}
           videoRef={videoRef}
           onViolation={handleViolation}
+          onViolationStart={handleViolationStart}
           overlayCanvasRef={overlayCanvasRef}
         />
       )}

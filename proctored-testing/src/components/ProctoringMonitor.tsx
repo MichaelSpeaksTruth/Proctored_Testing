@@ -187,6 +187,7 @@ interface Props {
   testId?: string;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onViolation?: (flag: DurationFlag) => void;
+  onViolationStart?: (event: ProctoringEvent, severity: Severity) => void;
   onStatusChange?: (status: MonitorStatus) => void;
   calibrationMode?: boolean;
   overlayCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
@@ -199,6 +200,7 @@ export default function ProctoringMonitor({
   testId,
   videoRef,
   onViolation,
+  onViolationStart,
   onStatusChange,
   calibrationMode = false,
   overlayCanvasRef,
@@ -238,8 +240,9 @@ export default function ProctoringMonitor({
     (event: ProctoringEvent, severity: Severity) => {
       if (activeInfractions.current.has(event)) return;
       activeInfractions.current.set(event, { startTime: Date.now(), severity });
+      onViolationStart?.(event, severity);
     },
-    []
+    [onViolationStart]
   );
 
   const closeInfraction = useCallback(
@@ -269,7 +272,7 @@ export default function ProctoringMonitor({
       if (violating) {
         h.v++;
         h.c = 0;
-        if (h.v >= FRAMES_TO_START) openInfraction(event, severity);
+        if (h.v === FRAMES_TO_START) openInfraction(event, severity);
       } else {
         h.c++;
         h.v = Math.max(0, h.v - 2);
@@ -596,8 +599,7 @@ export default function ProctoringMonitor({
             let sp = 0;
             for (let i = lo; i <= hi; i++) sp += freqBuf[i];
             const isLoud = rms > ambientBaseline || sp / (hi - lo + 1) > 72;
-            if (isLoud) { openInfraction('LOUD_AUDIO', 'medium'); quietFrames = 0; }
-            else { quietFrames++; if (quietFrames > 40) closeInfraction('LOUD_AUDIO'); }
+            report('LOUD_AUDIO', isLoud, 'medium');
           }
 
           // Camera covered

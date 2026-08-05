@@ -29,6 +29,7 @@ function CalibrationContent() {
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [flags, setFlags] = useState<{ id: number; flag: DurationFlag }[]>([]);
+  const [activeFlags, setActiveFlags] = useState<Set<ProctoringEvent>>(new Set());
   const flagsEndRef = useRef<HTMLDivElement>(null);
 
   const requestPermissions = async () => {
@@ -46,7 +47,16 @@ function CalibrationContent() {
     }
   };
 
+  const handleViolationStart = useCallback((event: ProctoringEvent) => {
+    setActiveFlags(prev => new Set(prev).add(event));
+  }, []);
+
   const handleViolation = useCallback((flag: DurationFlag) => {
+    setActiveFlags(prev => {
+      const next = new Set(prev);
+      next.delete(flag.event);
+      return next;
+    });
     setFlags(prev => [...prev, { id: Date.now() + Math.random(), flag }]);
   }, []);
 
@@ -139,6 +149,7 @@ function CalibrationContent() {
                 uid="admin_calibration"
                 videoRef={videoRef}
                 onViolation={handleViolation}
+                onViolationStart={handleViolationStart}
                 calibrationMode={true}
                 overlayCanvasRef={overlayCanvasRef}
               />
@@ -167,16 +178,23 @@ function CalibrationContent() {
 
               {/* Event legend pills */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 'var(--space-md)' }}>
-                {Object.entries(EVENT_META).map(([k, v]) => (
-                  <span key={k} style={{
-                    fontSize: '0.6875rem', padding: '2px 7px',
-                    borderRadius: 100, border: `1px solid ${v.color}44`,
-                    color: v.color, background: `${v.color}11`,
-                    fontFamily: 'var(--font-mono)',
-                  }}>
-                    {v.label}
-                  </span>
-                ))}
+                {Object.entries(EVENT_META).map(([k, v]) => {
+                  const isActive = activeFlags.has(k as ProctoringEvent);
+                  return (
+                    <span key={k} style={{
+                      fontSize: '0.6875rem', padding: '2px 7px',
+                      borderRadius: 100, 
+                      border: `1px solid ${isActive ? v.color : v.color + '44'}`,
+                      color: isActive ? '#000' : v.color, 
+                      background: isActive ? v.color : `${v.color}11`,
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: isActive ? 700 : 400,
+                      transition: 'all 0.2s',
+                    }}>
+                      {v.label} {isActive && '(Active)'}
+                    </span>
+                  );
+                })}
               </div>
 
               {/* Terminal scroll area */}
