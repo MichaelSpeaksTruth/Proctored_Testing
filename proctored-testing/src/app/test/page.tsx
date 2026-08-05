@@ -501,6 +501,7 @@ function TestContent() {
           onViolation={handleViolation}
           onViolationStart={handleViolationStart}
           overlayCanvasRef={overlayCanvasRef}
+          isSubmitting={submitted}
         />
       )}
       {/* Hidden webcam feed + canvas overlay (not visible to student) */}
