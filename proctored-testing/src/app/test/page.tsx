@@ -118,9 +118,7 @@ function TestContent() {
     violationTimeoutRef.current = setTimeout(() => setViolation(null), 3000);
   }, []);
 
-  const handleLockTest = useCallback(() => {
-    setLocked(true);
-  }, []);
+
 
   // ── Submit ────────────────────────────────────────────────
   const handleSubmit = useCallback(
@@ -453,7 +451,7 @@ function TestContent() {
       </div>
 
       {/* Proctoring engine + webcam */}
-      {uid && examStarted && <ProctoringMonitor uid={uid} videoRef={videoRef} onViolation={handleViolation} onLockTest={handleLockTest} />}
+      {uid && examStarted && <ProctoringMonitor uid={uid} videoRef={videoRef} onViolation={handleViolation} />}
       <WebcamFeed ref={videoRef} stream={stream} />
     </main>
   );
