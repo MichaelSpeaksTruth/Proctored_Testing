@@ -118,7 +118,8 @@ function TestContent() {
 
   const handleViolation = useCallback((flag: DurationFlag) => {
     const messages: Record<ProctoringEvent, string> = {
-      INVALID_FACE_COUNT: `⚠ Face visibility issue logged (${flag.durationInSeconds}s).`,
+      NO_FACE:            `🚨 No face detected in frame (${flag.durationInSeconds}s).`,
+      MULTIPLE_FACES:     `🚨 Multiple faces detected (${flag.durationInSeconds}s).`,
       TAB_SWITCHED:       `🚨 Tab switching logged (${flag.durationInSeconds}s).`,
       LEFT_FULLSCREEN:    `⚠ Exited fullscreen logged (${flag.durationInSeconds}s).`,
       LOUD_AUDIO:         `⚠ Loud audio detected (${flag.durationInSeconds}s).`,

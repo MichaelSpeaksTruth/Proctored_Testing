@@ -8,7 +8,8 @@ import { ProctoringEvent, DurationFlag } from '@/lib/proctoring';
 import Link from 'next/link';
 
 const EVENT_META: Record<ProctoringEvent, { label: string; color: string }> = {
-  INVALID_FACE_COUNT: { label: 'Face Count', color: '#f4a261' },
+  NO_FACE:            { label: 'No Face', color: '#f4a261' },
+  MULTIPLE_FACES:     { label: 'Multiple Faces', color: '#e63946' },
   TAB_SWITCHED:       { label: 'Tab Switch', color: '#e63946' },
   LEFT_FULLSCREEN:    { label: 'Fullscreen Exit', color: '#e63946' },
   LOUD_AUDIO:         { label: 'Loud Audio', color: '#f4a261' },

@@ -2,7 +2,8 @@ import { ref, push } from 'firebase/database';
 import { rtdb } from './firebase';
 
 export type ProctoringEvent =
-  | 'INVALID_FACE_COUNT'
+  | 'NO_FACE'
+  | 'MULTIPLE_FACES'
   | 'TAB_SWITCHED'
   | 'LEFT_FULLSCREEN'
   | 'LOUD_AUDIO'

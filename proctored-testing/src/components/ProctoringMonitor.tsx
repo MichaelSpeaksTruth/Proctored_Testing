@@ -68,93 +68,110 @@ function detectRectangle(
       const gy =
         -gray[i - W - 1] - 2 * gray[i - W] - gray[i - W + 1] +
          gray[i + W - 1] + 2 * gray[i + W] + gray[i + W + 1];
-      edges[i] = Math.sqrt(gx * gx + gy * gy) > 35 ? 1 : 0;
+      edges[i] = Math.sqrt(gx * gx + gy * gy) > 40 ? 1 : 0;
     }
   }
 
-  // 3. Projection — count edge pixels per row / column
+  // 3. Projection with smoothing for tilted edges
   const rowE = new Int32Array(H);
   const colE = new Int32Array(W);
-  for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++)
-      if (edges[y * W + x]) { rowE[y]++; colE[x]++; }
-
-  // 4. Find strong line candidates (at least 22% of span)
-  const hLines: number[] = [];
-  const vLines: number[] = [];
-  for (let y = 2; y < H - 2; y++)
-    if (rowE[y] >= W * 0.22 && (hLines.length === 0 || y - hLines[hLines.length - 1] > 6))
-      hLines.push(y);
-  for (let x = 2; x < W - 2; x++)
-    if (colE[x] >= H * 0.22 && (vLines.length === 0 || x - vLines[vLines.length - 1] > 6))
-      vLines.push(x);
-
-  if (hLines.length < 2 || vLines.length < 2)
-    return { detected: false, score: 0 };
-
-  // Outermost lines form the bounding rectangle
-  const top    = hLines[0];
-  const bottom = hLines[hLines.length - 1];
-  const left   = vLines[0];
-  const right  = vLines[vLines.length - 1];
-
-  const rectH = bottom - top;
-  const rectW = right  - left;
-  if (rectW < 8 || rectH < 8) return { detected: false, score: 0 };
-
-  const areaFraction = (rectH / H) * (rectW / W);
-  const aspect       = rectW / rectH;
-
-  // 5. Phone-like aspect ratio
-  // Portrait smartphone: 0.36–0.73 | Landscape: 1.40–2.60 | Tablet: 0.65–0.80
-  const isPhoneAspect =
-    (aspect >= 0.36 && aspect <= 0.73) ||
-    (aspect >= 1.40 && aspect <= 2.60);
-
-  if (!isPhoneAspect || areaFraction < 0.08)
-    return { detected: false, score: 0, reason: `aspect=${aspect.toFixed(2)} area=${(areaFraction * 100).toFixed(0)}%` };
-
-  // 6. Internal uniformity (phone back/screen = single consistent surface)
-  let sumL = 0, sumSq = 0, n = 0;
-  for (let sy = top + 2; sy < bottom - 2; sy += 4) {
-    for (let sx = left + 2; sx < right - 2; sx += 4) {
-      const lum = gray[sy * W + sx];
-      sumL  += lum;
-      sumSq += lum * lum;
-      n++;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (edges[y * W + x]) {
+        rowE[y]++; colE[x]++;
+      }
     }
   }
-  const meanL    = n > 0 ? sumL / n : 128;
-  const variance = n > 0 ? sumSq / n - meanL * meanL : 9999;
-  const uniformityScore = Math.max(0, 1 - variance / 3500);
 
-  // 7. Darkness bias — phone backs/screens are often dark
-  const darknessScore = Math.max(0, 1 - meanL / 160);
+  const smoothRow = new Int32Array(H);
+  const smoothCol = new Int32Array(W);
+  for (let y = 2; y < H - 2; y++) smoothRow[y] = rowE[y-2] + rowE[y-1] + rowE[y] + rowE[y+1] + rowE[y+2];
+  for (let x = 2; x < W - 2; x++) smoothCol[x] = colE[x-2] + colE[x-1] + colE[x] + colE[x+1] + colE[x+2];
 
-  // 8. Coverage boost
-  const coverageScore = Math.min(1, areaFraction / 0.25);
+  // 4. Find all candidate line positions (threshold: ~15% of width/height over 5 pixels)
+  const hLines: number[] = [];
+  const vLines: number[] = [];
+  for (let y = 4; y < H - 4; y++)
+    if (smoothRow[y] >= W * 0.15 && (hLines.length === 0 || y - hLines[hLines.length - 1] > 4))
+      hLines.push(y);
+  for (let x = 4; x < W - 4; x++)
+    if (smoothCol[x] >= H * 0.15 && (vLines.length === 0 || x - vLines[vLines.length - 1] > 4))
+      vLines.push(x);
 
-  // 9. Corner edge confirmation
-  const corners = [
-    [top, left], [top, right - 1], [bottom - 1, left], [bottom - 1, right - 1],
-  ] as const;
-  const cornerHits = corners.filter(([cy, cx]) => edges[cy * W + cx]).length;
-  const cornerScore = cornerHits / 4;
+  if (hLines.length < 2 || vLines.length < 2) return { detected: false, score: 0 };
 
-  // Final weighted score
-  const score =
-    uniformityScore * 0.30 +
-    darknessScore   * 0.10 +
-    coverageScore   * 0.35 +
-    cornerScore     * 0.25;
+  // 5. Exhaustive search over all bounding boxes formed by these lines
+  let bestScore = 0;
+  let bestRect = null;
 
-  const detected = score >= 0.42 && areaFraction >= 0.10;
+  for (let i = 0; i < hLines.length - 1; i++) {
+    for (let j = i + 1; j < hLines.length; j++) {
+      for (let k = 0; k < vLines.length - 1; k++) {
+        for (let l = k + 1; l < vLines.length; l++) {
+          const top = hLines[i], bottom = hLines[j];
+          const left = vLines[k], right = vLines[l];
+          const rectH = bottom - top;
+          const rectW = right - left;
+          
+          if (rectW < 12 || rectH < 12) continue;
+          
+          const areaFraction = (rectH / H) * (rectW / W);
+          const aspect = rectW / rectH;
+          
+          // Relaxed phone aspect ratio (portrait: 0.3-0.85, landscape: 1.15-3.0)
+          const isPhoneAspect = (aspect >= 0.30 && aspect <= 0.85) || (aspect >= 1.15 && aspect <= 3.0);
+          if (!isPhoneAspect || areaFraction < 0.05) continue;
+          
+          let sumL = 0, sumSq = 0, n = 0;
+          for (let sy = top + 2; sy < bottom - 2; sy += 3) {
+            for (let sx = left + 2; sx < right - 2; sx += 3) {
+              const lum = gray[sy * W + sx];
+              sumL += lum; sumSq += lum * lum; n++;
+            }
+          }
+          if (n === 0) continue;
+          
+          const meanL = sumL / n;
+          const variance = (sumSq / n) - (meanL * meanL);
+          
+          // Phone backs are uniform (variance < 1500) and dark (mean < 130)
+          const uniformityScore = Math.max(0, 1 - variance / 2500);
+          const darknessScore = Math.max(0, 1 - meanL / 160);
+          
+          const baseScore = uniformityScore * 0.7 + darknessScore * 0.3;
+          if (baseScore > bestScore) {
+             bestScore = baseScore;
+             bestRect = { top, bottom, left, right, baseScore, areaFraction, aspect, variance };
+          }
+        }
+      }
+    }
+  }
+
+  if (!bestRect) return { detected: false, score: 0 };
+
+  // 6. Verify border edge density
+  let borderEdges = 0;
+  for (let x = bestRect.left; x <= bestRect.right; x++) {
+    if (edges[bestRect.top * W + x]) borderEdges++;
+    if (edges[bestRect.bottom * W + x]) borderEdges++;
+  }
+  for (let y = bestRect.top; y <= bestRect.bottom; y++) {
+    if (edges[y * W + bestRect.left]) borderEdges++;
+    if (edges[y * W + bestRect.right]) borderEdges++;
+  }
+  const expectedBorder = (bestRect.right - bestRect.left) * 2 + (bestRect.bottom - bestRect.top) * 2;
+  const borderDensity = borderEdges / expectedBorder;
+
+  // Final score requires both internal uniformity and external edges
+  const finalScore = (bestRect.baseScore * 0.6) + (Math.min(1, borderDensity / 0.3) * 0.4);
+  const detected = finalScore >= 0.45 && borderDensity > 0.12 && bestRect.areaFraction >= 0.08;
 
   return {
     detected,
-    score,
-    bbox: { x: left / W, y: top / H, w: rectW / W, h: rectH / H },
-    reason: `score=${score.toFixed(2)} area=${(areaFraction * 100).toFixed(0)}% AR=${aspect.toFixed(2)} var=${variance.toFixed(0)}`,
+    score: finalScore,
+    bbox: { x: bestRect.left / W, y: bestRect.top / H, w: (bestRect.right - bestRect.left) / W, h: (bestRect.bottom - bestRect.top) / H },
+    reason: `S=${finalScore.toFixed(2)} (base=${bestRect.baseScore.toFixed(2)}, bdr=${borderDensity.toFixed(2)}) var=${bestRect.variance.toFixed(0)}`,
   };
 }
 // =============================================================================
@@ -429,7 +446,8 @@ export default function ProctoringMonitor({
         faceMesh.onResults((results: { multiFaceLandmarks: LM[][] }) => {
           if (!mounted) return;
           const count = results.multiFaceLandmarks.length;
-          report('INVALID_FACE_COUNT', count !== 1, count === 0 ? 'medium' : 'critical');
+          report('NO_FACE', count === 0, 'medium');
+          report('MULTIPLE_FACES', count > 1, 'critical');
           pushStatus({ faceDetected: count === 1 });
 
           if (overlayCanvasRef?.current) {
