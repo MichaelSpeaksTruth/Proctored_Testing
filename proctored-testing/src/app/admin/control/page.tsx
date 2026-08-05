@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { rtdb } from '@/lib/firebase';
+import { rtdb, auth } from '@/lib/firebase';
 import { ref, set, get, update, onValue } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
@@ -30,11 +30,41 @@ function ControlContent() {
       const data = snap.val();
       if (data) {
         setTestStatus(data.status || 'pending');
-        if (data.activeTestId) setSelectedTestId(data.activeTestId);
+        setSelectedTestId(data.activeTestId || '');
+        setScheduledStart(data.scheduledStart || '');
+      } else {
+        setTestStatus('pending');
       }
     });
     return () => unsub();
   }, []);
+
+  const revalidateCache = async () => {
+    try {
+      setLoading(true);
+      setMsg('Purging global edge cache...');
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        setMsg('Error: Could not retrieve admin token.');
+        return;
+      }
+      const res = await fetch('/api/revalidate-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: token }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMsg('Cache purged successfully. Hotfixes will now propagate.');
+      } else {
+        setMsg(`Cache purge failed: ${data.error}`);
+      }
+    } catch (e: any) {
+      setMsg(`Cache purge error: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const startTest = async () => {
     if (!selectedTestId) { setMsg('Please select a test first.'); return; }
@@ -157,11 +187,22 @@ function ControlContent() {
             <button
               id="schedule-test-btn"
               className="btn btn-outline"
-              style={{ width: '100%', justifyContent: 'center' }}
+              style={{ width: '100%', justifyContent: 'center', marginBottom: 'var(--space-md)' }}
               onClick={scheduleTest}
               disabled={loading || !selectedTestId || !scheduledStart}
             >
                Schedule Test
+            </button>
+            <div className="divider" />
+            <h4 style={{ marginBottom: 'var(--space-sm)', color: 'var(--accent-red)' }}>Emergency Hotfix</h4>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 'var(--space-md)' }}>Purge the Edge CDN cache for test questions globally.</p>
+            <button
+              className="btn btn-outline"
+              style={{ width: '100%', justifyContent: 'center', borderColor: 'var(--accent-red)', color: 'var(--accent-red)' }}
+              onClick={revalidateCache}
+              disabled={loading}
+            >
+              Purge Global Cache
             </button>
           </div>
 

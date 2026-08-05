@@ -79,7 +79,7 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                       <span className={rs.className} style={{ fontWeight: rs.className ? 700 : 400 }}>{rs.symbol}</span>
                     </td>
                     <td style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{entry.name}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>{entry.email}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', wordBreak: 'break-all' }}>{entry.email}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
                       {entry.score}/{entry.total}
                     </td>
@@ -109,7 +109,7 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                       )}
                     </td>
                     <td>
-                      <div className="flex gap-sm">
+                      <div className="flex gap-sm" style={{ flexWrap: 'wrap' }}>
                         <button
                           className="btn btn-ghost btn-sm"
                           id={`expand-${entry.uid}`}
@@ -154,7 +154,7 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                         style={{ background: 'var(--bg-secondary)', padding: 'var(--space-lg)' }}
                       >
                         {entry.aiSummary && (
-                          <div className="alert alert-info" style={{ marginBottom: 'var(--space-md)' }}>
+                          <div className="alert alert-info" style={{ marginBottom: 'var(--space-md)', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                             <strong>AI Analysis:</strong> {entry.aiSummary}
                           </div>
                         )}

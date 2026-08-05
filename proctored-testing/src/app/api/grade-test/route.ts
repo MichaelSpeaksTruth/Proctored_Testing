@@ -80,6 +80,46 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, alreadySubmitted: true });
     }
 
+    // ── Guard: Clock Exploit Validation ────────────────────────────
+    const stateSnap = await db.ref('testState').once('value');
+    const testState = stateSnap.val();
+    
+    // We only enforce duration if the test has a startedAt timestamp
+    if (testState?.startedAt) {
+      const testSnap = await db.ref(`tests/${testId}`).once('value');
+      const testData = testSnap.val();
+      
+      if (testData?.sections) {
+        // Calculate total allowed duration in seconds
+        let totalAllowedSeconds = 0;
+        const sectionsArray = Array.isArray(testData.sections) 
+          ? testData.sections 
+          : Object.values(testData.sections);
+          
+        for (const sec of sectionsArray as any[]) {
+          if (sec.timeLimit) {
+            totalAllowedSeconds += sec.timeLimit;
+          }
+        }
+        
+        // Add a 2-minute (120 seconds) buffer for network latency/submission delays
+        const bufferSeconds = 120;
+        const maxAllowedDurationMs = (totalAllowedSeconds + bufferSeconds) * 1000;
+        
+        const startTimeMs = new Date(testState.startedAt).getTime();
+        const currentTimeMs = Date.now();
+        const actualDurationMs = currentTimeMs - startTimeMs;
+        
+        if (actualDurationMs > maxAllowedDurationMs) {
+          console.warn(`[grade-test] Clock exploit detected for ${email}. Duration: ${actualDurationMs}ms, Allowed: ${maxAllowedDurationMs}ms`);
+          return NextResponse.json(
+            { success: false, error: 'Deadline exceeded. Submission rejected.' },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
     // ── Write isolated submission ──────────────────────────────────
     // Each user writes to their own document path — no contention possible.
     await db.ref(`submissions/${testId}/${uid}`).set({

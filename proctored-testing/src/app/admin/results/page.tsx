@@ -345,7 +345,7 @@ function ResultsContent() {
 
   return (
     <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
-      <div className="container">
+      <div className="container" style={{ maxWidth: '1800px', width: '100%' }}>
         <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-xl)' }}>
           <Link href="/admin" className="btn btn-ghost btn-sm">← Back</Link>
           <h1 style={{ fontSize: '1.75rem' }}>Results & Grading</h1>
