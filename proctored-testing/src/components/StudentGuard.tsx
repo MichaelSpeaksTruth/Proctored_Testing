@@ -28,7 +28,7 @@ export default function StudentGuard({ children }: { children: React.ReactNode }
       
       const snap = await get(ref(rtdb, `participants/${key}`));
       if (!snap.exists() || snap.val()?.allowed !== true) {
-        setError(`Your email (${user.email}) is not registered for this exam. Please contact the admin.`);
+        setError(`Your email is not listed in the participants list, if you think this is a mistake please contact club administration.`);
         setChecking(false);
         return;
       }

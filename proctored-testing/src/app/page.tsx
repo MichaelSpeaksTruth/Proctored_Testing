@@ -52,7 +52,7 @@ export default function LoginPage() {
       if (!pSnap.exists() || pSnap.val()?.allowed !== true) {
         await auth.signOut();
         setError(
-          `Your email (${user.email}) is not registered for this examination. Please contact the administrators.`
+          `Your email is not listed in the participants list, if you think this is a mistake please contact club administration.`
         );
         setLoading(false);
         return;

@@ -11,6 +11,11 @@ interface Props {
 export default function CountdownTimer({ durationSeconds, onExpire, label }: Props) {
   const [remaining, setRemaining] = useState(durationSeconds);
   const expiredRef = useRef(false);
+  const onExpireRef = useRef(onExpire);
+
+  useEffect(() => {
+    onExpireRef.current = onExpire;
+  }, [onExpire]);
 
   useEffect(() => {
     expiredRef.current = false;
@@ -21,7 +26,7 @@ export default function CountdownTimer({ durationSeconds, onExpire, label }: Pro
           clearInterval(interval);
           if (!expiredRef.current) {
             expiredRef.current = true;
-            onExpire?.();
+            onExpireRef.current?.();
           }
           return 0;
         }
@@ -29,7 +34,7 @@ export default function CountdownTimer({ durationSeconds, onExpire, label }: Pro
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [durationSeconds, onExpire]);
+  }, [durationSeconds]);
 
   const hours = Math.floor(remaining / 3600);
   const minutes = Math.floor((remaining % 3600) / 60);

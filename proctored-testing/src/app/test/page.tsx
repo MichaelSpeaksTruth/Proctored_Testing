@@ -95,6 +95,18 @@ function TestContent() {
     return () => unsub();
   }, []);
 
+  // ── Check if already submitted ─────────────────────────────
+  useEffect(() => {
+    if (uid && testId) {
+      get(ref(rtdb, `submissions/${testId}/${uid}`)).then(snap => {
+        if (snap.exists()) {
+          setSubmitted(true);
+          router.replace('/student-dashboard');
+        }
+      });
+    }
+  }, [uid, testId, router]);
+
   // ── Enforce fullscreen ────────────────────────────────────────
   const enterFullscreenAndStart = useCallback(() => {
     if (!isMobileDevice && !document.fullscreenElement) {
