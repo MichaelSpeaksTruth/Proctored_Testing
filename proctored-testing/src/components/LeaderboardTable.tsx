@@ -13,7 +13,7 @@ export interface LeaderboardEntry {
   flagCount: number;
   aiSeverity?: string;
   aiSummary?: string;
-  flags?: { event: string; severity: string; timestamp: string }[];
+  flags?: { event: string; severity: string; timestamp?: string; startTime?: string }[];
   interviewScheduled?: boolean;
   panelNo?: string;
   venue?: string;
@@ -183,7 +183,7 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                                   </span>{' '}
                                   {f.event}{' '}
                                   <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
-                                    {new Date(f.timestamp).toLocaleTimeString()}
+                                    {new Date(f.startTime || f.timestamp || '').toLocaleTimeString()}
                                   </span>
                                 </div>
                               ))}

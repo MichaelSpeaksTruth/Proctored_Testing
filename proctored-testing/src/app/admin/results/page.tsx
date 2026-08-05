@@ -61,7 +61,7 @@ function ResultsContent() {
             // Get proctoring flags
             const flagsSnap = await get(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}/flags`));
             const flagsData = flagsSnap.val();
-            const flags = flagsData ? Object.values(flagsData) as { event: string; severity: string; timestamp: string }[] : [];
+            const flags = flagsData ? Object.values(flagsData) as { event: string; severity: string; timestamp?: string; startTime?: string }[] : [];
 
             const isEmailUid = data.email === uid;
             const fallbackEmail = isEmailUid ? 'Unknown Email' : (data.email || 'Unknown Email');
@@ -249,7 +249,7 @@ function ResultsContent() {
         const flagsSnap = await get(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}/flags`));
         const flagsData = flagsSnap.val();
         const flags = flagsData
-          ? Object.values(flagsData) as { event: string; severity: string; timestamp: string }[]
+          ? Object.values(flagsData) as { event: string; severity: string; timestamp?: string; startTime?: string }[]
           : [];
 
         entries.push({
