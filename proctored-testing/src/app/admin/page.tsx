@@ -29,7 +29,8 @@ function AdminHomeContent() {
   }, []);
 
   return (
-    <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
+    <main className="page-wrapper" style={{ minHeight: '100vh', padding: 'var(--space-md) 0' }}>
+      <div className="container">
       {/* Navbar */}
       <nav className="navbar" style={{ marginBottom: 'var(--space-2xl)', borderRadius: 'var(--radius-lg)' }}>
         <div className="brand">
@@ -41,7 +42,7 @@ function AdminHomeContent() {
             <div className="brand-sub">BIT Mesra · Examination Control</div>
           </div>
         </div>
-        <div className="flex items-center gap-md">
+        <div className="flex items-center gap-md navbar-actions">
           <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
             {email}
           </span>
@@ -55,8 +56,7 @@ function AdminHomeContent() {
         </div>
       </nav>
 
-      <div className="container">
-        <div style={{ marginBottom: 'var(--space-2xl)' }}>
+      <div style={{ marginBottom: 'var(--space-2xl)' }}>
           <h1 style={{ marginBottom: 'var(--space-sm)' }}>Admin Dashboard</h1>
           <p>Manage the examination lifecycle from setup to results declaration.</p>
         </div>

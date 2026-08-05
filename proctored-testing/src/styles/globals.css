@@ -601,6 +601,14 @@ tr:last-child td { border-bottom: none; }
   h1 { font-size: 1.75rem; }
   h2 { font-size: 1.375rem; }
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
-  .navbar { padding: var(--space-md); }
+  .navbar { 
+    padding: var(--space-md);
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-md);
+  }
+  .navbar-actions {
+    justify-content: space-between;
+  }
   .container { padding: 0 var(--space-md); }
 }
