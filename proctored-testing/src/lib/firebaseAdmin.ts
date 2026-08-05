@@ -29,7 +29,7 @@ function getAdminApp(): App {
     return _app;
   }
 
-  const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  let serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
   if (!serviceAccountKey) {
     throw new Error(
       'FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set. ' +
@@ -37,7 +37,23 @@ function getAdminApp(): App {
     );
   }
 
-  const serviceAccount = JSON.parse(serviceAccountKey) as ServiceAccount;
+  // Vercel sometimes wraps JSON env vars in extra quotes or double-escapes newlines
+  if (serviceAccountKey.startsWith('"') && serviceAccountKey.endsWith('"')) {
+    serviceAccountKey = serviceAccountKey.slice(1, -1);
+  }
+  // If the private key newlines were not escaped properly in the JSON string
+  serviceAccountKey = serviceAccountKey.replace(/\\n/g, '\\n'); // Ensure it stays escaped for JSON.parse
+
+  let serviceAccount: ServiceAccount;
+  try {
+    serviceAccount = JSON.parse(serviceAccountKey);
+    // In case the private key still has escaped newlines after parsing
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    }
+  } catch (err: any) {
+    throw new Error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY: ' + err.message);
+  }
 
   _app = initializeApp({
     credential: cert(serviceAccount),

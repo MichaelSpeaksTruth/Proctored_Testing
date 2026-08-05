@@ -131,10 +131,10 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (err) {
+  } catch (err: any) {
     console.error('[grade-test] Error:', err);
     return NextResponse.json(
-      { success: false, error: 'Internal server error.' },
+      { success: false, error: `Server error: ${err.message}` },
       { status: 500 }
     );
   }
