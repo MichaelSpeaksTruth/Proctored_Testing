@@ -30,6 +30,7 @@ interface TestData {
 function TestContent() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const [uid, setUid] = useState<string | null>(null);
   const [testData, setTestData] = useState<TestData | null>(null);
   const [testId, setTestId] = useState<string | null>(null);
@@ -106,16 +107,17 @@ function TestContent() {
   // ── Violation handler (shows banner for 3s) ──────────────────
   const handleViolation = useCallback((flag: DurationFlag) => {
     const messages: Record<ProctoringEvent, string> = {
-      INVALID_FACE_COUNT: `WARNING: Face visibility issue logged (${flag.durationInSeconds}s).`,
-      TAB_SWITCHED: `WARNING: Tab switching logged (${flag.durationInSeconds}s).`,
-      LEFT_FULLSCREEN: `WARNING: Exited fullscreen logged (${flag.durationInSeconds}s).`,
-      LOUD_AUDIO: `WARNING: Loud audio logged (${flag.durationInSeconds}s).`,
-      CAMERA_COVERED: `CRITICAL: Camera covered logged (${flag.durationInSeconds}s).`,
-      PHONE_DETECTED: `CRITICAL: Mobile device detected (${flag.durationInSeconds}s).`,
+      INVALID_FACE_COUNT: `⚠ Face visibility issue logged (${flag.durationInSeconds}s).`,
+      TAB_SWITCHED:       `🚨 Tab switching logged (${flag.durationInSeconds}s).`,
+      LEFT_FULLSCREEN:    `⚠ Exited fullscreen logged (${flag.durationInSeconds}s).`,
+      LOUD_AUDIO:         `⚠ Loud audio detected (${flag.durationInSeconds}s).`,
+      CAMERA_COVERED:     `🚨 Camera covered logged (${flag.durationInSeconds}s).`,
+      PHONE_DETECTED:     `🚨 Mobile device detected (${flag.durationInSeconds}s).`,
+      GAZE_AWAY:          `⚠ Looking away from screen logged (${flag.durationInSeconds}s).`,
     };
-    setViolation(messages[flag.event] || 'WARNING: Proctoring violation logged.');
+    setViolation(messages[flag.event] || '⚠ Proctoring violation logged.');
     if (violationTimeoutRef.current) clearTimeout(violationTimeoutRef.current);
-    violationTimeoutRef.current = setTimeout(() => setViolation(null), 3000);
+    violationTimeoutRef.current = setTimeout(() => setViolation(null), 3500);
   }, []);
 
 
@@ -430,9 +432,22 @@ function TestContent() {
 
 
 
-      {/* Proctoring engine + webcam */}
-      {uid && examStarted && <ProctoringMonitor uid={uid} videoRef={videoRef} onViolation={handleViolation} />}
-      <WebcamFeed ref={videoRef} stream={stream} />
+      {/* Proctoring engine */}
+      {uid && examStarted && (
+        <ProctoringMonitor
+          uid={uid}
+          videoRef={videoRef}
+          onViolation={handleViolation}
+          overlayCanvasRef={overlayCanvasRef}
+        />
+      )}
+      {/* Hidden webcam feed + canvas overlay (not visible to student) */}
+      <div style={{ position: 'fixed', opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
+        <div style={{ position: 'relative' }}>
+          <WebcamFeed ref={videoRef} stream={stream} />
+          <canvas ref={overlayCanvasRef} style={{ position: 'absolute', inset: 0 }} />
+        </div>
+      </div>
     </main>
   );
 }

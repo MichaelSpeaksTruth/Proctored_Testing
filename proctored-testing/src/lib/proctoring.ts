@@ -7,7 +7,8 @@ export type ProctoringEvent =
   | 'LEFT_FULLSCREEN'
   | 'LOUD_AUDIO'
   | 'CAMERA_COVERED'
-  | 'PHONE_DETECTED';
+  | 'PHONE_DETECTED'
+  | 'GAZE_AWAY';
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 
