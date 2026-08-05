@@ -160,8 +160,8 @@ function ResultsContent() {
           email,
         });
 
-        // Fetch flags from RTDB
-        const flagsSnap = await get(ref(rtdb, `proctoringFlags/${uid}`));
+        // Fetch flags from RTDB — stored at new path uid/testId/flags
+        const flagsSnap = await get(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}/flags`));
         const flagsData = flagsSnap.val();
         const flags = flagsData
           ? Object.values(flagsData) as { event: string; severity: string; timestamp: string }[]

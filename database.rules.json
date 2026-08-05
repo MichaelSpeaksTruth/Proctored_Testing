@@ -6,8 +6,15 @@
     },
     "proctoringFlags": {
       "$uid": {
-        ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
-        ".write": "$uid == auth.uid"
+        ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com' || $uid == auth.uid",
+        "$testId": {
+          "flags": {
+            ".write": "$uid == auth.uid"
+          }
+        },
+        "flags": {
+          ".write": "$uid == auth.uid"
+        }
       }
     },
     "tests": {

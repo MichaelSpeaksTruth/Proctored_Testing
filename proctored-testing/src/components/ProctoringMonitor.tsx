@@ -5,25 +5,34 @@ import { ref, push } from 'firebase/database';
 import { rtdb } from '@/lib/firebase';
 import { ProctoringEvent, Severity, DurationFlag } from '@/lib/proctoring';
 
-// ── Hysteresis ───────────────────────────────────────────────────────────────
+// ── Hysteresis ────────────────────────────────────────────────────────────────
 // Require N consecutive bad frames BEFORE opening a violation → kills false positives.
 // Require M consecutive clean frames BEFORE closing a violation → prevents ping-pong.
 const FRAMES_TO_START = 14;
 const FRAMES_TO_CLEAR = 20;
 
 // MediaPipe FaceMesh landmark indices (out of 468)
-const IDX_NOSE_TIP   = 4;
-const IDX_FOREHEAD   = 10;
-const IDX_CHIN       = 152;
-const IDX_LEFT_EAR   = 234;
-const IDX_RIGHT_EAR  = 454;
+const IDX_NOSE_TIP  = 4;
+const IDX_FOREHEAD  = 10;
+const IDX_CHIN      = 152;
+const IDX_LEFT_EAR  = 234;
+const IDX_RIGHT_EAR = 454;
+
+// ── Phone/object classes we watch for ────────────────────────────────────────
+// Include common phone-like objects. Score thresholds are per-class.
+const PHONE_CLASSES: Record<string, number> = {
+  'cell phone':  0.30,   // Low threshold — phones from back look like rectangles
+  'remote':      0.35,
+  'laptop':      0.40,
+  'book':        0.45,
+};
 
 interface Props {
   uid: string;
+  testId?: string;                                          // ← needed for DB path
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onViolation?: (flag: DurationFlag) => void;
   calibrationMode?: boolean;
-  /** Optional canvas to draw face-mesh / object overlays on top of the video */
   overlayCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
 }
 
@@ -31,24 +40,32 @@ type LM = { x: number; y: number; z: number };
 
 export default function ProctoringMonitor({
   uid,
+  testId,
   videoRef,
   onViolation,
   calibrationMode = false,
   overlayCanvasRef,
 }: Props) {
-  // Active (ongoing) infractions map: event → { startTime, severity }
+
   const activeInfractions = useRef<Map<ProctoringEvent, { startTime: number; severity: Severity }>>(
     new Map()
   );
-
-  // Hysteresis counters per event
   const hys = useRef<Map<ProctoringEvent, { v: number; c: number }>>(new Map());
   const getHys = (e: ProctoringEvent) => {
     if (!hys.current.has(e)) hys.current.set(e, { v: 0, c: 0 });
     return hys.current.get(e)!;
   };
 
-  // ── Core infraction open/close ─────────────────────────────────────────────
+  // ── DB path helper ────────────────────────────────────────────────────────
+  // Stores flags at: proctoringFlags/{uid}/{testId}/flags  (or just /{uid}/flags in calibration)
+  const flagPath = useCallback(() => {
+    if (calibrationMode) return `proctoringFlags/calibration`;
+    return testId
+      ? `proctoringFlags/${uid}/${testId}/flags`
+      : `proctoringFlags/${uid}/flags`;
+  }, [uid, testId, calibrationMode]);
+
+  // ── Core infraction open/close ────────────────────────────────────────────
   const openInfraction = useCallback(
     (event: ProctoringEvent, severity: Severity) => {
       if (activeInfractions.current.has(event)) return;
@@ -73,12 +90,14 @@ export default function ProctoringMonitor({
         durationInSeconds,
       };
       onViolation?.(flag);
-      if (!calibrationMode) push(ref(rtdb, `proctoringFlags/${uid}`), flag);
+      if (!calibrationMode) {
+        push(ref(rtdb, flagPath()), flag);
+      }
     },
-    [uid, onViolation, calibrationMode]
+    [calibrationMode, flagPath, onViolation]
   );
 
-  // ── Hysteresis-gated report (call every frame) ────────────────────────────
+  // ── Hysteresis-gated report ───────────────────────────────────────────────
   const report = useCallback(
     (event: ProctoringEvent, violating: boolean, severity: Severity) => {
       const h = getHys(event);
@@ -88,7 +107,7 @@ export default function ProctoringMonitor({
         if (h.v >= FRAMES_TO_START) openInfraction(event, severity);
       } else {
         h.c++;
-        h.v = Math.max(0, h.v - 2); // gradual decay
+        h.v = Math.max(0, h.v - 2);
         if (h.c >= FRAMES_TO_CLEAR) {
           closeInfraction(event);
           h.v = 0;
@@ -108,86 +127,117 @@ export default function ProctoringMonitor({
     let cocoTimer: ReturnType<typeof setInterval> | null = null;
     let mounted = true;
 
-    // Ambient noise calibration state
+    // Ambient noise calibration
     let ambientBaseline = 0.06;
     let calibFrames = 0;
     let calibSum = 0;
-    const CALIB_FRAMES = 60; // ~2s
+    const CALIB_FRAMES = 60;
 
     // ── 1. Tab Switch & Fullscreen (discrete — bypass hysteresis) ─────────────
     const onVisibility = () => {
-      if (document.hidden) {
-        openInfraction('TAB_SWITCHED', 'critical');
-      } else {
-        closeInfraction('TAB_SWITCHED');
-      }
+      if (document.hidden) openInfraction('TAB_SWITCHED', 'critical');
+      else closeInfraction('TAB_SWITCHED');
     };
     const onFullscreen = () => {
-      if (!document.fullscreenElement) {
-        openInfraction('LEFT_FULLSCREEN', 'high');
-      } else {
-        closeInfraction('LEFT_FULLSCREEN');
-      }
+      if (!document.fullscreenElement) openInfraction('LEFT_FULLSCREEN', 'high');
+      else closeInfraction('LEFT_FULLSCREEN');
     };
     document.addEventListener('visibilitychange', onVisibility);
     document.addEventListener('fullscreenchange', onFullscreen);
 
     // ── 2. Phone / Object Detection (COCO-SSD) ────────────────────────────────
+    // We pre-process the video frame onto a smaller canvas to:
+    //  a) Boost contrast slightly (helps phone-back detection)
+    //  b) Give TF a fixed-size tensor (faster & more consistent)
+    const DETECT_W = 416;
+    const DETECT_H = 416;
+    const detectCanvas = document.createElement('canvas');
+    detectCanvas.width = DETECT_W;
+    detectCanvas.height = DETECT_H;
+    const detectCtx = detectCanvas.getContext('2d', { willReadFrequently: true });
+
     const initCoco = async () => {
       if (!mounted) return;
       try {
-        await import('@tensorflow/tfjs');
+        // Force WebGL backend for GPU acceleration (much faster inference)
+        const tf = await import('@tensorflow/tfjs');
+        await tf.setBackend('webgl');
+        await tf.ready();
+
         const cocoSsd = await import('@tensorflow-models/coco-ssd');
-        // mobilenet_v2 is much more accurate than lite for real-world objects
+        // lite_mobilenet_v2: faster but less accurate
+        // mobilenet_v2: more accurate, better for dark/partial objects
         const model = await cocoSsd.load({ base: 'mobilenet_v2' });
 
-        const CHEAT_CLASSES = new Set([
-          'cell phone', 'remote', 'book', 'laptop',
-        ]);
+        // Warm-up run: forces GPU shader compilation so first real inference is fast
+        if (mounted && videoRef.current && videoRef.current.readyState === 4) {
+          try { await model.detect(videoRef.current); } catch { /* warmup can fail */ }
+        }
 
         let detecting = false;
+
+        // Run every 1200ms — fast enough to catch a phone being held up briefly
         cocoTimer = setInterval(async () => {
           if (!mounted || !videoRef.current || videoRef.current.readyState !== 4 || detecting)
             return;
           try {
             detecting = true;
-            const preds = await model.detect(videoRef.current);
 
-            // Draw bounding boxes on overlay canvas
-            if (overlayCanvasRef?.current) {
+            // Draw current frame onto detection canvas (pre-process)
+            if (detectCtx && videoRef.current.videoWidth > 0) {
+              detectCtx.filter = 'contrast(1.15) brightness(1.05)';
+              detectCtx.drawImage(videoRef.current, 0, 0, DETECT_W, DETECT_H);
+              detectCtx.filter = 'none';
+            }
+
+            // Detect on the pre-processed canvas
+            const preds = await model.detect(detectCanvas);
+
+            // Also detect directly on video for a second pass at native resolution
+            const predsNative = await model.detect(videoRef.current);
+
+            // Merge both prediction sets
+            const allPreds = [...preds, ...predsNative];
+
+            // Draw all detected objects on overlay canvas
+            if (overlayCanvasRef?.current && videoRef.current.videoWidth > 0) {
               const cv = overlayCanvasRef.current;
               const gx = cv.getContext('2d');
-              if (gx && videoRef.current.videoWidth > 0) {
+              if (gx) {
                 const sx = cv.width / videoRef.current.videoWidth;
                 const sy = cv.height / videoRef.current.videoHeight;
-                preds.forEach((p) => {
-                  if (p.score < 0.45) return;
-                  const isCheat = CHEAT_CLASSES.has(p.class);
+                // Use native-res predictions for drawing (correct coordinates)
+                predsNative.forEach((p) => {
+                  if (p.score < 0.25) return;
+                  const isCheat = p.class in PHONE_CLASSES;
                   const [bx, by, bw, bh] = p.bbox;
-                  gx.strokeStyle = isCheat ? '#ff3333' : '#33ff99';
-                  gx.lineWidth = 2;
+                  gx.strokeStyle = isCheat ? '#ff2222' : '#22ff88';
+                  gx.lineWidth = isCheat ? 3 : 1.5;
                   gx.strokeRect(bx * sx, by * sy, bw * sx, bh * sy);
-                  gx.fillStyle = isCheat ? 'rgba(255,51,51,0.7)' : 'rgba(51,255,153,0.7)';
-                  gx.font = 'bold 11px monospace';
+                  gx.fillStyle = isCheat ? 'rgba(255,34,34,0.8)' : 'rgba(34,255,136,0.8)';
+                  gx.font = `bold ${isCheat ? 13 : 11}px monospace`;
                   gx.fillText(
                     `${p.class} ${(p.score * 100).toFixed(0)}%`,
                     bx * sx + 2,
-                    by * sy - 4
+                    by * sy > 14 ? by * sy - 4 : by * sy + 14
                   );
                 });
               }
             }
 
-            const phoneDetected = preds.some(
-              (p) => CHEAT_CLASSES.has(p.class) && p.score > 0.58
-            );
+            // Check if any cheat object detected across both passes
+            const phoneDetected = allPreds.some((p) => {
+              const threshold = PHONE_CLASSES[p.class];
+              return threshold !== undefined && p.score >= threshold;
+            });
+
             report('PHONE_DETECTED', phoneDetected, 'critical');
           } catch {
-            /* ignore */
+            /* suppress inference errors */
           } finally {
             detecting = false;
           }
-        }, 2500);
+        }, 1200);
       } catch (e) {
         console.warn('[Proctor] COCO-SSD load failed:', e);
       }
@@ -208,7 +258,7 @@ export default function ProctoringMonitor({
 
         faceMesh.setOptions({
           maxNumFaces: 4,
-          refineLandmarks: true,          // uses iris refine model — much more accurate
+          refineLandmarks: true,
           minDetectionConfidence: 0.65,
           minTrackingConfidence: 0.65,
         });
@@ -217,7 +267,6 @@ export default function ProctoringMonitor({
           if (!mounted) return;
           const count = results.multiFaceLandmarks.length;
 
-          // Face count check with hysteresis
           report('INVALID_FACE_COUNT', count !== 1, count === 0 ? 'medium' : 'critical');
 
           if (overlayCanvasRef?.current) {
@@ -225,30 +274,20 @@ export default function ProctoringMonitor({
             const gx = cv.getContext('2d');
             const W = cv.width;
             const H = cv.height;
-
-            if (gx && W > 0 && H > 0) {
-              if (count === 0) {
-                // No face warning overlay
-                gx.fillStyle = 'rgba(255,60,60,0.18)';
-                gx.fillRect(0, 0, W, H);
-                gx.fillStyle = '#ff4444';
-                gx.font = 'bold 16px monospace';
-                gx.textAlign = 'center';
-                gx.fillText('⚠ NO FACE DETECTED', W / 2, H / 2);
-                gx.textAlign = 'left';
-              } else if (count > 1) {
-                gx.fillStyle = 'rgba(255,60,60,0.18)';
-                gx.fillRect(0, 0, W, H);
-                gx.fillStyle = '#ff4444';
-                gx.font = 'bold 16px monospace';
-                gx.textAlign = 'center';
-                gx.fillText(`⚠ MULTIPLE FACES (${count})`, W / 2, H / 2);
-                gx.textAlign = 'left';
-              }
+            if (gx && W > 0 && H > 0 && count !== 1) {
+              gx.fillStyle = 'rgba(255,50,50,0.15)';
+              gx.fillRect(0, 0, W, H);
+              gx.fillStyle = '#ff4444';
+              gx.font = 'bold 15px monospace';
+              gx.textAlign = 'center';
+              gx.fillText(
+                count === 0 ? '⚠ NO FACE DETECTED' : `⚠ ${count} FACES DETECTED`,
+                W / 2, H / 2
+              );
+              gx.textAlign = 'left';
             }
           }
 
-          // Head pose + gaze tracking when exactly 1 face
           if (count === 1) {
             const lm = results.multiFaceLandmarks[0];
             const noseTip  = lm[IDX_NOSE_TIP];
@@ -257,26 +296,22 @@ export default function ProctoringMonitor({
             const forehead = lm[IDX_FOREHEAD];
             const chin     = lm[IDX_CHIN];
 
-            // Yaw: how far the nose is from the centre between ears
             const faceW = rightEar.x - leftEar.x;
             const yawRatio = faceW > 0.01
-              ? (noseTip.x - leftEar.x) / faceW   // 0=full-left, 0.5=forward, 1=full-right
+              ? (noseTip.x - leftEar.x) / faceW
               : 0.5;
 
-            // Pitch: nose position within forehead-chin span
             const faceH = chin.y - forehead.y;
             const pitchRatio = faceH > 0.01
-              ? (noseTip.y - forehead.y) / faceH   // 0=up, 0.5=level, 1=down
+              ? (noseTip.y - forehead.y) / faceH
               : 0.5;
 
-            // >±30° yaw or >30° pitch down / >15° pitch up → looking away
             const yawDeg   = (yawRatio - 0.5) * 90;
             const pitchDeg = (pitchRatio - 0.5) * 90;
             const gazeAway = Math.abs(yawDeg) > 28 || pitchDeg > 30 || pitchDeg < -18;
 
             report('GAZE_AWAY', gazeAway, 'medium');
 
-            // Draw landmarks + gaze HUD on overlay canvas
             if (overlayCanvasRef?.current) {
               const cv = overlayCanvasRef.current;
               const gx = cv.getContext('2d');
@@ -285,7 +320,6 @@ export default function ProctoringMonitor({
               if (gx && W > 0) {
                 const dotColor = gazeAway ? 'rgba(255,120,0,0.85)' : 'rgba(0,255,120,0.85)';
                 gx.fillStyle = dotColor;
-                // Draw every 4th landmark for performance
                 for (let i = 0; i < lm.length; i += 4) {
                   const p = lm[i];
                   gx.beginPath();
@@ -293,7 +327,7 @@ export default function ProctoringMonitor({
                   gx.fill();
                 }
 
-                // Gaze direction arrow from nose tip
+                // Gaze arrow
                 gx.strokeStyle = gazeAway ? '#ff7800' : '#00ff78';
                 gx.lineWidth = 2.5;
                 gx.beginPath();
@@ -305,7 +339,6 @@ export default function ProctoringMonitor({
                 gx.moveTo(nx, ny);
                 gx.lineTo(ax, ay);
                 gx.stroke();
-                // Arrowhead
                 const angle = Math.atan2(ay - ny, ax - nx);
                 gx.beginPath();
                 gx.moveTo(ax, ay);
@@ -315,12 +348,12 @@ export default function ProctoringMonitor({
                 gx.fillStyle = gazeAway ? '#ff7800' : '#00ff78';
                 gx.fill();
 
-                // HUD text bottom-left
-                gx.font = 'bold 12px monospace';
-                gx.fillStyle = gazeAway ? '#ff7800' : '#00ff78';
+                // HUD
                 const gazeLabel = gazeAway
                   ? `⚠ GAZE AWAY  Y:${yawDeg.toFixed(0)}° P:${pitchDeg.toFixed(0)}°`
                   : `✓ FACE OK    Y:${yawDeg.toFixed(0)}° P:${pitchDeg.toFixed(0)}°`;
+                gx.font = 'bold 12px monospace';
+                gx.fillStyle = gazeAway ? '#ff7800' : '#00ff78';
                 gx.fillText(gazeLabel, 6, H - 8);
               }
             }
@@ -336,20 +369,14 @@ export default function ProctoringMonitor({
               if (!videoRef.current || !mounted || processing) return;
               try {
                 processing = true;
-                // Sync canvas dimensions once per frame
                 if (overlayCanvasRef?.current && videoRef.current.videoWidth > 0) {
                   const cv = overlayCanvasRef.current;
-                  if (cv.width !== videoRef.current.videoWidth)
-                    cv.width = videoRef.current.videoWidth;
-                  if (cv.height !== videoRef.current.videoHeight)
-                    cv.height = videoRef.current.videoHeight;
-                  // Clear before each render pass
+                  if (cv.width !== videoRef.current.videoWidth) cv.width = videoRef.current.videoWidth;
+                  if (cv.height !== videoRef.current.videoHeight) cv.height = videoRef.current.videoHeight;
                   cv.getContext('2d')?.clearRect(0, 0, cv.width, cv.height);
                 }
                 await faceMesh.send({ image: videoRef.current });
-              } catch {
-                /* suppress */
-              } finally {
+              } catch { /* suppress */ } finally {
                 processing = false;
               }
             },
@@ -387,30 +414,25 @@ export default function ProctoringMonitor({
         const tick = () => {
           if (!mounted) return;
 
-          // RMS of time-domain signal
           analyser.getFloatTimeDomainData(timeBuf);
           let sumSq = 0;
           for (let i = 0; i < timeBuf.length; i++) sumSq += timeBuf[i] * timeBuf[i];
           const rms = Math.sqrt(sumSq / timeBuf.length);
 
-          // Phase 1: ambient calibration (first ~2s)
           if (calibFrames < CALIB_FRAMES) {
             calibSum += rms;
             calibFrames++;
             if (calibFrames === CALIB_FRAMES) {
-              // Baseline = 3× the ambient RMS, clamped to reasonable range
               ambientBaseline = Math.max(0.045, Math.min(0.14, (calibSum / CALIB_FRAMES) * 3.2));
             }
           } else {
-            // Phase 2: speech frequency energy (300–3500 Hz) check
             analyser.getByteFrequencyData(freqBuf);
-            const binHz    = (audioCtx!.sampleRate / 2) / freqBuf.length;
+            const binHz = (audioCtx!.sampleRate / 2) / freqBuf.length;
             const lo = Math.floor(300  / binHz);
             const hi = Math.min(Math.floor(3500 / binHz), freqBuf.length - 1);
             let speechSum = 0;
             for (let i = lo; i <= hi; i++) speechSum += freqBuf[i];
             const speechAvg = speechSum / (hi - lo + 1);
-
             const isLoud = rms > ambientBaseline || speechAvg > 72;
 
             if (isLoud) {
@@ -422,7 +444,7 @@ export default function ProctoringMonitor({
             }
           }
 
-          // Camera covered: check average frame luminance
+          // Camera covered
           if (hCtx && videoRef.current && videoRef.current.readyState === 4) {
             hCtx.drawImage(videoRef.current, 0, 0, 64, 64);
             const pixels = hCtx.getImageData(0, 0, 64, 64).data;
@@ -447,12 +469,11 @@ export default function ProctoringMonitor({
       document.removeEventListener('visibilitychange', onVisibility);
       document.removeEventListener('fullscreenchange', onFullscreen);
 
-      // Flush any active infractions
       const endMs = Date.now();
       activeInfractions.current.forEach((val, event) => {
         const dur = Math.round((endMs - val.startTime) / 1000);
         if (dur >= 1 && !calibrationMode) {
-          push(ref(rtdb, `proctoringFlags/${uid}`), {
+          push(ref(rtdb, flagPath()), {
             event,
             severity: val.severity,
             startTime: new Date(val.startTime).toISOString(),
@@ -471,7 +492,7 @@ export default function ProctoringMonitor({
       if (audioStream) audioStream.getTracks().forEach((t) => t.stop());
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uid]);
+  }, [uid, testId]);
 
   return null;
 }

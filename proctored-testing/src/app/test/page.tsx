@@ -446,6 +446,7 @@ function TestContent() {
       {uid && examStarted && (
         <ProctoringMonitor
           uid={uid}
+          testId={testId ?? undefined}
           videoRef={videoRef}
           onViolation={handleViolation}
           overlayCanvasRef={overlayCanvasRef}
