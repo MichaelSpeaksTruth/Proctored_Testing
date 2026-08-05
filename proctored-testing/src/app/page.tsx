@@ -126,7 +126,7 @@ export default function LoginPage() {
           AeroSoc
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9375rem' }}>
-          Aeronautical Society · Official Examination Portal
+          Aerospace Society · Official Examination Portal
         </p>
       </div>
 
@@ -189,7 +189,7 @@ export default function LoginPage() {
           letterSpacing: '0.04em',
         }}
       >
-        AERONAUTICAL SOCIETY · BIT MESRA · RANCHI
+        AEROSPACE SOCIETY · BIT MESRA · RANCHI
       </div>
     </main>
   );
