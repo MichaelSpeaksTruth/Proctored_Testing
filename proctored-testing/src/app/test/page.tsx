@@ -227,6 +227,28 @@ function TestContent() {
   const totalSections = testData?.sections.length || 0;
   const totalQuestions = currentSection?.questions.length || 0;
 
+  // ── Block exam cheating shortcuts (copy, right-click, print) ──────────
+  useEffect(() => {
+    if (!examStarted) return;
+    const blockCopy = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        ['c', 'C', 'a', 'A', 's', 'S', 'p', 'P', 'u', 'U'].includes(e.key)
+      ) {
+        e.preventDefault();
+      }
+    };
+    const blockContext = (e: MouseEvent) => e.preventDefault();
+    const blockPrint = () => window.print = () => {};
+    document.addEventListener('keydown', blockCopy);
+    document.addEventListener('contextmenu', blockContext);
+    blockPrint();
+    return () => {
+      document.removeEventListener('keydown', blockCopy);
+      document.removeEventListener('contextmenu', blockContext);
+    };
+  }, [examStarted]);
+
   // ── Admin force-end lock screen ────────────────────────────
   if (locked && !submitted) {
     handleSubmit(true);
@@ -352,28 +374,6 @@ function TestContent() {
       </main>
     );
   }
-
-  // ── Block exam cheating shortcuts (copy, right-click, print) ──────────
-  useEffect(() => {
-    if (!examStarted) return;
-    const blockCopy = (e: KeyboardEvent) => {
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        ['c', 'C', 'a', 'A', 's', 'S', 'p', 'P', 'u', 'U'].includes(e.key)
-      ) {
-        e.preventDefault();
-      }
-    };
-    const blockContext = (e: MouseEvent) => e.preventDefault();
-    const blockPrint = () => window.print = () => {};
-    document.addEventListener('keydown', blockCopy);
-    document.addEventListener('contextmenu', blockContext);
-    blockPrint();
-    return () => {
-      document.removeEventListener('keydown', blockCopy);
-      document.removeEventListener('contextmenu', blockContext);
-    };
-  }, [examStarted]);
 
   // ── Main test interface ───────────────────────────────────
   return (
