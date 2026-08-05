@@ -92,9 +92,13 @@ function SetupContent() {
       text: qText.trim(),
       type: qType,
       tag: qTag.trim(),
-      options: qType === 'mcq' ? qOptions.filter(Boolean) : undefined,
-      timeLimit: qTimeLimit || undefined,
     };
+    if (qType === 'mcq') {
+      newQ.options = qOptions.filter(Boolean);
+    }
+    if (qTimeLimit) {
+      newQ.timeLimit = qTimeLimit;
+    }
     const updatedSections = test.sections.map(s =>
       s.id === qSectionId ? { ...s, questions: [...s.questions, newQ] } : s
     );
