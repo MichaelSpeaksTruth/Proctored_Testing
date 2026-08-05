@@ -9,10 +9,10 @@
   --bg-input: #0c0c0c;
 
   /* Text */
-  --text-primary: #f5f5f5;
-  --text-secondary: #c0c0c0;
-  --text-muted: #666666;
-  --text-dim: #333333;
+  --text-primary: #fafafa;
+  --text-secondary: #d4d4d8;
+  --text-muted: #a1a1aa;
+  --text-dim: #71717a;
 
   /* Accents — NO blue, purple, pink, violet */
   --accent-green: #2d6a4f;
