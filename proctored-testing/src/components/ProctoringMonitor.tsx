@@ -141,7 +141,7 @@ function detectRectangle(
           const baseScore = uniformityScore * 0.7 + darknessScore * 0.3;
           if (baseScore > bestScore) {
              bestScore = baseScore;
-             bestRect = { top, bottom, left, right, baseScore, areaFraction, aspect, variance };
+             bestRect = { top, bottom, left, right, baseScore, areaFraction, aspect, variance, meanL };
           }
         }
       }
@@ -163,15 +163,51 @@ function detectRectangle(
   const expectedBorder = (bestRect.right - bestRect.left) * 2 + (bestRect.bottom - bestRect.top) * 2;
   const borderDensity = borderEdges / expectedBorder;
 
-  // Final score requires both internal uniformity and external edges
-  const finalScore = (bestRect.baseScore * 0.6) + (Math.min(1, borderDensity / 0.3) * 0.4);
-  const detected = finalScore >= 0.45 && borderDensity > 0.12 && bestRect.areaFraction >= 0.08;
+  // 7. Detect Camera Lens (Circles on the rectangle)
+  let maxLensScore = 0;
+  const rh = bestRect.bottom - bestRect.top;
+  const scanTop = bestRect.top + 2;
+  const scanBottom = bestRect.bottom - 5;
+  const scanLeft = bestRect.left + 2;
+  const scanRight = bestRect.right - 5;
+
+  for (let cy = scanTop; cy <= scanBottom; cy++) {
+    // Only search the top 35% and bottom 35% (corners) for camera lenses
+    if (cy > bestRect.top + rh * 0.35 && cy < bestRect.bottom - rh * 0.35) continue;
+    
+    for (let cx = scanLeft; cx <= scanRight; cx++) {
+      let centerSum = 0;
+      let edgeHits = 0;
+      // Evaluate a 3x3 inner patch for circular features
+      for (let dy = 0; dy <= 2; dy++) {
+        for (let dx = 0; dx <= 2; dx++) {
+          centerSum += gray[(cy + dy) * W + (cx + dx)];
+          if (edges[(cy + dy) * W + (cx + dx)]) edgeHits++;
+        }
+      }
+      const centerMean = centerSum / 9;
+      // Camera lenses stand out with high local contrast compared to the phone body
+      const contrast = Math.abs(centerMean - bestRect.meanL);
+      if (contrast > 12 && edgeHits >= 3) {
+        const score = (contrast / 40) * (edgeHits / 6);
+        if (score > maxLensScore) maxLensScore = score;
+      }
+    }
+  }
+
+  const lensBoost = Math.min(1.0, maxLensScore) * 0.35;
+
+  // Final score requires both internal uniformity and external edges, boosted by camera presence
+  const finalScore = (bestRect.baseScore * 0.5) + (Math.min(1, borderDensity / 0.3) * 0.5) + lensBoost;
+  
+  // With the smart lens detector, we can drop the density requirement slightly
+  const detected = finalScore >= 0.52 && borderDensity > 0.08 && bestRect.areaFraction >= 0.06;
 
   return {
     detected,
     score: finalScore,
     bbox: { x: bestRect.left / W, y: bestRect.top / H, w: (bestRect.right - bestRect.left) / W, h: (bestRect.bottom - bestRect.top) / H },
-    reason: `S=${finalScore.toFixed(2)} (base=${bestRect.baseScore.toFixed(2)}, bdr=${borderDensity.toFixed(2)}) var=${bestRect.variance.toFixed(0)}`,
+    reason: `S=${finalScore.toFixed(2)} (cam=${lensBoost.toFixed(2)}, base=${bestRect.baseScore.toFixed(2)}, bdr=${borderDensity.toFixed(2)})`,
   };
 }
 // =============================================================================

@@ -5,6 +5,7 @@
       ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'"
     },
     "proctoringFlags": {
+      ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
       "$uid": {
         ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com' || $uid == auth.uid",
         "$testId": {
@@ -30,6 +31,7 @@
     },
     "submissions": {
       ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
+      ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
       "$testId": {
         "$uid": {
           ".read": "$uid == auth.uid",
