@@ -67,9 +67,19 @@ function TestContent() {
         setTestId(data.activeTestId);
         const testSnap = await get(ref(rtdb, `tests/${data.activeTestId}`));
         if (testSnap.exists()) {
-          const t = testSnap.val() as TestData;
-          t.sections = t.sections || [];
-          setTestData(t);
+          const raw = testSnap.val();
+          // RTDB returns arrays as numbered objects; normalise back to real arrays
+          const toArr = <T,>(v: unknown): T[] => {
+            if (!v) return [];
+            if (Array.isArray(v)) return v as T[];
+            if (typeof v === 'object') return Object.values(v as Record<string, T>);
+            return [];
+          };
+          const sections = toArr<Section>(raw.sections).map((s: Section) => ({
+            ...s,
+            questions: toArr<Question>(s.questions),
+          }));
+          setTestData({ ...raw, sections });
         }
       }
     });

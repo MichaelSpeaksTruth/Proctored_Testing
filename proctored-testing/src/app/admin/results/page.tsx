@@ -103,10 +103,17 @@ function ResultsContent() {
       const testSnap = await get(ref(rtdb, `tests/${selectedTestId}`));
       const testData = testSnap.val();
       const questionTagMap: Record<string, string> = {}; // questionId -> tag
-      (testData?.sections || []).forEach((sec: { questions: { id: string; tag: string }[] }) => {
-        if (sec.questions) {
-          sec.questions.forEach((q) => { questionTagMap[q.id] = q.tag; });
-        }
+      // RTDB returns arrays as numbered objects — normalise both sections and questions
+      const toArr = <T,>(v: unknown): T[] => {
+        if (!v) return [];
+        if (Array.isArray(v)) return v as T[];
+        if (typeof v === 'object') return Object.values(v as Record<string, T>);
+        return [];
+      };
+      toArr<{ questions: unknown; id: string; tag: string }>(testData?.sections).forEach((sec) => {
+        toArr<{ id: string; tag: string }>(sec.questions).forEach((q) => {
+          questionTagMap[q.id] = q.tag;
+        });
       });
       const totalQuestions = Object.keys(questionTagMap).length;
 

@@ -40,18 +40,27 @@ function SetupContent() {
   const [qSectionId, setQSectionId] = useState('');
   const [qTimeLimit, setQTimeLimit] = useState(0);
 
+  // Firebase RTDB never stores empty arrays and returns arrays as numbered objects.
+  // This helper normalises any value to a real JS array.
+  const toArr = <T,>(v: unknown): T[] => {
+    if (!v) return [];
+    if (Array.isArray(v)) return v as T[];
+    if (typeof v === 'object') return Object.values(v as Record<string, T>);
+    return [];
+  };
+
   const fetchTests = async () => {
     const snap = await get(ref(rtdb, 'tests'));
     const val = snap.val();
-    if (!val) {
-      setTests([]);
-      return;
-    }
-    const parsed = Object.keys(val).map(key => ({ 
-      id: key, 
-      ...val[key],
-      sections: val[key].sections || []
-    }));
+    if (!val) { setTests([]); return; }
+    const parsed: TestDraft[] = Object.keys(val).map(key => {
+      const t = val[key];
+      const sections: Section[] = toArr<Section>(t.sections).map((s: Section) => ({
+        ...s,
+        questions: toArr<Question>(s.questions),
+      }));
+      return { id: key, ...t, sections };
+    });
     setTests(parsed);
   };
 
