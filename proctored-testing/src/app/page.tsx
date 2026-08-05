@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, rtdb } from '@/lib/firebase';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
-import { ref, get } from 'firebase/database';
+import { ref, get, update } from 'firebase/database';
 import { isAdmin } from '@/lib/adminUtils';
 import Image from 'next/image';
 
@@ -57,6 +57,10 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
+
+      // Update participant record with UID to enable mapping later
+      await update(ref(rtdb, `participants/${key}`), { uid: user.uid });
+
 
       router.replace('/waiting-room');
     } catch (err: unknown) {

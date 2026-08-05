@@ -636,7 +636,9 @@ export default function ProctoringMonitor({
           for (let i = 0; i < timeBuf.length; i++) sumSq += timeBuf[i] * timeBuf[i];
           const rms = Math.sqrt(sumSq / timeBuf.length);
           
-          const isMuted = rms < 0.0001; // hardware mute or completely dead
+          // Software check: verify the stream has an active audio track instead of relying on a strict RMS threshold
+          // which can cause issues with device noise gates (e.g. on iPhones requiring shouting).
+          const isMuted = !audioStream || audioStream.getAudioTracks().length === 0 || audioStream.getAudioTracks()[0].readyState !== 'live';
           report('MIC_MUTED', isMuted, 'critical');
           pushStatus({ micWorking: !isMuted });
 

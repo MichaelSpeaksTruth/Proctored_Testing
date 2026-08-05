@@ -9,7 +9,7 @@ import Link from 'next/link';
 
 interface TestOption { id: string; title: string; }
 interface AnswerKey { [tag: string]: string; }
-interface Submission { answers: Record<string, string>; submittedAt: string; autoSubmitted: boolean; }
+interface Submission { answers: Record<string, string>; submittedAt: string; autoSubmitted: boolean; email?: string; name?: string; }
 
 function ResultsContent() {
   const [tests, setTests] = useState<TestOption[]>([]);
@@ -63,10 +63,17 @@ function ResultsContent() {
             const flagsData = flagsSnap.val();
             const flags = flagsData ? Object.values(flagsData) as { event: string; severity: string; timestamp: string }[] : [];
 
+            const isEmailUid = data.email === uid;
+            const fallbackEmail = isEmailUid ? 'Unknown Email' : (data.email || 'Unknown Email');
+            let fallbackName = data.name || uidToName[uid];
+            if (!fallbackName) {
+              fallbackName = isEmailUid ? 'Unknown Name' : (data.email?.split('@')[0] || 'Unknown Name');
+            }
+
             entries.push({
               uid,
-              name: uidToName[uid] || data.email?.split('@')[0] || uid,
-              email: data.email,
+              name: fallbackName,
+              email: fallbackEmail,
               score: data.score,
               total: data.total,
               rank: data.rank,
@@ -198,7 +205,7 @@ function ResultsContent() {
       });
 
       // Score each submission
-      const scored: { uid: string; email: string; score: number }[] = [];
+      const scored: { uid: string; email: string; name: string; score: number }[] = [];
       for (const uid of Object.keys(subsData)) {
         const sub = subsData[uid] as Submission;
         let score = 0;
@@ -206,7 +213,11 @@ function ResultsContent() {
           const tag = questionTagMap[qId];
           if (tag && key![tag] === ans) score++;
         });
-        scored.push({ uid, email: uidToData[uid]?.email || uid, score });
+        
+        const emailFallback = sub.email || uidToData[uid]?.email || 'Unknown Email';
+        const nameFallback = sub.name || uidToData[uid]?.name || (emailFallback !== 'Unknown Email' ? emailFallback.split('@')[0] : 'Unknown Name');
+        
+        scored.push({ uid, email: emailFallback, name: nameFallback, score });
       }
 
       // Sort by score descending, assign ranks
@@ -215,7 +226,7 @@ function ResultsContent() {
 
       // Fetch proctoring flags for each
       for (let i = 0; i < scored.length; i++) {
-        const { uid, email, score } = scored[i];
+        const { uid, email, name, score } = scored[i];
         const rank = i + 1;
 
         // Check for existing result first to preserve fields
@@ -231,6 +242,7 @@ function ResultsContent() {
           rank,
           roundStatus,
           email,
+          name,
         });
 
         // Fetch flags from RTDB - stored at new path uid/testId/flags
@@ -242,7 +254,7 @@ function ResultsContent() {
 
         entries.push({
           uid,
-          name: uidToData[uid]?.name || email.split('@')[0],
+          name,
           email,
           score,
           total: totalQuestions,

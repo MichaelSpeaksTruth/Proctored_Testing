@@ -157,6 +157,8 @@ function TestContent() {
           answers,
           submittedAt: new Date().toISOString(),
           autoSubmitted: autoSubmit,
+          email: auth.currentUser?.email || '',
+          name: auth.currentUser?.displayName || '',
         });
         if (document.fullscreenElement) document.exitFullscreen();
         router.replace('/student-dashboard');
