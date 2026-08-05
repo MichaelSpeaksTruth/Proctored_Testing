@@ -7,9 +7,6 @@ export const metadata: Metadata = {
   description:
     'Official online examination portal for AeroSoc — Aerospace Society of BIT Mesra. Secure, proctored, and fully encrypted.',
   keywords: ['AeroSoc', 'BIT Mesra', 'Online Exam', 'Proctored Test', 'Aerospace Society'],
-  icons: {
-    icon: '/aerosoc_logo.jpg',
-  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
