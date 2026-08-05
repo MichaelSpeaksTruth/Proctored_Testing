@@ -190,6 +190,7 @@ interface Props {
   onViolationStart?: (event: ProctoringEvent, severity: Severity) => void;
   onStatusChange?: (status: MonitorStatus) => void;
   calibrationMode?: boolean;
+  isSubmitting?: boolean;
   overlayCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
 }
 
@@ -203,12 +204,19 @@ export default function ProctoringMonitor({
   onViolationStart,
   onStatusChange,
   calibrationMode = false,
+  isSubmitting = false,
   overlayCanvasRef,
 }: Props) {
 
   const activeInfractions = useRef<Map<ProctoringEvent, { startTime: number; severity: Severity }>>(
     new Map()
   );
+  // Keep a ref of isSubmitting to avoid re-binding event listeners
+  const isSubmittingRef = useRef(isSubmitting);
+  useEffect(() => {
+    isSubmittingRef.current = isSubmitting;
+  }, [isSubmitting]);
+
   const hys = useRef<Map<ProctoringEvent, { v: number; c: number }>>(new Map());
   const getHys = (e: ProctoringEvent) => {
     if (!hys.current.has(e)) hys.current.set(e, { v: 0, c: 0 });
@@ -301,14 +309,23 @@ export default function ProctoringMonitor({
     let calibSum = 0;
     const CALIB_FRAMES = 60;
 
-    // ── 1. Tab Switch & Fullscreen ────────────────────────────────────────────
+    // ── 1. Tab & Window monitoring ────────────────────────────────────────────
     const onVisibility = () => {
-      if (document.hidden) openInfraction('TAB_SWITCHED', 'critical');
-      else closeInfraction('TAB_SWITCHED');
+      if (isSubmittingRef.current) return;
+      if (document.hidden) {
+        openInfraction('TAB_SWITCHED', 'critical');
+      } else {
+        closeInfraction('TAB_SWITCHED');
+      }
     };
+
     const onFullscreen = () => {
-      if (!document.fullscreenElement) openInfraction('LEFT_FULLSCREEN', 'high');
-      else closeInfraction('LEFT_FULLSCREEN');
+      if (isSubmittingRef.current) return;
+      if (!document.fullscreenElement) {
+        openInfraction('LEFT_FULLSCREEN', 'high');
+      } else {
+        closeInfraction('LEFT_FULLSCREEN');
+      }
     };
     document.addEventListener('visibilitychange', onVisibility);
     document.addEventListener('fullscreenchange', onFullscreen);
@@ -485,7 +502,7 @@ export default function ProctoringMonitor({
             const pitchRatio = faceH > 0.01 ? (noseTip.y - forehead.y) / faceH : 0.5;
             const yawDeg     = (yawRatio - 0.5) * 90;
             const pitchDeg   = (pitchRatio - 0.5) * 90;
-            const gazeAway   = Math.abs(yawDeg) > 28 || pitchDeg > 30 || pitchDeg < -18;
+            const gazeAway   = Math.abs(yawDeg) > 28 || pitchDeg > 20 || pitchDeg < -18;
 
             report('GAZE_AWAY', gazeAway, 'medium');
 

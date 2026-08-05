@@ -47,7 +47,14 @@ function TestContent() {
   const [permError, setPermError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [hardwareStatus, setHardwareStatus] = useState<MonitorStatus>({ faceDetected: false, cameraCovered: false, micWorking: false });
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
   const violationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (typeof navigator !== 'undefined') {
+      setIsMobileDevice(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    }
+  }, []);
 
   // ── Auth ──────────────────────────────────────────────────
   useEffect(() => {
@@ -90,11 +97,11 @@ function TestContent() {
 
   // ── Enforce fullscreen ────────────────────────────────────────
   const enterFullscreenAndStart = useCallback(() => {
-    if (!document.fullscreenElement) {
+    if (!isMobileDevice && !document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(console.error);
     }
     setExamStarted(true);
-  }, []);
+  }, [isMobileDevice]);
 
   // ── Request camera + mic permissions ─────────────────────────
   const requestPermissions = async () => {
@@ -276,7 +283,7 @@ function TestContent() {
             onClick={enterFullscreenAndStart}
             disabled={!allGood}
           >
-            {allGood ? 'Start Exam & Enter Fullscreen' : 'Waiting for hardware...'}
+            {allGood ? (isMobileDevice ? 'Start Exam' : 'Start Exam & Enter Fullscreen') : 'Waiting for hardware...'}
           </button>
         </div>
         
@@ -302,9 +309,6 @@ function TestContent() {
   // ── Main test interface ───────────────────────────────────
   return (
     <main style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
-      {/* Violation banner */}
-      {violation && <div className="proctoring-banner">{violation}</div>}
-
       {/* Top bar */}
       <div className="test-topbar">
         <div className="brand">
