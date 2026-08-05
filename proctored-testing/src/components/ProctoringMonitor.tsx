@@ -6,8 +6,6 @@ import { rtdb } from '@/lib/firebase';
 import { ProctoringEvent, Severity, DurationFlag } from '@/lib/proctoring';
 
 // ── Hysteresis ────────────────────────────────────────────────────────────────
-// Require N consecutive bad frames BEFORE opening a violation → kills false positives.
-// Require M consecutive clean frames BEFORE closing a violation → prevents ping-pong.
 const FRAMES_TO_START = 14;
 const FRAMES_TO_CLEAR = 20;
 
@@ -18,18 +16,152 @@ const IDX_CHIN      = 152;
 const IDX_LEFT_EAR  = 234;
 const IDX_RIGHT_EAR = 454;
 
-// ── Phone/object classes we watch for ────────────────────────────────────────
-// Include common phone-like objects. Score thresholds are per-class.
+// COCO-SSD classes that indicate a device is present
 const PHONE_CLASSES: Record<string, number> = {
-  'cell phone':  0.30,   // Low threshold — phones from back look like rectangles
-  'remote':      0.35,
-  'laptop':      0.40,
-  'book':        0.45,
+  'cell phone': 0.28,
+  'remote':     0.32,
+  'laptop':     0.38,
+  'book':       0.42,
 };
+
+// =============================================================================
+// Custom Rectangle / Phone Detector
+// Uses Sobel edge detection + projection analysis — no ML model required.
+// Detects ANY large rectangular object with phone-like dimensions even when
+// COCO-SSD fails to classify it (e.g. phone seen from the back).
+// =============================================================================
+interface RectResult {
+  detected: boolean;
+  score: number;
+  bbox?: { x: number; y: number; w: number; h: number };
+  reason?: string;
+}
+
+function detectRectangle(
+  videoEl: HTMLVideoElement,
+  workCanvas: HTMLCanvasElement
+): RectResult {
+  const W = 160, H = 120;
+  workCanvas.width  = W;
+  workCanvas.height = H;
+  const ctx = workCanvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx || videoEl.readyState < 2 || videoEl.videoWidth === 0)
+    return { detected: false, score: 0 };
+
+  ctx.drawImage(videoEl, 0, 0, W, H);
+  const { data } = ctx.getImageData(0, 0, W, H);
+
+  // 1. Grayscale
+  const gray = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    gray[i] = (data[i * 4] * 77 + data[i * 4 + 1] * 150 + data[i * 4 + 2] * 29) >> 8;
+  }
+
+  // 2. Sobel Edge Detection
+  const edges = new Uint8Array(W * H);
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      const i = y * W + x;
+      const gx =
+        -gray[i - W - 1] - 2 * gray[i - 1] - gray[i + W - 1] +
+         gray[i - W + 1] + 2 * gray[i + 1] + gray[i + W + 1];
+      const gy =
+        -gray[i - W - 1] - 2 * gray[i - W] - gray[i - W + 1] +
+         gray[i + W - 1] + 2 * gray[i + W] + gray[i + W + 1];
+      edges[i] = Math.sqrt(gx * gx + gy * gy) > 35 ? 1 : 0;
+    }
+  }
+
+  // 3. Projection — count edge pixels per row / column
+  const rowE = new Int32Array(H);
+  const colE = new Int32Array(W);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++)
+      if (edges[y * W + x]) { rowE[y]++; colE[x]++; }
+
+  // 4. Find strong line candidates (at least 22% of span)
+  const hLines: number[] = [];
+  const vLines: number[] = [];
+  for (let y = 2; y < H - 2; y++)
+    if (rowE[y] >= W * 0.22 && (hLines.length === 0 || y - hLines[hLines.length - 1] > 6))
+      hLines.push(y);
+  for (let x = 2; x < W - 2; x++)
+    if (colE[x] >= H * 0.22 && (vLines.length === 0 || x - vLines[vLines.length - 1] > 6))
+      vLines.push(x);
+
+  if (hLines.length < 2 || vLines.length < 2)
+    return { detected: false, score: 0 };
+
+  // Outermost lines form the bounding rectangle
+  const top    = hLines[0];
+  const bottom = hLines[hLines.length - 1];
+  const left   = vLines[0];
+  const right  = vLines[vLines.length - 1];
+
+  const rectH = bottom - top;
+  const rectW = right  - left;
+  if (rectW < 8 || rectH < 8) return { detected: false, score: 0 };
+
+  const areaFraction = (rectH / H) * (rectW / W);
+  const aspect       = rectW / rectH;
+
+  // 5. Phone-like aspect ratio
+  // Portrait smartphone: 0.36–0.73 | Landscape: 1.40–2.60 | Tablet: 0.65–0.80
+  const isPhoneAspect =
+    (aspect >= 0.36 && aspect <= 0.73) ||
+    (aspect >= 1.40 && aspect <= 2.60);
+
+  if (!isPhoneAspect || areaFraction < 0.08)
+    return { detected: false, score: 0, reason: `aspect=${aspect.toFixed(2)} area=${(areaFraction * 100).toFixed(0)}%` };
+
+  // 6. Internal uniformity (phone back/screen = single consistent surface)
+  let sumL = 0, sumSq = 0, n = 0;
+  for (let sy = top + 2; sy < bottom - 2; sy += 4) {
+    for (let sx = left + 2; sx < right - 2; sx += 4) {
+      const lum = gray[sy * W + sx];
+      sumL  += lum;
+      sumSq += lum * lum;
+      n++;
+    }
+  }
+  const meanL    = n > 0 ? sumL / n : 128;
+  const variance = n > 0 ? sumSq / n - meanL * meanL : 9999;
+  const uniformityScore = Math.max(0, 1 - variance / 3500);
+
+  // 7. Darkness bias — phone backs/screens are often dark
+  const darknessScore = Math.max(0, 1 - meanL / 160);
+
+  // 8. Coverage boost
+  const coverageScore = Math.min(1, areaFraction / 0.25);
+
+  // 9. Corner edge confirmation
+  const corners = [
+    [top, left], [top, right - 1], [bottom - 1, left], [bottom - 1, right - 1],
+  ] as const;
+  const cornerHits = corners.filter(([cy, cx]) => edges[cy * W + cx]).length;
+  const cornerScore = cornerHits / 4;
+
+  // Final weighted score
+  const score =
+    uniformityScore * 0.30 +
+    darknessScore   * 0.10 +
+    coverageScore   * 0.35 +
+    cornerScore     * 0.25;
+
+  const detected = score >= 0.42 && areaFraction >= 0.10;
+
+  return {
+    detected,
+    score,
+    bbox: { x: left / W, y: top / H, w: rectW / W, h: rectH / H },
+    reason: `score=${score.toFixed(2)} area=${(areaFraction * 100).toFixed(0)}% AR=${aspect.toFixed(2)} var=${variance.toFixed(0)}`,
+  };
+}
+// =============================================================================
 
 interface Props {
   uid: string;
-  testId?: string;                                          // ← needed for DB path
+  testId?: string;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onViolation?: (flag: DurationFlag) => void;
   calibrationMode?: boolean;
@@ -56,8 +188,7 @@ export default function ProctoringMonitor({
     return hys.current.get(e)!;
   };
 
-  // ── DB path helper ────────────────────────────────────────────────────────
-  // Stores flags at: proctoringFlags/{uid}/{testId}/flags  (or just /{uid}/flags in calibration)
+  // DB path: proctoringFlags/{uid}/{testId}/flags
   const flagPath = useCallback(() => {
     if (calibrationMode) return `proctoringFlags/calibration`;
     return testId
@@ -65,7 +196,6 @@ export default function ProctoringMonitor({
       : `proctoringFlags/${uid}/flags`;
   }, [uid, testId, calibrationMode]);
 
-  // ── Core infraction open/close ────────────────────────────────────────────
   const openInfraction = useCallback(
     (event: ProctoringEvent, severity: Severity) => {
       if (activeInfractions.current.has(event)) return;
@@ -90,14 +220,11 @@ export default function ProctoringMonitor({
         durationInSeconds,
       };
       onViolation?.(flag);
-      if (!calibrationMode) {
-        push(ref(rtdb, flagPath()), flag);
-      }
+      if (!calibrationMode) push(ref(rtdb, flagPath()), flag);
     },
     [calibrationMode, flagPath, onViolation]
   );
 
-  // ── Hysteresis-gated report ───────────────────────────────────────────────
   const report = useCallback(
     (event: ProctoringEvent, violating: boolean, severity: Severity) => {
       const h = getHys(event);
@@ -125,15 +252,15 @@ export default function ProctoringMonitor({
     let faceMeshInst: { close: () => void } | null = null;
     let rafId: number | null = null;
     let cocoTimer: ReturnType<typeof setInterval> | null = null;
+    let rectTimer: ReturnType<typeof setInterval> | null = null;
     let mounted = true;
 
-    // Ambient noise calibration
     let ambientBaseline = 0.06;
     let calibFrames = 0;
     let calibSum = 0;
     const CALIB_FRAMES = 60;
 
-    // ── 1. Tab Switch & Fullscreen (discrete — bypass hysteresis) ─────────────
+    // ── 1. Tab Switch & Fullscreen ────────────────────────────────────────────
     const onVisibility = () => {
       if (document.hidden) openInfraction('TAB_SWITCHED', 'critical');
       else closeInfraction('TAB_SWITCHED');
@@ -145,12 +272,43 @@ export default function ProctoringMonitor({
     document.addEventListener('visibilitychange', onVisibility);
     document.addEventListener('fullscreenchange', onFullscreen);
 
-    // ── 2. Phone / Object Detection (COCO-SSD) ────────────────────────────────
-    // We pre-process the video frame onto a smaller canvas to:
-    //  a) Boost contrast slightly (helps phone-back detection)
-    //  b) Give TF a fixed-size tensor (faster & more consistent)
-    const DETECT_W = 416;
-    const DETECT_H = 416;
+    // ── 2a. Custom Rectangle Detector (runs every 600ms — fast, no model load) ──
+    const workCanvas = document.createElement('canvas');
+
+    rectTimer = setInterval(() => {
+      if (!mounted || !videoRef.current || videoRef.current.readyState < 2) return;
+      const result = detectRectangle(videoRef.current, workCanvas);
+
+      // Draw result on overlay canvas
+      if (overlayCanvasRef?.current && videoRef.current.videoWidth > 0) {
+        const cv = overlayCanvasRef.current;
+        const gx = cv.getContext('2d');
+        if (gx && result.bbox) {
+          const { x, y, w, h } = result.bbox;
+          const cx = x * cv.width, cy = y * cv.height;
+          const cw = w * cv.width, ch = h * cv.height;
+          gx.strokeStyle = result.detected ? '#ff2200' : `rgba(255,180,0,${result.score.toFixed(2)})`;
+          gx.lineWidth   = result.detected ? 3 : 1.5;
+          gx.setLineDash(result.detected ? [] : [6, 4]);
+          gx.strokeRect(cx, cy, cw, ch);
+          gx.setLineDash([]);
+          if (result.detected) {
+            gx.fillStyle = 'rgba(255,34,0,0.85)';
+            gx.font = 'bold 13px monospace';
+            gx.fillText(`RECT OBJECT ${(result.score * 100).toFixed(0)}%`, cx + 2, cy > 18 ? cy - 4 : cy + ch + 14);
+          } else if (result.score > 0.25) {
+            gx.fillStyle = 'rgba(255,180,0,0.7)';
+            gx.font = '11px monospace';
+            gx.fillText(`rect? ${(result.score * 100).toFixed(0)}%`, cx + 2, cy > 14 ? cy - 4 : cy + ch + 12);
+          }
+        }
+      }
+
+      report('PHONE_DETECTED', result.detected, 'critical');
+    }, 600);
+
+    // ── 2b. COCO-SSD Object Detection (secondary, slower) ─────────────────────
+    const DETECT_W = 416, DETECT_H = 416;
     const detectCanvas = document.createElement('canvas');
     detectCanvas.width = DETECT_W;
     detectCanvas.height = DETECT_H;
@@ -159,85 +317,69 @@ export default function ProctoringMonitor({
     const initCoco = async () => {
       if (!mounted) return;
       try {
-        // Force WebGL backend for GPU acceleration (much faster inference)
         const tf = await import('@tensorflow/tfjs');
         await tf.setBackend('webgl');
         await tf.ready();
-
         const cocoSsd = await import('@tensorflow-models/coco-ssd');
-        // lite_mobilenet_v2: faster but less accurate
-        // mobilenet_v2: more accurate, better for dark/partial objects
         const model = await cocoSsd.load({ base: 'mobilenet_v2' });
 
-        // Warm-up run: forces GPU shader compilation so first real inference is fast
+        // Warm-up inference
         if (mounted && videoRef.current && videoRef.current.readyState === 4) {
-          try { await model.detect(videoRef.current); } catch { /* warmup can fail */ }
+          try { await model.detect(videoRef.current); } catch { /* ok */ }
         }
 
         let detecting = false;
-
-        // Run every 1200ms — fast enough to catch a phone being held up briefly
         cocoTimer = setInterval(async () => {
-          if (!mounted || !videoRef.current || videoRef.current.readyState !== 4 || detecting)
-            return;
+          if (!mounted || !videoRef.current || videoRef.current.readyState !== 4 || detecting) return;
           try {
             detecting = true;
-
-            // Draw current frame onto detection canvas (pre-process)
             if (detectCtx && videoRef.current.videoWidth > 0) {
               detectCtx.filter = 'contrast(1.15) brightness(1.05)';
               detectCtx.drawImage(videoRef.current, 0, 0, DETECT_W, DETECT_H);
               detectCtx.filter = 'none';
             }
-
-            // Detect on the pre-processed canvas
             const preds = await model.detect(detectCanvas);
-
-            // Also detect directly on video for a second pass at native resolution
             const predsNative = await model.detect(videoRef.current);
+            const all = [...preds, ...predsNative];
 
-            // Merge both prediction sets
-            const allPreds = [...preds, ...predsNative];
-
-            // Draw all detected objects on overlay canvas
+            // Draw COCO boxes (don't clear — FaceMesh draws first)
             if (overlayCanvasRef?.current && videoRef.current.videoWidth > 0) {
               const cv = overlayCanvasRef.current;
               const gx = cv.getContext('2d');
               if (gx) {
                 const sx = cv.width / videoRef.current.videoWidth;
                 const sy = cv.height / videoRef.current.videoHeight;
-                // Use native-res predictions for drawing (correct coordinates)
                 predsNative.forEach((p) => {
-                  if (p.score < 0.25) return;
+                  if (p.score < 0.22) return;
                   const isCheat = p.class in PHONE_CLASSES;
                   const [bx, by, bw, bh] = p.bbox;
-                  gx.strokeStyle = isCheat ? '#ff2222' : '#22ff88';
-                  gx.lineWidth = isCheat ? 3 : 1.5;
+                  gx.strokeStyle = isCheat ? '#ff2200' : '#22ff88';
+                  gx.lineWidth   = isCheat ? 2.5 : 1;
                   gx.strokeRect(bx * sx, by * sy, bw * sx, bh * sy);
-                  gx.fillStyle = isCheat ? 'rgba(255,34,34,0.8)' : 'rgba(34,255,136,0.8)';
-                  gx.font = `bold ${isCheat ? 13 : 11}px monospace`;
+                  gx.fillStyle = isCheat ? 'rgba(255,34,0,0.85)' : 'rgba(34,255,136,0.7)';
+                  gx.font = `bold ${isCheat ? 12 : 10}px monospace`;
                   gx.fillText(
                     `${p.class} ${(p.score * 100).toFixed(0)}%`,
                     bx * sx + 2,
-                    by * sy > 14 ? by * sy - 4 : by * sy + 14
+                    by * sy > 14 ? by * sy - 4 : by * sy + bh * sy + 12
                   );
                 });
               }
             }
 
-            // Check if any cheat object detected across both passes
-            const phoneDetected = allPreds.some((p) => {
-              const threshold = PHONE_CLASSES[p.class];
-              return threshold !== undefined && p.score >= threshold;
+            const cocoDetected = all.some((p) => {
+              const thr = PHONE_CLASSES[p.class];
+              return thr !== undefined && p.score >= thr;
             });
 
-            report('PHONE_DETECTED', phoneDetected, 'critical');
+            // Only override the rect detector's result if COCO is confident
+            if (cocoDetected) openInfraction('PHONE_DETECTED', 'critical');
           } catch {
-            /* suppress inference errors */
+            /* suppress */
           } finally {
             detecting = false;
           }
-        }, 1200);
+        }, 1400);
       } catch (e) {
         console.warn('[Proctor] COCO-SSD load failed:', e);
       }
@@ -266,14 +408,12 @@ export default function ProctoringMonitor({
         faceMesh.onResults((results: { multiFaceLandmarks: LM[][] }) => {
           if (!mounted) return;
           const count = results.multiFaceLandmarks.length;
-
           report('INVALID_FACE_COUNT', count !== 1, count === 0 ? 'medium' : 'critical');
 
           if (overlayCanvasRef?.current) {
             const cv = overlayCanvasRef.current;
             const gx = cv.getContext('2d');
-            const W = cv.width;
-            const H = cv.height;
+            const W = cv.width, H = cv.height;
             if (gx && W > 0 && H > 0 && count !== 1) {
               gx.fillStyle = 'rgba(255,50,50,0.15)';
               gx.fillRect(0, 0, W, H);
@@ -281,7 +421,7 @@ export default function ProctoringMonitor({
               gx.font = 'bold 15px monospace';
               gx.textAlign = 'center';
               gx.fillText(
-                count === 0 ? '⚠ NO FACE DETECTED' : `⚠ ${count} FACES DETECTED`,
+                count === 0 ? '⚠ NO FACE DETECTED' : `⚠ ${count} FACES`,
                 W / 2, H / 2
               );
               gx.textAlign = 'left';
@@ -297,64 +437,47 @@ export default function ProctoringMonitor({
             const chin     = lm[IDX_CHIN];
 
             const faceW = rightEar.x - leftEar.x;
-            const yawRatio = faceW > 0.01
-              ? (noseTip.x - leftEar.x) / faceW
-              : 0.5;
-
-            const faceH = chin.y - forehead.y;
-            const pitchRatio = faceH > 0.01
-              ? (noseTip.y - forehead.y) / faceH
-              : 0.5;
-
-            const yawDeg   = (yawRatio - 0.5) * 90;
-            const pitchDeg = (pitchRatio - 0.5) * 90;
-            const gazeAway = Math.abs(yawDeg) > 28 || pitchDeg > 30 || pitchDeg < -18;
+            const yawRatio   = faceW > 0.01 ? (noseTip.x - leftEar.x) / faceW : 0.5;
+            const faceH      = chin.y - forehead.y;
+            const pitchRatio = faceH > 0.01 ? (noseTip.y - forehead.y) / faceH : 0.5;
+            const yawDeg     = (yawRatio - 0.5) * 90;
+            const pitchDeg   = (pitchRatio - 0.5) * 90;
+            const gazeAway   = Math.abs(yawDeg) > 28 || pitchDeg > 30 || pitchDeg < -18;
 
             report('GAZE_AWAY', gazeAway, 'medium');
 
             if (overlayCanvasRef?.current) {
               const cv = overlayCanvasRef.current;
               const gx = cv.getContext('2d');
-              const W = cv.width;
-              const H = cv.height;
+              const W = cv.width, H = cv.height;
               if (gx && W > 0) {
-                const dotColor = gazeAway ? 'rgba(255,120,0,0.85)' : 'rgba(0,255,120,0.85)';
-                gx.fillStyle = dotColor;
+                gx.fillStyle = gazeAway ? 'rgba(255,120,0,0.85)' : 'rgba(0,255,120,0.85)';
                 for (let i = 0; i < lm.length; i += 4) {
-                  const p = lm[i];
                   gx.beginPath();
-                  gx.arc(p.x * W, p.y * H, 1.2, 0, Math.PI * 2);
+                  gx.arc(lm[i].x * W, lm[i].y * H, 1.2, 0, Math.PI * 2);
                   gx.fill();
                 }
-
-                // Gaze arrow
+                const nx = noseTip.x * W, ny = noseTip.y * H;
+                const ax = nx + (yawDeg / 45) * 60, ay = ny + (pitchDeg / 45) * 60;
                 gx.strokeStyle = gazeAway ? '#ff7800' : '#00ff78';
                 gx.lineWidth = 2.5;
-                gx.beginPath();
-                const nx = noseTip.x * W;
-                const ny = noseTip.y * H;
-                const arrowScale = 60;
-                const ax = nx + (yawDeg / 45) * arrowScale;
-                const ay = ny + (pitchDeg / 45) * arrowScale;
-                gx.moveTo(nx, ny);
-                gx.lineTo(ax, ay);
-                gx.stroke();
-                const angle = Math.atan2(ay - ny, ax - nx);
+                gx.beginPath(); gx.moveTo(nx, ny); gx.lineTo(ax, ay); gx.stroke();
+                const ang = Math.atan2(ay - ny, ax - nx);
                 gx.beginPath();
                 gx.moveTo(ax, ay);
-                gx.lineTo(ax - 8 * Math.cos(angle - 0.4), ay - 8 * Math.sin(angle - 0.4));
-                gx.lineTo(ax - 8 * Math.cos(angle + 0.4), ay - 8 * Math.sin(angle + 0.4));
+                gx.lineTo(ax - 8 * Math.cos(ang - 0.4), ay - 8 * Math.sin(ang - 0.4));
+                gx.lineTo(ax - 8 * Math.cos(ang + 0.4), ay - 8 * Math.sin(ang + 0.4));
                 gx.closePath();
                 gx.fillStyle = gazeAway ? '#ff7800' : '#00ff78';
                 gx.fill();
-
-                // HUD
-                const gazeLabel = gazeAway
-                  ? `⚠ GAZE AWAY  Y:${yawDeg.toFixed(0)}° P:${pitchDeg.toFixed(0)}°`
-                  : `✓ FACE OK    Y:${yawDeg.toFixed(0)}° P:${pitchDeg.toFixed(0)}°`;
                 gx.font = 'bold 12px monospace';
                 gx.fillStyle = gazeAway ? '#ff7800' : '#00ff78';
-                gx.fillText(gazeLabel, 6, H - 8);
+                gx.fillText(
+                  gazeAway
+                    ? `⚠ GAZE AWAY  Y:${yawDeg.toFixed(0)}° P:${pitchDeg.toFixed(0)}°`
+                    : `✓ FACE OK    Y:${yawDeg.toFixed(0)}° P:${pitchDeg.toFixed(0)}°`,
+                  6, H - 8
+                );
               }
             }
           }
@@ -391,12 +514,11 @@ export default function ProctoringMonitor({
     };
     initFace();
 
-    // ── 4. Audio Analysis + Camera-covered Check ──────────────────────────────
+    // ── 4. Audio + Camera-covered ─────────────────────────────────────────────
     const initAudio = async () => {
       if (!mounted) return;
       const hiddenCv = document.createElement('canvas');
-      hiddenCv.width = 64;
-      hiddenCv.height = 64;
+      hiddenCv.width = 64; hiddenCv.height = 64;
       const hCtx = hiddenCv.getContext('2d', { willReadFrequently: true });
 
       try {
@@ -407,53 +529,42 @@ export default function ProctoringMonitor({
         analyser.smoothingTimeConstant = 0.75;
         audioCtx.createMediaStreamSource(audioStream).connect(analyser);
 
-        const timeBuf  = new Float32Array(analyser.frequencyBinCount);
-        const freqBuf  = new Uint8Array(analyser.frequencyBinCount);
+        const timeBuf = new Float32Array(analyser.frequencyBinCount);
+        const freqBuf = new Uint8Array(analyser.frequencyBinCount);
         let quietFrames = 0;
 
         const tick = () => {
           if (!mounted) return;
-
           analyser.getFloatTimeDomainData(timeBuf);
           let sumSq = 0;
           for (let i = 0; i < timeBuf.length; i++) sumSq += timeBuf[i] * timeBuf[i];
           const rms = Math.sqrt(sumSq / timeBuf.length);
 
           if (calibFrames < CALIB_FRAMES) {
-            calibSum += rms;
-            calibFrames++;
-            if (calibFrames === CALIB_FRAMES) {
+            calibSum += rms; calibFrames++;
+            if (calibFrames === CALIB_FRAMES)
               ambientBaseline = Math.max(0.045, Math.min(0.14, (calibSum / CALIB_FRAMES) * 3.2));
-            }
           } else {
             analyser.getByteFrequencyData(freqBuf);
             const binHz = (audioCtx!.sampleRate / 2) / freqBuf.length;
             const lo = Math.floor(300  / binHz);
             const hi = Math.min(Math.floor(3500 / binHz), freqBuf.length - 1);
-            let speechSum = 0;
-            for (let i = lo; i <= hi; i++) speechSum += freqBuf[i];
-            const speechAvg = speechSum / (hi - lo + 1);
-            const isLoud = rms > ambientBaseline || speechAvg > 72;
-
-            if (isLoud) {
-              openInfraction('LOUD_AUDIO', 'medium');
-              quietFrames = 0;
-            } else {
-              quietFrames++;
-              if (quietFrames > 40) closeInfraction('LOUD_AUDIO');
-            }
+            let sp = 0;
+            for (let i = lo; i <= hi; i++) sp += freqBuf[i];
+            const isLoud = rms > ambientBaseline || sp / (hi - lo + 1) > 72;
+            if (isLoud) { openInfraction('LOUD_AUDIO', 'medium'); quietFrames = 0; }
+            else { quietFrames++; if (quietFrames > 40) closeInfraction('LOUD_AUDIO'); }
           }
 
           // Camera covered
           if (hCtx && videoRef.current && videoRef.current.readyState === 4) {
             hCtx.drawImage(videoRef.current, 0, 0, 64, 64);
-            const pixels = hCtx.getImageData(0, 0, 64, 64).data;
+            const px = hCtx.getImageData(0, 0, 64, 64).data;
             let lum = 0;
-            for (let i = 0; i < pixels.length; i += 4)
-              lum += pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114;
+            for (let i = 0; i < px.length; i += 4)
+              lum += px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114;
             report('CAMERA_COVERED', (lum / (64 * 64)) < 12, 'critical');
           }
-
           rafId = requestAnimationFrame(tick);
         };
         tick();
@@ -474,8 +585,7 @@ export default function ProctoringMonitor({
         const dur = Math.round((endMs - val.startTime) / 1000);
         if (dur >= 1 && !calibrationMode) {
           push(ref(rtdb, flagPath()), {
-            event,
-            severity: val.severity,
+            event, severity: val.severity,
             startTime: new Date(val.startTime).toISOString(),
             endTime: new Date(endMs).toISOString(),
             durationInSeconds: dur,
@@ -486,6 +596,7 @@ export default function ProctoringMonitor({
 
       if (rafId !== null) cancelAnimationFrame(rafId);
       if (cocoTimer !== null) clearInterval(cocoTimer);
+      if (rectTimer !== null) clearInterval(rectTimer);
       if (camera) camera.stop();
       if (faceMeshInst) faceMeshInst.close();
       if (audioCtx) audioCtx.close();
