@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { db, rtdb } from '@/lib/firebase';
-import { collection, doc, getDocs, setDoc, getDoc } from 'firebase/firestore';
-import { ref, get } from 'firebase/database';
+import { rtdb } from '@/lib/firebase';
+import { ref, get, set, update } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import LeaderboardTable, { LeaderboardEntry } from '@/components/LeaderboardTable';
 import Link from 'next/link';
@@ -26,9 +25,12 @@ function ResultsContent() {
   const [roundStatusUpdates, setRoundStatusUpdates] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    getDocs(collection(db, 'tests')).then(snap =>
-      setTests(snap.docs.map(d => ({ id: d.id, title: (d.data().title as string) || d.id })))
-    );
+    get(ref(rtdb, 'tests')).then(snap => {
+      const val = snap.val();
+      if (val) {
+        setTests(Object.keys(val).map(key => ({ id: key, title: val[key].title || key })));
+      }
+    });
   }, []);
 
   const parseAnswerKeyText = (text: string): AnswerKey => {
@@ -72,7 +74,7 @@ function ResultsContent() {
         setLoading(false);
         return;
       }
-      await setDoc(doc(db, 'answerKeys', selectedTestId), key);
+      await set(ref(rtdb, `answerKeys/${selectedTestId}`), key);
       setAnswerKey(key);
       setMsg(`Answer key uploaded with ${Object.keys(key).length} entries.`);
     } catch (e) {
@@ -91,35 +93,40 @@ function ResultsContent() {
       // Load answer key if not in state
       let key = answerKey;
       if (!key) {
-        const keySnap = await getDoc(doc(db, 'answerKeys', selectedTestId));
+        const keySnap = await get(ref(rtdb, `answerKeys/${selectedTestId}`));
         if (!keySnap.exists()) { setError('No answer key found. Please upload it first.'); setLoading(false); return; }
-        key = keySnap.data() as AnswerKey;
+        key = keySnap.val() as AnswerKey;
         setAnswerKey(key);
       }
 
       // Load test structure (to get question tags)
-      const testSnap = await getDoc(doc(db, 'tests', selectedTestId));
-      const testData = testSnap.data();
+      const testSnap = await get(ref(rtdb, `tests/${selectedTestId}`));
+      const testData = testSnap.val();
       const questionTagMap: Record<string, string> = {}; // questionId -> tag
       (testData?.sections || []).forEach((sec: { questions: { id: string; tag: string }[] }) => {
-        sec.questions.forEach((q) => { questionTagMap[q.id] = q.tag; });
+        if (sec.questions) {
+          sec.questions.forEach((q) => { questionTagMap[q.id] = q.tag; });
+        }
       });
       const totalQuestions = Object.keys(questionTagMap).length;
 
       // Load all submissions
-      const submissionsSnap = await getDocs(collection(db, `submissions/${selectedTestId}`));
-      const participantsSnap = await getDocs(collection(db, 'participants'));
+      const submissionsSnap = await get(ref(rtdb, `submissions/${selectedTestId}`));
+      const subsData = submissionsSnap.val() || {};
+      
+      const participantsSnap = await get(ref(rtdb, 'participants'));
+      const partsData = participantsSnap.val() || {};
 
-      // Map uid -> email from participants (indexed by email)
-      // We need uid -> email, so load all and match
+      // Map uid -> email from participants (indexed by email key)
       const emailToData: Record<string, string> = {};
-      participantsSnap.docs.forEach(d => { emailToData[d.data().uid || ''] = d.id; });
+      Object.keys(partsData).forEach(key => { 
+        emailToData[partsData[key].uid || ''] = partsData[key].email; 
+      });
 
       // Score each submission
       const scored: { uid: string; email: string; score: number }[] = [];
-      for (const subDoc of submissionsSnap.docs) {
-        const uid = subDoc.id;
-        const sub = subDoc.data() as Submission;
+      for (const uid of Object.keys(subsData)) {
+        const sub = subsData[uid] as Submission;
         let score = 0;
         Object.entries(sub.answers || {}).forEach(([qId, ans]) => {
           const tag = questionTagMap[qId];
@@ -137,8 +144,8 @@ function ResultsContent() {
         const { uid, email, score } = scored[i];
         const rank = i + 1;
 
-        // Save result to Firestore
-        await setDoc(doc(db, `results/${selectedTestId}/${uid}`), {
+        // Save result to RTDB
+        await set(ref(rtdb, `results/${selectedTestId}/${uid}`), {
           score,
           total: totalQuestions,
           rank,
@@ -154,8 +161,8 @@ function ResultsContent() {
           : [];
 
         // Check for existing AI result
-        const existingResult = await getDoc(doc(db, `results/${selectedTestId}/${uid}`));
-        const existingAI = existingResult.data();
+        const existingResult = await get(ref(rtdb, `results/${selectedTestId}/${uid}`));
+        const existingAI = existingResult.val();
 
         entries.push({
           uid,
@@ -194,13 +201,12 @@ function ResultsContent() {
       });
       const data = await res.json();
 
-      // Persist AI result to Firestore
+      // Persist AI result to RTDB
       if (selectedTestId && data.severity) {
-        await setDoc(
-          doc(db, `results/${selectedTestId}/${uid}`),
-          { aiSeverity: data.severity, aiSummary: data.summary },
-          { merge: true }
-        );
+        await update(ref(rtdb, `results/${selectedTestId}/${uid}`), {
+          aiSeverity: data.severity,
+          aiSummary: data.summary,
+        });
       }
 
       setLeaderboard(prev =>
@@ -220,11 +226,9 @@ function ResultsContent() {
   const updateRoundStatus = async (uid: string, status: string) => {
     setRoundStatusUpdates(prev => ({ ...prev, [uid]: status }));
     if (selectedTestId) {
-      await setDoc(
-        doc(db, `results/${selectedTestId}/${uid}`),
-        { roundStatus: status },
-        { merge: true }
-      );
+      await update(ref(rtdb, `results/${selectedTestId}/${uid}`), {
+        roundStatus: status,
+      });
       setLeaderboard(prev => prev.map(e => e.uid === uid ? { ...e, roundStatus: status } : e));
     }
   };

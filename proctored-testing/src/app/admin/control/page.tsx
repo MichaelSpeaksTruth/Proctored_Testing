@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { db, rtdb } from '@/lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
-import { ref, set, onValue, serverTimestamp } from 'firebase/database';
+import { rtdb } from '@/lib/firebase';
+import { ref, set, get, onValue } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 
@@ -18,9 +17,13 @@ function ControlContent() {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    getDocs(collection(db, 'tests')).then(snap =>
-      setTests(snap.docs.map(d => ({ id: d.id, title: (d.data().title as string) || d.id })))
-    );
+    get(ref(rtdb, 'tests')).then(snap => {
+      const val = snap.val();
+      if (val) {
+        const testsArr = Object.keys(val).map(key => ({ id: key, title: val[key].title || key }));
+        setTests(testsArr);
+      }
+    });
 
     const stateRef = ref(rtdb, 'testState');
     const unsub = onValue(stateRef, snap => {

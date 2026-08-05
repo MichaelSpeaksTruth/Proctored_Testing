@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { auth, db } from '@/lib/firebase';
+import { auth, rtdb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { ref, get } from 'firebase/database';
 import StudentGuard from '@/components/StudentGuard';
 import { Trophy } from 'lucide-react';
 
@@ -28,18 +28,22 @@ function StudentDashboardContent() {
 
       // Fetch all test results for this student
       try {
-        const testsSnap = await getDocs(collection(db, 'tests'));
+        const testsSnap = await get(ref(rtdb, 'tests'));
+        const testsVal = testsSnap.val();
         const allResults: Result[] = [];
-        for (const testDoc of testsSnap.docs) {
-          const resultRef = doc(db, 'results', testDoc.id, u.uid, 'data');
-          // Try the flat structure: /results/{testId}/{uid}
-          const resultSnap = await getDoc(doc(db, `results/${testDoc.id}/${u.uid}`));
-          if (resultSnap.exists()) {
-            allResults.push({
-              ...resultSnap.data() as Omit<Result, 'testId' | 'testTitle'>,
-              testId: testDoc.id,
-              testTitle: testDoc.data().title || testDoc.id,
-            });
+        
+        if (testsVal) {
+          for (const testId of Object.keys(testsVal)) {
+            const resultSnap = await get(ref(rtdb, `results/${testId}/${u.uid}`));
+            const resultVal = resultSnap.val();
+            
+            if (resultVal) {
+              allResults.push({
+                ...resultVal,
+                testId: testId,
+                testTitle: testsVal[testId].title || testId,
+              });
+            }
           }
         }
         setResults(allResults);

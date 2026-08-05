@@ -2,10 +2,9 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db, rtdb } from '@/lib/firebase';
+import { auth, rtdb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { ref, onValue } from 'firebase/database';
+import { ref, onValue, get, set } from 'firebase/database';
 import StudentGuard from '@/components/StudentGuard';
 import ProctoringMonitor from '@/components/ProctoringMonitor';
 import WebcamFeed from '@/components/WebcamFeed';
@@ -65,10 +64,9 @@ function TestContent() {
         setLocked(true);
       } else if (data.status === 'active' && data.activeTestId) {
         setTestId(data.activeTestId);
-        const testRef = doc(db, 'tests', data.activeTestId);
-        const testSnap = await getDoc(testRef);
+        const testSnap = await get(ref(rtdb, `tests/${data.activeTestId}`));
         if (testSnap.exists()) {
-          setTestData(testSnap.data() as TestData);
+          setTestData(testSnap.val() as TestData);
         }
       }
     });
@@ -126,7 +124,7 @@ function TestContent() {
       if (submitted || !uid || !testId) return;
       setSubmitted(true);
       try {
-        await setDoc(doc(db, `submissions/${testId}/${uid}`), {
+        await set(ref(rtdb, `submissions/${testId}/${uid}`), {
           answers,
           submittedAt: new Date().toISOString(),
           autoSubmitted: autoSubmit,

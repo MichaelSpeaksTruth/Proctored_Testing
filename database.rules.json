@@ -9,6 +9,39 @@
         ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
         ".write": "$uid == auth.uid"
       }
+    },
+    "tests": {
+      ".read": "auth != null",
+      ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'"
+    },
+    "participants": {
+      ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
+      ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
+      "$email": {
+        ".read": "auth.token.email == $email"
+      }
+    },
+    "submissions": {
+      ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
+      "$testId": {
+        "$uid": {
+          ".read": "$uid == auth.uid",
+          ".write": "$uid == auth.uid"
+        }
+      }
+    },
+    "results": {
+      ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
+      ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
+      "$testId": {
+        "$uid": {
+          ".read": "$uid == auth.uid"
+        }
+      }
+    },
+    "answerKeys": {
+      ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
+      ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'"
     }
   }
 }

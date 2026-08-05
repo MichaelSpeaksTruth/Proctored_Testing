@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { doc, setDoc, getDocs, collection, deleteDoc } from 'firebase/firestore';
+import { rtdb } from '@/lib/firebase';
+import { ref, get, set, remove } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 
@@ -21,9 +21,21 @@ function ParticipantsContent() {
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 25;
 
+  const encodeEmail = (e: string) => e.replace(/\./g, ',');
+  const decodeEmail = (e: string) => e.replace(/,/g, '.');
+
   const fetchParticipants = async () => {
-    const snap = await getDocs(collection(db, 'participants'));
-    setParticipants(snap.docs.map((d) => ({ email: d.id, ...(d.data() as { allowed: boolean }) })));
+    const snap = await get(ref(rtdb, 'participants'));
+    const val = snap.val();
+    if (!val) {
+      setParticipants([]);
+      return;
+    }
+    const parsed = Object.keys(val).map(key => ({
+      email: decodeEmail(key),
+      ...(val[key] as { allowed: boolean })
+    }));
+    setParticipants(parsed);
   };
 
   useEffect(() => { fetchParticipants(); }, []);
@@ -31,7 +43,8 @@ function ParticipantsContent() {
   const addEmail = async (email: string) => {
     const trimmed = email.trim().toLowerCase();
     if (!trimmed || !trimmed.includes('@')) return false;
-    await setDoc(doc(db, 'participants', trimmed), { email: trimmed, allowed: true });
+    const key = encodeEmail(trimmed);
+    await set(ref(rtdb, `participants/${key}`), { email: trimmed, allowed: true });
     return true;
   };
 
@@ -77,7 +90,8 @@ function ParticipantsContent() {
   };
 
   const handleRemove = async (email: string) => {
-    await deleteDoc(doc(db, 'participants', email));
+    const key = encodeEmail(email);
+    await remove(ref(rtdb, `participants/${key}`));
     setParticipants((prev) => prev.filter((p) => p.email !== email));
   };
 

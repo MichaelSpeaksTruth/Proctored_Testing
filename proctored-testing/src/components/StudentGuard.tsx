@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db } from '@/lib/firebase';
+import { auth, rtdb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { ref, get } from 'firebase/database';
 import { isAdmin } from '@/lib/adminUtils';
 
 export default function StudentGuard({ children }: { children: React.ReactNode }) {
@@ -23,9 +23,11 @@ export default function StudentGuard({ children }: { children: React.ReactNode }
         return;
       }
       // Check participant list
-      const pRef = doc(db, 'participants', user.email);
-      const snap = await getDoc(pRef);
-      if (!snap.exists() || snap.data()?.allowed !== true) {
+      const encodeEmail = (e: string) => e.replace(/\./g, ',');
+      const key = encodeEmail(user.email.toLowerCase());
+      
+      const snap = await get(ref(rtdb, `participants/${key}`));
+      if (!snap.exists() || snap.val()?.allowed !== true) {
         setError(`Your email (${user.email}) is not registered for this exam. Please contact the admin.`);
         setChecking(false);
         return;

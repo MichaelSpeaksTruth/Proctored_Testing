@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db } from '@/lib/firebase';
+import { auth, rtdb } from '@/lib/firebase';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { ref, get } from 'firebase/database';
 import { isAdmin } from '@/lib/adminUtils';
 import Image from 'next/image';
 
@@ -44,8 +44,12 @@ export default function LoginPage() {
 
       // Verify participant
       if (!user.email) throw new Error('No email found on Google account.');
-      const pSnap = await getDoc(doc(db, 'participants', user.email));
-      if (!pSnap.exists() || pSnap.data()?.allowed !== true) {
+      
+      const encodeEmail = (e: string) => e.replace(/\./g, ',');
+      const key = encodeEmail(user.email.toLowerCase());
+      
+      const pSnap = await get(ref(rtdb, `participants/${key}`));
+      if (!pSnap.exists() || pSnap.val()?.allowed !== true) {
         await auth.signOut();
         setError(
           `Your email (${user.email}) is not registered for this examination. Please contact the administrators.`

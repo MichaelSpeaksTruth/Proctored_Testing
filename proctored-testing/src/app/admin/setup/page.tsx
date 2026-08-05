@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { rtdb } from '@/lib/firebase';
+import { ref, push, get, update, remove, set } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 import { Question } from '@/components/QuestionPanel';
@@ -41,8 +41,14 @@ function SetupContent() {
   const [qTimeLimit, setQTimeLimit] = useState(0);
 
   const fetchTests = async () => {
-    const snap = await getDocs(collection(db, 'tests'));
-    setTests(snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<TestDraft, 'id'>) })));
+    const snap = await get(ref(rtdb, 'tests'));
+    const val = snap.val();
+    if (!val) {
+      setTests([]);
+      return;
+    }
+    const parsed = Object.keys(val).map(key => ({ id: key, ...val[key] }));
+    setTests(parsed);
   };
 
   useEffect(() => { fetchTests(); }, []);
@@ -52,14 +58,15 @@ function SetupContent() {
   const createTest = async () => {
     if (!newTitle.trim()) return;
     setLoading(true);
-    const ref = await addDoc(collection(db, 'tests'), {
+    const newRef = push(ref(rtdb, 'tests'));
+    await set(newRef, {
       title: newTitle.trim(),
       sections: [],
       status: 'pending',
       createdAt: new Date().toISOString(),
     });
     setNewTitle('');
-    setSelectedTestId(ref.id);
+    setSelectedTestId(newRef.key);
     await fetchTests();
     setLoading(false);
   };
@@ -74,7 +81,7 @@ function SetupContent() {
       timeLimit: sectionTime,
       questions: [],
     };
-    await updateDoc(doc(db, 'tests', selectedTestId), {
+    await update(ref(rtdb, `tests/${selectedTestId}`), {
       sections: [...(test.sections || []), newSection],
     });
     setSectionName('');
@@ -102,7 +109,7 @@ function SetupContent() {
     const updatedSections = test.sections.map(s =>
       s.id === qSectionId ? { ...s, questions: [...s.questions, newQ] } : s
     );
-    await updateDoc(doc(db, 'tests', selectedTestId), { sections: updatedSections });
+    await update(ref(rtdb, `tests/${selectedTestId}`), { sections: updatedSections });
     setQText(''); setQTag(''); setQOptions(['', '', '', '']); setQTimeLimit(0);
     await fetchTests();
     setLoading(false);
