@@ -165,7 +165,7 @@ function ResultsContent() {
       const testSnap = await get(ref(rtdb, `tests/${selectedTestId}`));
       const testData = testSnap.val();
       const questionTagMap: Record<string, string> = {}; // questionId -> tag
-      // RTDB returns arrays as numbered objects — normalise both sections and questions
+      // RTDB returns arrays as numbered objects - normalise both sections and questions
       const toArr = <T,>(v: unknown): T[] => {
         if (!v) return [];
         if (Array.isArray(v)) return v as T[];
@@ -233,7 +233,7 @@ function ResultsContent() {
           email,
         });
 
-        // Fetch flags from RTDB — stored at new path uid/testId/flags
+        // Fetch flags from RTDB - stored at new path uid/testId/flags
         const flagsSnap = await get(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}/flags`));
         const flagsData = flagsSnap.val();
         const flags = flagsData
@@ -322,10 +322,12 @@ function ResultsContent() {
 
   const deleteResult = async (uid: string) => {
     if (!selectedTestId) return;
-    if (!confirm('Are you sure you want to delete this past test record?')) return;
+    if (!confirm('Are you sure you want to delete this past test record? This will also remove their submission and proctoring flags.')) return;
     await remove(ref(rtdb, `results/${selectedTestId}/${uid}`));
+    await remove(ref(rtdb, `submissions/${selectedTestId}/${uid}`));
+    await remove(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}`));
     setLeaderboard(prev => prev.filter(e => e.uid !== uid));
-    setMsg('Test record deleted.');
+    setMsg('Test record, submission, and proctoring logs deleted.');
   };
 
 
@@ -402,7 +404,7 @@ function ResultsContent() {
             </div>
 
             <div className="alert alert-info" style={{ marginBottom: 'var(--space-lg)' }}>
-              <strong>AI Proctoring Review:</strong> Click "AI Review" on any student row to run an on-demand Groq analysis of their proctoring flags. Analysis is rate-limit safe — one student at a time.
+              <strong>AI Proctoring Review:</strong> Click "AI Review" on any student row to run an on-demand Groq analysis of their proctoring flags. Analysis is rate-limit safe - one student at a time.
             </div>
 
             <LeaderboardTable
@@ -410,56 +412,20 @@ function ResultsContent() {
               onAnalyze={analyzeStudent}
               analyzing={analyzing}
               onDelete={deleteResult}
+              onUpdateRoundStatus={updateRoundStatus}
+              onEditInfo={(uid) => {
+                const entry = leaderboard.find(e => e.uid === uid);
+                if (entry) {
+                  setDetailsForm({
+                    interviewScheduled: entry.interviewScheduled || false,
+                    panelNo: entry.panelNo || '',
+                    venue: entry.venue || '',
+                    dateTime: entry.dateTime || ''
+                  });
+                  setEditingDetailsFor(uid);
+                }
+              }}
             />
-
-            {/* Round status bulk editor */}
-            <div className="divider" />
-            <h3 style={{ marginBottom: 'var(--space-md)' }}>Update Round Status</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-sm)' }}>
-              {leaderboard.map(entry => (
-                <div
-                  key={entry.uid}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-sm)',
-                    padding: '10px 14px',
-                    background: 'var(--bg-input)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius-md)',
-                  }}
-                >
-                  <span style={{ flex: 1, fontSize: '0.875rem', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {entry.email}
-                  </span>
-                  <select
-                    id={`round-status-${entry.uid}`}
-                    value={entry.roundStatus || 'Pending'}
-                    onChange={e => updateRoundStatus(entry.uid, e.target.value)}
-                    style={{ width: 130, fontSize: '0.8125rem', padding: '6px 10px' }}
-                  >
-                    <option>Pending</option>
-                    <option>Qualified</option>
-                    <option>Eliminated</option>
-                    <option>Waitlisted</option>
-                  </select>
-                  <button
-                    className="btn btn-outline btn-sm"
-                    onClick={() => {
-                      setDetailsForm({
-                        interviewScheduled: entry.interviewScheduled || false,
-                        panelNo: entry.panelNo || '',
-                        venue: entry.venue || '',
-                        dateTime: entry.dateTime || ''
-                      });
-                      setEditingDetailsFor(entry.uid);
-                    }}
-                  >
-                    Edit Info
-                  </button>
-                </div>
-              ))}
-            </div>
 
             {editingDetailsFor && (
               <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

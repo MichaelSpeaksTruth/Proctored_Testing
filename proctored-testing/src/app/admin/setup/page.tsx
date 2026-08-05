@@ -139,6 +139,10 @@ function SetupContent() {
   // ── CREATE TEST ─────────────────────────────────────────────────────────────
   const createTest = async () => {
     if (!newTitle.trim()) return;
+    if (tests.some(t => t.title.toLowerCase() === newTitle.trim().toLowerCase())) {
+      flash('A test with this name already exists.', 'error');
+      return;
+    }
     setLoading(true);
     const newRef = push(ref(rtdb, 'tests'));
     await set(newRef, {
@@ -168,6 +172,10 @@ function SetupContent() {
   const saveTestEdit = async () => {
     if (editMode.kind !== 'test') return;
     if (!editMode.title.trim()) return;
+    if (tests.some(t => t.id !== editMode.testId && t.title.toLowerCase() === editMode.title.trim().toLowerCase())) {
+      flash('A test with this name already exists.', 'error');
+      return;
+    }
     setLoading(true);
     await update(ref(rtdb, `tests/${editMode.testId}`), { title: editMode.title.trim() });
     await fetchTests();
@@ -179,8 +187,12 @@ function SetupContent() {
   // ── ADD SECTION ─────────────────────────────────────────────────────────────
   const addSection = async () => {
     if (!selectedTestId || !sectionName.trim()) return;
-    setLoading(true);
     const test = tests.find(t => t.id === selectedTestId)!;
+    if (test.sections.some(s => s.name.toLowerCase() === sectionName.trim().toLowerCase())) {
+      flash('A section with this name already exists in this test.', 'error');
+      return;
+    }
+    setLoading(true);
     const newSection: Section = {
       id: `s_${Date.now()}`,
       name: sectionName.trim(),
@@ -210,8 +222,12 @@ function SetupContent() {
   // ── SAVE EDIT: SECTION ──────────────────────────────────────────────────────
   const saveSectionEdit = async () => {
     if (editMode.kind !== 'section') return;
-    setLoading(true);
     const test = tests.find(t => t.id === editMode.testId)!;
+    if (test.sections.some(s => s.id !== editMode.sectionId && s.name.toLowerCase() === editMode.name.trim().toLowerCase())) {
+      flash('A section with this name already exists in this test.', 'error');
+      return;
+    }
+    setLoading(true);
     const updatedSections = test.sections.map(s =>
       s.id === editMode.sectionId
         ? { ...s, name: editMode.name.trim(), timeLimit: editMode.timeLimit }
@@ -337,6 +353,7 @@ function SetupContent() {
                   {tests.map(t => (
                     <div
                       key={t.id}
+                      onClick={() => setSelectedTestId(t.id)}
                       style={{
                         padding: '12px 16px',
                         background: selectedTestId === t.id ? 'rgba(255,255,255,0.06)' : 'var(--bg-input)',
@@ -358,7 +375,7 @@ function SetupContent() {
                         >
                           {t.title}
                         </button>
-                        <div className="flex gap-sm">
+                        <div className="flex gap-sm" onClick={e => e.stopPropagation()}>
                           <button
                             className="btn btn-ghost btn-sm"
                             onClick={() => setEditMode({ kind: 'test', testId: t.id, title: t.title })}

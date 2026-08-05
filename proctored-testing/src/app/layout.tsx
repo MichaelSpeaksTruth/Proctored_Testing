@@ -5,7 +5,7 @@ import '@/styles/globals.css';
 export const metadata: Metadata = {
   title: 'AeroSoc BIT Mesra | Online Testing Platform',
   description:
-    'Official online examination portal for AeroSoc — Aerospace Society of BIT Mesra. Secure, proctored, and fully encrypted.',
+    'Official online examination portal for AeroSoc - Aerospace Society of BIT Mesra. Secure, proctored, and fully encrypted.',
   keywords: ['AeroSoc', 'BIT Mesra', 'Online Exam', 'Proctored Test', 'Aerospace Society'],
 };
 

@@ -90,7 +90,7 @@ function WaitingRoomContent() {
             }}
           >
             {testStatus === 'pending' && <><Clock size={20} /> Waiting for Admin</>}
-            {testStatus === 'active' && <><CheckCircle size={20} /> Test Active — Redirecting...</>}
+            {testStatus === 'active' && <><CheckCircle size={20} /> Test Active - Redirecting...</>}
             {testStatus === 'ended' && <><XCircle size={20} /> Test Ended</>}
           </div>
 

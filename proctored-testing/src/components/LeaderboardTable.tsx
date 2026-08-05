@@ -25,11 +25,13 @@ interface Props {
   onAnalyze: (uid: string) => void;
   analyzing: string | null;
   onDelete?: (uid: string) => void;
+  onUpdateRoundStatus?: (uid: string, status: string) => void;
+  onEditInfo?: (uid: string) => void;
 }
 
 const PAGE_SIZE = 20;
 
-export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDelete }: Props) {
+export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDelete, onUpdateRoundStatus, onEditInfo }: Props) {
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -44,9 +46,9 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
   };
 
   const rankStyle = (rank: number) => {
-    if (rank === 1) return { className: 'rank-1', symbol: '' };
-    if (rank === 2) return { className: 'rank-2', symbol: '' };
-    if (rank === 3) return { className: 'rank-3', symbol: '' };
+    if (rank === 1) return { className: 'rank-1', symbol: '🥇 1' };
+    if (rank === 2) return { className: 'rank-2', symbol: '🥈 2' };
+    if (rank === 3) return { className: 'rank-3', symbol: '🥉 3' };
     return { className: '', symbol: String(rank) };
   };
 
@@ -74,7 +76,7 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                 <>
                   <tr key={entry.uid}>
                     <td>
-                      <span className={rs.className}>{rs.symbol}</span>
+                      <span className={rs.className} style={{ fontWeight: rs.className ? 700 : 400 }}>{rs.symbol}</span>
                     </td>
                     <td style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{entry.name}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>{entry.email}</td>
@@ -90,7 +92,21 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                     </td>
                     <td>{severityBadge(entry.aiSeverity)}</td>
                     <td>
-                      <span className="badge badge-gray">{entry.roundStatus || 'Pending'}</span>
+                      {onUpdateRoundStatus ? (
+                        <select
+                          id={`table-round-status-${entry.uid}`}
+                          value={entry.roundStatus || 'Pending'}
+                          onChange={e => onUpdateRoundStatus(entry.uid, e.target.value)}
+                          style={{ width: 110, fontSize: '0.8125rem', padding: '4px 8px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}
+                        >
+                          <option>Pending</option>
+                          <option>Qualified</option>
+                          <option>Eliminated</option>
+                          <option>Waitlisted</option>
+                        </select>
+                      ) : (
+                        <span className="badge badge-gray">{entry.roundStatus || 'Pending'}</span>
+                      )}
                     </td>
                     <td>
                       <div className="flex gap-sm">
@@ -101,6 +117,14 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                         >
                           {isExpanded ? 'Hide' : 'Details'}
                         </button>
+                        {onEditInfo && (
+                          <button
+                            className="btn btn-outline btn-sm"
+                            onClick={() => onEditInfo(entry.uid)}
+                          >
+                            Edit Info
+                          </button>
+                        )}
                         {!entry.aiSeverity && (
                           <button
                             className="btn btn-outline btn-sm"

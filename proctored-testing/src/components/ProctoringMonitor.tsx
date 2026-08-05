@@ -26,7 +26,7 @@ const PHONE_CLASSES: Record<string, number> = {
 
 // =============================================================================
 // Custom Rectangle / Phone Detector
-// Uses Sobel edge detection + projection analysis — no ML model required.
+// Uses Sobel edge detection + projection analysis - no ML model required.
 // Detects ANY large rectangular object with phone-like dimensions even when
 // COCO-SSD fails to classify it (e.g. phone seen from the back).
 // =============================================================================
@@ -313,7 +313,7 @@ export default function ProctoringMonitor({
     document.addEventListener('visibilitychange', onVisibility);
     document.addEventListener('fullscreenchange', onFullscreen);
 
-    // ── 2a. Custom Rectangle Detector (runs every 600ms — fast, no model load) ──
+    // ── 2a. Custom Rectangle Detector (runs every 600ms - fast, no model load) ──
     const workCanvas = document.createElement('canvas');
 
     rectTimer = setInterval(() => {
@@ -383,7 +383,7 @@ export default function ProctoringMonitor({
             const predsNative = await model.detect(videoRef.current);
             const all = [...preds, ...predsNative];
 
-            // Draw COCO boxes (don't clear — FaceMesh draws first)
+            // Draw COCO boxes (don't clear - FaceMesh draws first)
             if (overlayCanvasRef?.current && videoRef.current.videoWidth > 0) {
               const cv = overlayCanvasRef.current;
               const gx = cv.getContext('2d');

@@ -255,7 +255,7 @@ function ParticipantsContent() {
                       </>
                     ) : (
                       <>
-                        <td style={{ fontWeight: 500 }}>{p.name || '—'}</td>
+                        <td style={{ fontWeight: 500 }}>{p.name || '-'}</td>
                         <td style={{ fontFamily: 'var(--font-mono)' }}>{p.email}</td>
                         <td><span className="badge badge-green">Approved</span></td>
                         <td>

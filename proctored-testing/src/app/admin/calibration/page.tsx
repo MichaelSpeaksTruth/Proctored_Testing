@@ -74,7 +74,7 @@ function CalibrationContent() {
         <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-2xl)' }}>
           <div>
             <h1 style={{ marginBottom: 'var(--space-sm)' }}>System Calibration</h1>
-            <p>Test all AI proctoring models locally — no flags are written to the database in this mode.</p>
+            <p>Test all AI proctoring models locally - no flags are written to the database in this mode.</p>
           </div>
           <Link href="/admin">
             <button className="btn btn-outline">← Dashboard</button>
@@ -158,7 +158,7 @@ function CalibrationContent() {
               <div style={{ marginTop: 'var(--space-md)', fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: 1.7 }}>
                 <strong style={{ color: 'var(--text-secondary)' }}>Active Models:</strong>{' '}
                 MediaPipe FaceMesh (w/ iris refinement) · COCO-SSD MobileNetV2 · Web Audio API<br />
-                <em>Hysteresis: 14 frames to start, 20 to clear — eliminates false positives.</em><br />
+                <em>Hysteresis: 14 frames to start, 20 to clear - eliminates false positives.</em><br />
                 <em>To test: switch tabs, exit fullscreen (F11), cover camera, talk, or show a phone.</em>
               </div>
             </div>
@@ -211,7 +211,7 @@ function CalibrationContent() {
                 {flags.length === 0 ? (
                   <div style={{ color: 'var(--text-muted)' }}>
                     Waiting for events…<br /><br />
-                    The improved engine uses <strong style={{ color: 'var(--text-secondary)' }}>hysteresis</strong> —
+                    The improved engine uses <strong style={{ color: 'var(--text-secondary)' }}>hysteresis</strong> -
                     a violation must persist for ~½s before it is logged, and must resolve for ~⅔s before it clears.
                     This eliminates single-frame false positives.
                   </div>
