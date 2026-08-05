@@ -250,28 +250,15 @@ function TestContent() {
       {violation && <div className="proctoring-banner">{violation}</div>}
 
       {/* Top bar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px var(--space-xl)',
-          background: 'var(--bg-card)',
-          borderBottom: '1px solid var(--border)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
-        }}
-      >
+      <div className="test-topbar">
         <div className="brand">
-          <span style={{ fontSize: '1.25rem' }}></span>
           <div>
             <div className="brand-name" style={{ fontSize: '0.9375rem' }}>AeroSoc</div>
             <div className="brand-sub">BIT Mesra</div>
           </div>
         </div>
 
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center', flex: 1 }}>
           <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 2 }}>
             {currentSection?.name}
           </div>
@@ -297,20 +284,20 @@ function TestContent() {
           onClick={() => handleSubmit(false)}
           disabled={submitted}
         >
-          {submitted ? 'Submitting...' : 'Submit Test'}
+          {submitted ? 'Submitting...' : 'Submit'}
         </button>
       </div>
 
       {/* Section tabs */}
       {totalSections > 1 && (
-        <div style={{ padding: '0 var(--space-xl)', paddingTop: 'var(--space-md)', display: 'flex', gap: 8 }}>
+        <div className="section-tabs-bar">
           {testData!.sections.map((sec, idx) => (
             <button
               key={sec.id}
               id={`section-tab-${idx}`}
               onClick={() => { setCurrentSectionIdx(idx); setCurrentQuestionIdx(0); }}
               style={{
-                padding: '8px 20px',
+                padding: '8px 16px',
                 background: idx === currentSectionIdx ? 'var(--bg-card)' : 'transparent',
                 border: `1px solid ${idx === currentSectionIdx ? 'var(--border-light)' : 'var(--border)'}`,
                 borderRadius: 'var(--radius-md)',
@@ -319,6 +306,7 @@ function TestContent() {
                 fontSize: '0.875rem',
                 fontWeight: 500,
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
                 transition: 'all 150ms ease',
               }}
             >
@@ -329,23 +317,70 @@ function TestContent() {
       )}
 
       {/* Body */}
-      <div
-        style={{
-          maxWidth: 900,
-          margin: '0 auto',
-          padding: 'var(--space-xl)',
-          display: 'grid',
-          gridTemplateColumns: '240px 1fr',
-          gap: 'var(--space-xl)',
-          alignItems: 'start',
-        }}
-      >
-        {/* Question navigator */}
-        <div className="card card-sm">
+      <div className="test-body">
+        {/* Question panel first on mobile */}
+        <div className="test-question-area">
+          {currentQuestion ? (
+            <>
+              <QuestionPanel
+                question={currentQuestion}
+                questionIndex={currentQuestionIdx}
+                totalQuestions={totalQuestions}
+                answer={answers[currentQuestion.id] || ''}
+                onChange={(val) =>
+                  setAnswers((prev) => ({ ...prev, [currentQuestion.id]: val }))
+                }
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--space-md)' }}>
+                <button
+                  id="prev-question"
+                  className="btn btn-outline"
+                  disabled={currentQuestionIdx === 0}
+                  onClick={() => setCurrentQuestionIdx((i) => i - 1)}
+                >
+                  ← Prev
+                </button>
+                {currentQuestionIdx < totalQuestions - 1 ? (
+                  <button
+                    id="next-question"
+                    className="btn btn-primary"
+                    onClick={() => setCurrentQuestionIdx((i) => i + 1)}
+                  >
+                    Next →
+                  </button>
+                ) : (
+                  currentSectionIdx < totalSections - 1 ? (
+                    <button
+                      id="next-section"
+                      className="btn btn-primary"
+                      onClick={() => { setCurrentSectionIdx((i) => i + 1); setCurrentQuestionIdx(0); }}
+                    >
+                      Next Section →
+                    </button>
+                  ) : (
+                    <button
+                      id="final-submit"
+                      className="btn btn-success"
+                      onClick={() => handleSubmit(false)}
+                      disabled={submitted}
+                    >
+                       Finish & Submit
+                    </button>
+                  )
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="loading-center"><div className="spinner" /></div>
+          )}
+        </div>
+
+        {/* Question navigator sidebar */}
+        <div className="test-navigator card card-sm">
           <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 12 }}>
             Questions
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
+          <div className="q-nav-grid">
             {currentSection?.questions.map((q, idx) => {
               const isAnswered = !!answers[q.id];
               const isCurrent = idx === currentQuestionIdx;
@@ -391,64 +426,9 @@ function TestContent() {
             </div>
           </div>
         </div>
-
-        {/* Question panel */}
-        <div>
-          {currentQuestion ? (
-            <>
-              <QuestionPanel
-                question={currentQuestion}
-                questionIndex={currentQuestionIdx}
-                totalQuestions={totalQuestions}
-                answer={answers[currentQuestion.id] || ''}
-                onChange={(val) =>
-                  setAnswers((prev) => ({ ...prev, [currentQuestion.id]: val }))
-                }
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--space-md)' }}>
-                <button
-                  id="prev-question"
-                  className="btn btn-outline"
-                  disabled={currentQuestionIdx === 0}
-                  onClick={() => setCurrentQuestionIdx((i) => i - 1)}
-                >
-                  ← Previous
-                </button>
-                {currentQuestionIdx < totalQuestions - 1 ? (
-                  <button
-                    id="next-question"
-                    className="btn btn-primary"
-                    onClick={() => setCurrentQuestionIdx((i) => i + 1)}
-                  >
-                    Next →
-                  </button>
-                ) : (
-                  currentSectionIdx < totalSections - 1 ? (
-                    <button
-                      id="next-section"
-                      className="btn btn-primary"
-                      onClick={() => { setCurrentSectionIdx((i) => i + 1); setCurrentQuestionIdx(0); }}
-                    >
-                      Next Section →
-                    </button>
-                  ) : (
-                    <button
-                      id="final-submit"
-                      className="btn btn-success"
-                      onClick={() => handleSubmit(false)}
-                      disabled={submitted}
-                    >
-                       Finish & Submit
-                    </button>
-                  )
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="loading-center"><div className="spinner" /></div>
-          )}
-        </div>
       </div>
+
+
 
       {/* Proctoring engine + webcam */}
       {uid && examStarted && <ProctoringMonitor uid={uid} videoRef={videoRef} onViolation={handleViolation} />}
