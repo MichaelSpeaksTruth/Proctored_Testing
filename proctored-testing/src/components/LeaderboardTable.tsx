@@ -14,6 +14,10 @@ export interface LeaderboardEntry {
   aiSeverity?: string;
   aiSummary?: string;
   flags?: { event: string; severity: string; timestamp: string }[];
+  interviewScheduled?: boolean;
+  panelNo?: string;
+  venue?: string;
+  dateTime?: string;
 }
 
 interface Props {

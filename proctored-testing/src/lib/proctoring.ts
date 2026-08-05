@@ -7,6 +7,7 @@ export type ProctoringEvent =
   | 'LEFT_FULLSCREEN'
   | 'LOUD_AUDIO'
   | 'CAMERA_COVERED'
+  | 'MIC_MUTED'
   | 'PHONE_DETECTED'
   | 'GAZE_AWAY';
 

@@ -23,6 +23,8 @@ function ResultsContent() {
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [roundStatusUpdates, setRoundStatusUpdates] = useState<Record<string, string>>({});
+  const [editingDetailsFor, setEditingDetailsFor] = useState<string | null>(null);
+  const [detailsForm, setDetailsForm] = useState({ interviewScheduled: false, panelNo: '', venue: '', dateTime: '' });
 
   useEffect(() => {
     get(ref(rtdb, 'tests')).then(snap => {
@@ -151,12 +153,18 @@ function ResultsContent() {
         const { uid, email, score } = scored[i];
         const rank = i + 1;
 
+        // Check for existing result first to preserve fields
+        const existingResultSnap = await get(ref(rtdb, `results/${selectedTestId}/${uid}`));
+        const existingVal = existingResultSnap.val() || {};
+
+        const roundStatus = roundStatusUpdates[uid] || existingVal.roundStatus || 'Pending';
+
         // Save result to RTDB
-        await set(ref(rtdb, `results/${selectedTestId}/${uid}`), {
+        await update(ref(rtdb, `results/${selectedTestId}/${uid}`), {
           score,
           total: totalQuestions,
           rank,
-          roundStatus: roundStatusUpdates[uid] || 'Pending',
+          roundStatus,
           email,
         });
 
@@ -167,10 +175,6 @@ function ResultsContent() {
           ? Object.values(flagsData) as { event: string; severity: string; timestamp: string }[]
           : [];
 
-        // Check for existing AI result
-        const existingResult = await get(ref(rtdb, `results/${selectedTestId}/${uid}`));
-        const existingAI = existingResult.val();
-
         entries.push({
           uid,
           name: email.split('@')[0],
@@ -178,11 +182,15 @@ function ResultsContent() {
           score,
           total: totalQuestions,
           rank,
-          roundStatus: roundStatusUpdates[uid] || 'Pending',
+          roundStatus,
           flagCount: flags.length,
           flags,
-          aiSeverity: existingAI?.aiSeverity,
-          aiSummary: existingAI?.aiSummary,
+          aiSeverity: existingVal.aiSeverity,
+          aiSummary: existingVal.aiSummary,
+          interviewScheduled: existingVal.interviewScheduled,
+          panelNo: existingVal.panelNo,
+          venue: existingVal.venue,
+          dateTime: existingVal.dateTime,
         });
       }
 
@@ -239,6 +247,14 @@ function ResultsContent() {
       setLeaderboard(prev => prev.map(e => e.uid === uid ? { ...e, roundStatus: status } : e));
     }
   };
+
+  const saveInterviewDetails = async (uid: string) => {
+    if (!selectedTestId) return;
+    await update(ref(rtdb, `results/${selectedTestId}/${uid}`), detailsForm);
+    setLeaderboard(prev => prev.map(e => e.uid === uid ? { ...e, ...detailsForm } : e));
+    setEditingDetailsFor(null);
+  };
+
 
   return (
     <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
@@ -353,9 +369,75 @@ function ResultsContent() {
                     <option>Eliminated</option>
                     <option>Waitlisted</option>
                   </select>
+                  <button
+                    className="btn btn-outline btn-sm"
+                    onClick={() => {
+                      setDetailsForm({
+                        interviewScheduled: entry.interviewScheduled || false,
+                        panelNo: entry.panelNo || '',
+                        venue: entry.venue || '',
+                        dateTime: entry.dateTime || ''
+                      });
+                      setEditingDetailsFor(entry.uid);
+                    }}
+                  >
+                    Edit Info
+                  </button>
                 </div>
               ))}
             </div>
+
+            {editingDetailsFor && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="card" style={{ width: 400, maxWidth: '90%' }}>
+                  <h3 style={{ marginBottom: 'var(--space-md)' }}>Upcoming Info</h3>
+                  <div className="form-group">
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        checked={detailsForm.interviewScheduled}
+                        onChange={e => setDetailsForm(prev => ({ ...prev, interviewScheduled: e.target.checked }))}
+                        style={{ marginRight: 8 }}
+                      />
+                      Interview Scheduled
+                    </label>
+                  </div>
+                  <div className="form-group">
+                    <label>Panel No.</label>
+                    <input 
+                      type="text" 
+                      value={detailsForm.panelNo}
+                      onChange={e => setDetailsForm(prev => ({ ...prev, panelNo: e.target.value }))}
+                      className="input"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Venue / Link</label>
+                    <input 
+                      type="text" 
+                      value={detailsForm.venue}
+                      onChange={e => setDetailsForm(prev => ({ ...prev, venue: e.target.value }))}
+                      className="input"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Date & Time</label>
+                    <input 
+                      type="text" 
+                      value={detailsForm.dateTime}
+                      onChange={e => setDetailsForm(prev => ({ ...prev, dateTime: e.target.value }))}
+                      className="input"
+                      placeholder="e.g. 10th Aug, 10:00 AM"
+                    />
+                  </div>
+                  <div className="flex gap-sm justify-end" style={{ marginTop: 'var(--space-lg)' }}>
+                    <button className="btn btn-ghost" onClick={() => setEditingDetailsFor(null)}>Cancel</button>
+                    <button className="btn btn-primary" onClick={() => saveInterviewDetails(editingDetailsFor)}>Save</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         )}
       </div>

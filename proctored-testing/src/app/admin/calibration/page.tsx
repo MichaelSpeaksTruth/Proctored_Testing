@@ -13,6 +13,7 @@ const EVENT_META: Record<ProctoringEvent, { label: string; color: string }> = {
   LEFT_FULLSCREEN:    { label: 'Fullscreen Exit', color: '#e63946' },
   LOUD_AUDIO:         { label: 'Loud Audio', color: '#f4a261' },
   CAMERA_COVERED:     { label: 'Camera Covered', color: '#e63946' },
+  MIC_MUTED:          { label: 'Microphone Muted', color: '#e63946' },
   PHONE_DETECTED:     { label: 'Phone Detected', color: '#e63946' },
   GAZE_AWAY:          { label: 'Gaze Away', color: '#ffd166' },
 };

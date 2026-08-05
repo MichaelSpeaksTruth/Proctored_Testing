@@ -10,8 +10,9 @@ import ProctoringMonitor from '@/components/ProctoringMonitor';
 import WebcamFeed from '@/components/WebcamFeed';
 import CountdownTimer from '@/components/CountdownTimer';
 import QuestionPanel, { Question } from '@/components/QuestionPanel';
-import { Lock, Camera, Monitor } from 'lucide-react';
+import { Lock, Camera, Monitor, CheckCircle2, XCircle } from 'lucide-react';
 import { ProctoringEvent, DurationFlag } from '@/lib/proctoring';
+import { MonitorStatus } from '@/components/ProctoringMonitor';
 
 interface Section {
   id: string;
@@ -45,6 +46,7 @@ function TestContent() {
   const [requestingPermissions, setRequestingPermissions] = useState(false);
   const [permError, setPermError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [hardwareStatus, setHardwareStatus] = useState<MonitorStatus>({ faceDetected: false, cameraCovered: false, micWorking: false });
   const violationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Auth ──────────────────────────────────────────────────
@@ -114,7 +116,6 @@ function TestContent() {
     }
   };
 
-  // ── Violation handler (shows banner for 3s) ──────────────────
   const handleViolation = useCallback((flag: DurationFlag) => {
     const messages: Record<ProctoringEvent, string> = {
       INVALID_FACE_COUNT: `⚠ Face visibility issue logged (${flag.durationInSeconds}s).`,
@@ -122,6 +123,7 @@ function TestContent() {
       LEFT_FULLSCREEN:    `⚠ Exited fullscreen logged (${flag.durationInSeconds}s).`,
       LOUD_AUDIO:         `⚠ Loud audio detected (${flag.durationInSeconds}s).`,
       CAMERA_COVERED:     `🚨 Camera covered logged (${flag.durationInSeconds}s).`,
+      MIC_MUTED:          `🚨 Microphone muted/silent (${flag.durationInSeconds}s).`,
       PHONE_DETECTED:     `🚨 Mobile device detected (${flag.durationInSeconds}s).`,
       GAZE_AWAY:          `⚠ Looking away from screen logged (${flag.durationInSeconds}s).`,
     };
@@ -227,29 +229,65 @@ function TestContent() {
     );
   }
 
-  // ── Start Exam Gate ─────────────────────────────────────────
+  // ── Start Exam Gate (Preflight Check) ────────────────────────
   if (permissionsGranted && !examStarted) {
+    const allGood = hardwareStatus.faceDetected && !hardwareStatus.cameraCovered && hardwareStatus.micWorking;
+    
     return (
       <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)' }}>
-        <div className="card" style={{ maxWidth: 480, width: '100%', textAlign: 'center' }}>
-          <div style={{ marginBottom: 'var(--space-md)' }}>
+        <div className="card" style={{ maxWidth: 480, width: '100%' }}>
+          <div style={{ textAlign: 'center', marginBottom: 'var(--space-md)' }}>
             <Monitor size={40} color="var(--text-primary)" />
           </div>
-          <h2 style={{ marginBottom: 'var(--space-sm)' }}>Ready to Begin</h2>
-          <p style={{ marginBottom: 'var(--space-xl)', color: 'var(--text-muted)' }}>
-            Your camera and microphone are configured. This test must be taken in full-screen mode.
-            Exiting full-screen more than once will automatically lock your exam.
+          <h2 style={{ textAlign: 'center', marginBottom: 'var(--space-sm)' }}>Hardware Verification</h2>
+          <p style={{ textAlign: 'center', marginBottom: 'var(--space-lg)', color: 'var(--text-muted)' }}>
+            Please ensure your face is visible and your microphone is working before starting the exam.
           </p>
+
+          <div style={{ background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
+            <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-sm)' }}>
+              <span>Face Detected</span>
+              {hardwareStatus.faceDetected ? <CheckCircle2 size={20} color="var(--accent-green)" /> : <XCircle size={20} color="var(--accent-red)" />}
+            </div>
+            <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-sm)' }}>
+              <span>Camera Uncovered</span>
+              {!hardwareStatus.cameraCovered ? <CheckCircle2 size={20} color="var(--accent-green)" /> : <XCircle size={20} color="var(--accent-red)" />}
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Microphone Working</span>
+              {hardwareStatus.micWorking ? <CheckCircle2 size={20} color="var(--accent-green)" /> : <XCircle size={20} color="var(--accent-red)" />}
+            </div>
+            {!hardwareStatus.micWorking && (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 8, fontStyle: 'italic' }}>
+                * Try speaking or making some noise. If your microphone is physically muted, please unmute it.
+              </p>
+            )}
+          </div>
+
           <button
             className="btn btn-success btn-lg"
             style={{ width: '100%', justifyContent: 'center' }}
             onClick={enterFullscreenAndStart}
+            disabled={!allGood}
           >
-            Start Exam & Enter Fullscreen
+            {allGood ? 'Start Exam & Enter Fullscreen' : 'Waiting for hardware...'}
           </button>
         </div>
+        
+        {uid && (
+          <ProctoringMonitor
+            uid={uid}
+            calibrationMode
+            onStatusChange={setHardwareStatus}
+            videoRef={videoRef}
+            overlayCanvasRef={overlayCanvasRef}
+          />
+        )}
         <div style={{ position: 'fixed', opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
-           <WebcamFeed ref={videoRef} stream={stream} />
+           <div style={{ position: 'relative' }}>
+             <WebcamFeed ref={videoRef} stream={stream} />
+             <canvas ref={overlayCanvasRef} style={{ position: 'absolute', inset: 0 }} />
+           </div>
         </div>
       </main>
     );

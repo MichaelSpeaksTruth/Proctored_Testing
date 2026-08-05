@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { rtdb } from '@/lib/firebase';
-import { ref, set, get, onValue } from 'firebase/database';
+import { ref, set, get, update, onValue } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 
@@ -39,6 +39,28 @@ function ControlContent() {
   const startTest = async () => {
     if (!selectedTestId) { setMsg('Please select a test first.'); return; }
     setLoading(true);
+
+    // Strip empty sections before going live
+    const testSnap = await get(ref(rtdb, `tests/${selectedTestId}`));
+    const testData = testSnap.val();
+    if (testData && testData.sections) {
+      const sectionsRaw = Array.isArray(testData.sections)
+        ? testData.sections
+        : Object.values(testData.sections as Record<string, unknown>);
+      type SectionLike = { questions?: unknown };
+      const withQuestions = (sectionsRaw as SectionLike[]).filter(
+        (s) => s && Array.isArray(s.questions) ? s.questions.length > 0
+          : typeof s.questions === 'object' && s.questions !== null
+            ? Object.keys(s.questions).length > 0
+            : false
+      );
+      if (withQuestions.length !== sectionsRaw.length) {
+        await update(ref(rtdb, `tests/${selectedTestId}`), { sections: withQuestions });
+        const removed = sectionsRaw.length - withQuestions.length;
+        setMsg(`Removed ${removed} empty section${removed > 1 ? 's' : ''} before starting.`);
+      }
+    }
+
     await set(ref(rtdb, 'testState'), {
       status: 'active',
       activeTestId: selectedTestId,

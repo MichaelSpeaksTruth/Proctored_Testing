@@ -14,6 +14,10 @@ interface Result {
   roundStatus: string;
   testId: string;
   testTitle: string;
+  interviewScheduled?: boolean;
+  panelNo?: string;
+  venue?: string;
+  dateTime?: string;
 }
 
 function StudentDashboardContent() {
@@ -115,6 +119,30 @@ function StudentDashboardContent() {
                   </div>
                 </div>
               </div>
+              
+              {result.interviewScheduled && (
+                <div style={{ marginTop: 'var(--space-lg)', padding: 'var(--space-md)', background: 'var(--bg-card)', border: '1px solid var(--accent-amber)', borderRadius: 'var(--radius-md)' }}>
+                  <h4 style={{ marginBottom: 'var(--space-md)', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-amber)' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    Interview Details
+                  </h4>
+                  <div className="grid-3" style={{ gap: 'var(--space-md)' }}>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>Date & Time</div>
+                      <div style={{ fontWeight: 500, fontFamily: 'var(--font-mono)' }}>{result.dateTime || 'TBA'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>Panel No.</div>
+                      <div style={{ fontWeight: 500, fontFamily: 'var(--font-mono)' }}>{result.panelNo || 'TBA'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>Venue / Link</div>
+                      <div style={{ fontWeight: 500, fontFamily: 'var(--font-mono)' }}>{result.venue || 'TBA'}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </div>
           ))
         )}

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { rtdb } from '@/lib/firebase';
-import { ref, push, get, update, remove, set } from 'firebase/database';
+import { ref, push, get, update, set } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 import { Question } from '@/components/QuestionPanel';
@@ -21,12 +21,81 @@ interface TestDraft {
   status: string;
 }
 
+// ─── Inline edit state types ─────────────────────────────────────────────────
+type EditMode =
+  | { kind: 'none' }
+  | { kind: 'test'; testId: string; title: string }
+  | { kind: 'section'; testId: string; sectionId: string; name: string; timeLimit: number }
+  | { kind: 'question'; testId: string; sectionId: string; question: Question };
+
+// ─── tiny helper ─────────────────────────────────────────────────────────────
+const toArr = <T,>(v: unknown): T[] => {
+  if (!v) return [];
+  if (Array.isArray(v)) return v as T[];
+  if (typeof v === 'object') return Object.values(v as Record<string, T>);
+  return [];
+};
+
+// ─── Inline modal shell ───────────────────────────────────────────────────────
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+      }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="card"
+        style={{
+          width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
+          border: '1px solid var(--border-light)',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+          animation: 'fadeIn 150ms ease',
+        }}
+      >
+        <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)' }}>
+          <h3 style={{ fontSize: '1.125rem', margin: 0 }}>{title}</h3>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.25rem', cursor: 'pointer', lineHeight: 1 }}
+          >✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── Danger confirm button ────────────────────────────────────────────────────
+function DeleteBtn({ label, onConfirm, disabled }: { label: string; onConfirm: () => void; disabled?: boolean }) {
+  const [confirming, setConfirming] = useState(false);
+  if (confirming) {
+    return (
+      <span className="flex gap-sm" style={{ alignItems: 'center' }}>
+        <span style={{ fontSize: '0.8125rem', color: 'var(--accent-red-light)' }}>Sure?</span>
+        <button className="btn btn-danger btn-sm" disabled={disabled} onClick={() => { setConfirming(false); onConfirm(); }}>Yes, delete</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => setConfirming(false)}>Cancel</button>
+      </span>
+    );
+  }
+  return (
+    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-red-light)' }} disabled={disabled} onClick={() => setConfirming(true)}>
+      🗑 {label}
+    </button>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 function SetupContent() {
   const [tests, setTests] = useState<TestDraft[]>([]);
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [msgKind, setMsgKind] = useState<'success' | 'error'>('success');
 
   // New section form
   const [sectionName, setSectionName] = useState('');
@@ -40,16 +109,15 @@ function SetupContent() {
   const [qSectionId, setQSectionId] = useState('');
   const [qTimeLimit, setQTimeLimit] = useState(0);
 
-  // Firebase RTDB never stores empty arrays and returns arrays as numbered objects.
-  // This helper normalises any value to a real JS array.
-  const toArr = <T,>(v: unknown): T[] => {
-    if (!v) return [];
-    if (Array.isArray(v)) return v as T[];
-    if (typeof v === 'object') return Object.values(v as Record<string, T>);
-    return [];
+  // Edit state
+  const [editMode, setEditMode] = useState<EditMode>({ kind: 'none' });
+
+  const flash = (text: string, kind: 'success' | 'error' = 'success') => {
+    setMsg(text); setMsgKind(kind);
+    setTimeout(() => setMsg(null), 4000);
   };
 
-  const fetchTests = async () => {
+  const fetchTests = useCallback(async () => {
     const snap = await get(ref(rtdb, 'tests'));
     const val = snap.val();
     if (!val) { setTests([]); return; }
@@ -62,12 +130,13 @@ function SetupContent() {
       return { id: key, ...t, sections };
     });
     setTests(parsed);
-  };
+  }, []);
 
-  useEffect(() => { fetchTests(); }, []);
+  useEffect(() => { fetchTests(); }, [fetchTests]);
 
   const selectedTest = tests.find(t => t.id === selectedTestId) || null;
 
+  // ── CREATE TEST ─────────────────────────────────────────────────────────────
   const createTest = async () => {
     if (!newTitle.trim()) return;
     setLoading(true);
@@ -82,8 +151,32 @@ function SetupContent() {
     setSelectedTestId(newRef.key);
     await fetchTests();
     setLoading(false);
+    flash('Test created.');
   };
 
+  // ── DELETE TEST ─────────────────────────────────────────────────────────────
+  const deleteTest = async (testId: string) => {
+    setLoading(true);
+    await set(ref(rtdb, `tests/${testId}`), null);
+    if (selectedTestId === testId) setSelectedTestId(null);
+    await fetchTests();
+    setLoading(false);
+    flash('Test deleted.');
+  };
+
+  // ── SAVE EDIT: TEST TITLE ───────────────────────────────────────────────────
+  const saveTestEdit = async () => {
+    if (editMode.kind !== 'test') return;
+    if (!editMode.title.trim()) return;
+    setLoading(true);
+    await update(ref(rtdb, `tests/${editMode.testId}`), { title: editMode.title.trim() });
+    await fetchTests();
+    setLoading(false);
+    setEditMode({ kind: 'none' });
+    flash('Test renamed.');
+  };
+
+  // ── ADD SECTION ─────────────────────────────────────────────────────────────
   const addSection = async () => {
     if (!selectedTestId || !sectionName.trim()) return;
     setLoading(true);
@@ -100,9 +193,38 @@ function SetupContent() {
     setSectionName('');
     await fetchTests();
     setLoading(false);
-    setMsg(`Section "${newSection.name}" added.`);
+    flash(`Section "${newSection.name}" added.`);
   };
 
+  // ── DELETE SECTION ──────────────────────────────────────────────────────────
+  const deleteSection = async (testId: string, sectionId: string) => {
+    setLoading(true);
+    const test = tests.find(t => t.id === testId)!;
+    const updatedSections = test.sections.filter(s => s.id !== sectionId);
+    await update(ref(rtdb, `tests/${testId}`), { sections: updatedSections });
+    await fetchTests();
+    setLoading(false);
+    flash('Section deleted.');
+  };
+
+  // ── SAVE EDIT: SECTION ──────────────────────────────────────────────────────
+  const saveSectionEdit = async () => {
+    if (editMode.kind !== 'section') return;
+    setLoading(true);
+    const test = tests.find(t => t.id === editMode.testId)!;
+    const updatedSections = test.sections.map(s =>
+      s.id === editMode.sectionId
+        ? { ...s, name: editMode.name.trim(), timeLimit: editMode.timeLimit }
+        : s
+    );
+    await update(ref(rtdb, `tests/${editMode.testId}`), { sections: updatedSections });
+    await fetchTests();
+    setLoading(false);
+    setEditMode({ kind: 'none' });
+    flash('Section updated.');
+  };
+
+  // ── ADD QUESTION ────────────────────────────────────────────────────────────
   const addQuestion = async () => {
     if (!selectedTestId || !qText.trim() || !qSectionId || !qTag.trim()) return;
     setLoading(true);
@@ -126,9 +248,49 @@ function SetupContent() {
     setQText(''); setQTag(''); setQOptions(['', '', '', '']); setQTimeLimit(0);
     await fetchTests();
     setLoading(false);
-    setMsg('Question added.');
+    flash('Question added.');
   };
 
+  // ── DELETE QUESTION ─────────────────────────────────────────────────────────
+  const deleteQuestion = async (testId: string, sectionId: string, questionId: string) => {
+    setLoading(true);
+    const test = tests.find(t => t.id === testId)!;
+    const updatedSections = test.sections.map(s =>
+      s.id === sectionId
+        ? { ...s, questions: s.questions.filter(q => q.id !== questionId) }
+        : s
+    );
+    await update(ref(rtdb, `tests/${testId}`), { sections: updatedSections });
+    await fetchTests();
+    setLoading(false);
+    flash('Question deleted.');
+  };
+
+  // ── SAVE EDIT: QUESTION ─────────────────────────────────────────────────────
+  const saveQuestionEdit = async () => {
+    if (editMode.kind !== 'question') return;
+    const q = editMode.question;
+    if (!q.text.trim() || !q.tag.trim()) return;
+    setLoading(true);
+    const test = tests.find(t => t.id === editMode.testId)!;
+    const updatedSections = test.sections.map(s =>
+      s.id === editMode.sectionId
+        ? {
+          ...s,
+          questions: s.questions.map(existing =>
+            existing.id === q.id ? { ...q, text: q.text.trim(), tag: q.tag.trim() } : existing
+          ),
+        }
+        : s
+    );
+    await update(ref(rtdb, `tests/${editMode.testId}`), { sections: updatedSections });
+    await fetchTests();
+    setLoading(false);
+    setEditMode({ kind: 'none' });
+    flash('Question updated.');
+  };
+
+  // ── RENDER ──────────────────────────────────────────────────────────────────
   return (
     <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
       <div className="container">
@@ -137,18 +299,33 @@ function SetupContent() {
           <h1 style={{ fontSize: '1.75rem' }}>Test Setup</h1>
         </div>
 
-        {msg && <div className="alert alert-success" style={{ marginBottom: 'var(--space-lg)' }}>{msg}</div>}
+        {msg && (
+          <div
+            className={`alert alert-${msgKind === 'success' ? 'success' : 'info'}`}
+            style={{ marginBottom: 'var(--space-lg)' }}
+          >
+            {msg}
+          </div>
+        )}
 
         <div className="grid-2" style={{ gap: 'var(--space-lg)', alignItems: 'start' }}>
-          {/* Left: test list + create */}
+          {/* ── Left: test list + create ────────────────────────────────── */}
           <div>
             <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
               <h3 style={{ marginBottom: 'var(--space-md)' }}>Create New Test</h3>
               <div className="form-group">
                 <label htmlFor="test-title">Test Title</label>
-                <input id="test-title" value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="e.g. AeroSoc Round 1" />
+                <input
+                  id="test-title"
+                  value={newTitle}
+                  onChange={e => setNewTitle(e.target.value)}
+                  placeholder="e.g. AeroSoc Round 1"
+                  onKeyDown={e => e.key === 'Enter' && createTest()}
+                />
               </div>
-              <button id="create-test-btn" className="btn btn-primary" onClick={createTest} disabled={loading || !newTitle.trim()}>Create Test</button>
+              <button id="create-test-btn" className="btn btn-primary" onClick={createTest} disabled={loading || !newTitle.trim()}>
+                Create Test
+              </button>
             </div>
 
             <div className="card">
@@ -158,35 +335,52 @@ function SetupContent() {
               ) : (
                 <div className="flex-col gap-sm">
                   {tests.map(t => (
-                    <button
+                    <div
                       key={t.id}
-                      id={`select-test-${t.id}`}
-                      onClick={() => setSelectedTestId(t.id)}
                       style={{
                         padding: '12px 16px',
                         background: selectedTestId === t.id ? 'rgba(255,255,255,0.06)' : 'var(--bg-input)',
                         border: `1px solid ${selectedTestId === t.id ? 'var(--border-light)' : 'var(--border)'}`,
                         borderRadius: 'var(--radius-md)',
-                        color: 'var(--text-primary)',
-                        fontFamily: 'var(--font-sans)',
-                        fontSize: '0.9375rem',
                         cursor: 'pointer',
-                        textAlign: 'left',
-                        width: '100%',
                       }}
                     >
-                      <div style={{ fontWeight: 500 }}>{t.title}</div>
-                      <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>{t.sections.length} sections · {t.sections.reduce((acc, s) => acc + s.questions.length, 0)} questions</div>
-                    </button>
+                      <div className="flex justify-between items-center">
+                        <button
+                          id={`select-test-${t.id}`}
+                          onClick={() => setSelectedTestId(t.id)}
+                          style={{
+                            background: 'none', border: 'none',
+                            color: 'var(--text-primary)', fontFamily: 'var(--font-sans)',
+                            fontSize: '0.9375rem', cursor: 'pointer', textAlign: 'left',
+                            fontWeight: 500, padding: 0, flex: 1,
+                          }}
+                        >
+                          {t.title}
+                        </button>
+                        <div className="flex gap-sm">
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => setEditMode({ kind: 'test', testId: t.id, title: t.title })}
+                            title="Rename test"
+                          >✏️</button>
+                          <DeleteBtn label="" onConfirm={() => deleteTest(t.id)} disabled={loading} />
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
+                        {t.sections.length} sections · {t.sections.reduce((a, s) => a + s.questions.length, 0)} questions
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Right: section + question builder */}
+          {/* ── Right: section + question builder ──────────────────────── */}
           {selectedTest && (
             <div>
+              {/* Add Section */}
               <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
                 <h3 style={{ marginBottom: 'var(--space-md)' }}>Add Section to "{selectedTest.title}"</h3>
                 <div className="form-group">
@@ -197,9 +391,115 @@ function SetupContent() {
                   <label htmlFor="section-time">Time Limit (seconds)</label>
                   <input id="section-time" type="number" value={sectionTime} onChange={e => setSectionTime(Number(e.target.value))} />
                 </div>
-                <button id="add-section-btn" className="btn btn-primary" onClick={addSection} disabled={loading || !sectionName.trim()}>Add Section</button>
+                <button id="add-section-btn" className="btn btn-primary" onClick={addSection} disabled={loading || !sectionName.trim()}>
+                  Add Section
+                </button>
               </div>
 
+              {/* Sections Preview with edit/delete */}
+              {selectedTest.sections.length > 0 && (
+                <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
+                  <h3 style={{ marginBottom: 'var(--space-md)' }}>Sections &amp; Questions</h3>
+                  {selectedTest.sections.map((sec, si) => (
+                    <div
+                      key={sec.id}
+                      style={{
+                        marginBottom: 'var(--space-md)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-md)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {/* Section header */}
+                      <div
+                        className="flex justify-between items-center"
+                        style={{
+                          padding: '10px 14px',
+                          background: 'rgba(255,255,255,0.04)',
+                          borderBottom: '1px solid var(--border)',
+                        }}
+                      >
+                        <div className="flex items-center gap-sm">
+                          <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                            §{si + 1}
+                          </span>
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{sec.name}</span>
+                          <span className="badge badge-gray" style={{ fontSize: '0.75rem' }}>
+                            {sec.questions.length} Qs · {Math.floor(sec.timeLimit / 60)}m
+                          </span>
+                        </div>
+                        <div className="flex gap-sm">
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => setEditMode({ kind: 'section', testId: selectedTestId!, sectionId: sec.id, name: sec.name, timeLimit: sec.timeLimit })}
+                          >✏️ Edit</button>
+                          <DeleteBtn label="Section" onConfirm={() => deleteSection(selectedTestId!, sec.id)} disabled={loading} />
+                        </div>
+                      </div>
+
+                      {/* Questions list */}
+                      <div style={{ padding: '10px 14px' }}>
+                        {sec.questions.length === 0 ? (
+                          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No questions yet.</p>
+                        ) : (
+                          sec.questions.map((q, qi) => (
+                            <div
+                              key={q.id}
+                              style={{
+                                display: 'flex', alignItems: 'flex-start', gap: 10,
+                                padding: '8px 10px',
+                                background: 'var(--bg-input)',
+                                borderRadius: 'var(--radius-sm)',
+                                border: '1px solid var(--border)',
+                                marginBottom: 6,
+                                fontSize: '0.875rem',
+                              }}
+                            >
+                              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', flexShrink: 0, marginTop: 1 }}>
+                                Q{qi + 1}
+                              </span>
+                              <div style={{ flex: 1, color: 'var(--text-secondary)' }}>
+                                {q.text.substring(0, 80)}{q.text.length > 80 ? '...' : ''}
+                                {q.type === 'mcq' && q.options && (
+                                  <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                    {q.options.map((opt, oi) => (
+                                      <span
+                                        key={oi}
+                                        style={{
+                                          fontSize: '0.75rem', padding: '2px 8px',
+                                          background: 'rgba(255,255,255,0.06)',
+                                          border: '1px solid var(--border)',
+                                          borderRadius: 'var(--radius-sm)',
+                                          color: 'var(--text-muted)',
+                                        }}
+                                      >
+                                        {String.fromCharCode(65 + oi)}: {opt}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                <div style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                                  #{q.tag} · {q.type}{q.timeLimit ? ` · ${q.timeLimit}s` : ''}
+                                </div>
+                              </div>
+                              <div className="flex gap-sm" style={{ flexShrink: 0 }}>
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+                                  onClick={() => setEditMode({ kind: 'question', testId: selectedTestId!, sectionId: sec.id, question: { ...q, options: q.options ? [...q.options] : ['', '', '', ''] } })}
+                                >✏️</button>
+                                <DeleteBtn label="" onConfirm={() => deleteQuestion(selectedTestId!, sec.id, q.id)} disabled={loading} />
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add Question */}
               {selectedTest.sections.length > 0 && (
                 <div className="card">
                   <h3 style={{ marginBottom: 'var(--space-md)' }}>Add Question</h3>
@@ -207,7 +507,7 @@ function SetupContent() {
                     <label htmlFor="q-section">Target Section</label>
                     <select id="q-section" value={qSectionId} onChange={e => setQSectionId(e.target.value)}>
                       <option value="">-- Select section --</option>
-                      {selectedTest.sections.map(s => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                      {selectedTest.sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
@@ -246,30 +546,184 @@ function SetupContent() {
                       <input id="q-timelimit" type="number" value={qTimeLimit} onChange={e => setQTimeLimit(Number(e.target.value))} />
                     </div>
                   </div>
-                  <button id="add-question-btn" className="btn btn-primary" onClick={addQuestion} disabled={loading || !qText.trim() || !qSectionId || !qTag.trim()}>Add Question</button>
-
-                  {/* Preview */}
-                  <div className="divider" />
-                  {selectedTest.sections.map(sec => (
-                    <div key={sec.id} style={{ marginBottom: 'var(--space-md)' }}>
-                      <div className="flex justify-between items-center" style={{ marginBottom: 8 }}>
-                        <h4 style={{ fontSize: '0.875rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{sec.name}</h4>
-                        <span className="badge badge-gray">{sec.questions.length} Qs · {Math.floor(sec.timeLimit / 60)}m</span>
-                      </div>
-                      {sec.questions.map((q, qi) => (
-                        <div key={q.id} style={{ padding: '8px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: 6, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginRight: 8 }}>Q{qi+1}</span>
-                          {q.text.substring(0, 80)}{q.text.length > 80 ? '...' : ''}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
+                  <button
+                    id="add-question-btn"
+                    className="btn btn-primary"
+                    onClick={addQuestion}
+                    disabled={loading || !qText.trim() || !qSectionId || !qTag.trim()}
+                  >
+                    Add Question
+                  </button>
                 </div>
               )}
             </div>
           )}
         </div>
       </div>
+
+      {/* ── Edit Modals ──────────────────────────────────────────────────────── */}
+
+      {/* Edit Test Title */}
+      {editMode.kind === 'test' && (
+        <Modal title="Rename Test" onClose={() => setEditMode({ kind: 'none' })}>
+          <div className="form-group">
+            <label htmlFor="edit-test-title">New Title</label>
+            <input
+              id="edit-test-title"
+              value={editMode.title}
+              onChange={e => setEditMode({ ...editMode, title: e.target.value })}
+              onKeyDown={e => e.key === 'Enter' && saveTestEdit()}
+              autoFocus
+            />
+          </div>
+          <div className="flex gap-sm" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn btn-ghost" onClick={() => setEditMode({ kind: 'none' })}>Cancel</button>
+            <button className="btn btn-primary" onClick={saveTestEdit} disabled={loading || !editMode.title.trim()}>Save</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit Section */}
+      {editMode.kind === 'section' && (
+        <Modal title="Edit Section" onClose={() => setEditMode({ kind: 'none' })}>
+          <div className="form-group">
+            <label htmlFor="edit-section-name">Section Name</label>
+            <input
+              id="edit-section-name"
+              value={editMode.name}
+              onChange={e => setEditMode({ ...editMode, name: e.target.value })}
+              autoFocus
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="edit-section-time">Time Limit (seconds)</label>
+            <input
+              id="edit-section-time"
+              type="number"
+              value={editMode.timeLimit}
+              onChange={e => setEditMode({ ...editMode, timeLimit: Number(e.target.value) })}
+            />
+            <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+              = {Math.floor(editMode.timeLimit / 60)}m {editMode.timeLimit % 60}s
+            </span>
+          </div>
+          <div className="flex gap-sm" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn btn-ghost" onClick={() => setEditMode({ kind: 'none' })}>Cancel</button>
+            <button className="btn btn-primary" onClick={saveSectionEdit} disabled={loading || !editMode.name.trim()}>Save</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit Question */}
+      {editMode.kind === 'question' && (
+        <Modal title="Edit Question" onClose={() => setEditMode({ kind: 'none' })}>
+          <div className="form-group">
+            <label htmlFor="edit-q-type">Question Type</label>
+            <select
+              id="edit-q-type"
+              value={editMode.question.type}
+              onChange={e => setEditMode({
+                ...editMode,
+                question: {
+                  ...editMode.question,
+                  type: e.target.value as 'mcq' | 'short',
+                  options: e.target.value === 'mcq' ? (editMode.question.options || ['', '', '', '']) : undefined,
+                },
+              })}
+            >
+              <option value="mcq">Multiple Choice (MCQ)</option>
+              <option value="short">Short Answer</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label htmlFor="edit-q-text">Question Text</label>
+            <textarea
+              id="edit-q-text"
+              value={editMode.question.text}
+              onChange={e => setEditMode({ ...editMode, question: { ...editMode.question, text: e.target.value } })}
+              rows={4}
+              autoFocus
+            />
+          </div>
+          {editMode.question.type === 'mcq' && (
+            <div className="form-group">
+              <label>Options</label>
+              {(editMode.question.options || ['', '', '', '']).map((opt, i) => (
+                <div key={i} className="flex gap-sm" style={{ marginBottom: 8, alignItems: 'center' }}>
+                  <span style={{
+                    width: 28, height: 28, border: '1px solid var(--border-light)',
+                    borderRadius: '50%', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700,
+                    color: 'var(--text-muted)', flexShrink: 0,
+                  }}>{String.fromCharCode(65 + i)}</span>
+                  <input
+                    id={`edit-q-option-${i}`}
+                    value={opt}
+                    onChange={e => {
+                      const opts = [...(editMode.question.options || ['', '', '', ''])];
+                      opts[i] = e.target.value;
+                      setEditMode({ ...editMode, question: { ...editMode.question, options: opts } });
+                    }}
+                    placeholder={`Option ${String.fromCharCode(65 + i)}`}
+                    style={{ flex: 1 }}
+                  />
+                  {(editMode.question.options || []).length > 2 && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--accent-red-light)', flexShrink: 0 }}
+                      onClick={() => {
+                        const opts = [...(editMode.question.options || [])];
+                        opts.splice(i, 1);
+                        setEditMode({ ...editMode, question: { ...editMode.question, options: opts } });
+                      }}
+                    >✕</button>
+                  )}
+                </div>
+              ))}
+              {(editMode.question.options || []).length < 6 && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ marginTop: 4 }}
+                  onClick={() => {
+                    const opts = [...(editMode.question.options || []), ''];
+                    setEditMode({ ...editMode, question: { ...editMode.question, options: opts } });
+                  }}
+                >+ Add option</button>
+              )}
+            </div>
+          )}
+          <div className="grid-2" style={{ gap: 'var(--space-md)' }}>
+            <div className="form-group">
+              <label htmlFor="edit-q-tag">Tag</label>
+              <input
+                id="edit-q-tag"
+                value={editMode.question.tag}
+                onChange={e => setEditMode({ ...editMode, question: { ...editMode.question, tag: e.target.value } })}
+                style={{ fontFamily: 'var(--font-mono)' }}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="edit-q-timelimit">Timer (s, 0=none)</label>
+              <input
+                id="edit-q-timelimit"
+                type="number"
+                value={editMode.question.timeLimit || 0}
+                onChange={e => setEditMode({ ...editMode, question: { ...editMode.question, timeLimit: Number(e.target.value) || undefined } })}
+              />
+            </div>
+          </div>
+          <div className="flex gap-sm" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn btn-ghost" onClick={() => setEditMode({ kind: 'none' })}>Cancel</button>
+            <button
+              className="btn btn-primary"
+              onClick={saveQuestionEdit}
+              disabled={loading || !editMode.question.text.trim() || !editMode.question.tag.trim()}
+            >
+              Save Changes
+            </button>
+          </div>
+        </Modal>
+      )}
     </main>
   );
 }

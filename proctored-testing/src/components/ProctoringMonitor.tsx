@@ -159,11 +159,18 @@ function detectRectangle(
 }
 // =============================================================================
 
+export interface MonitorStatus {
+  faceDetected: boolean;
+  cameraCovered: boolean;
+  micWorking: boolean;
+}
+
 interface Props {
   uid: string;
   testId?: string;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onViolation?: (flag: DurationFlag) => void;
+  onStatusChange?: (status: MonitorStatus) => void;
   calibrationMode?: boolean;
   overlayCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
 }
@@ -175,6 +182,7 @@ export default function ProctoringMonitor({
   testId,
   videoRef,
   onViolation,
+  onStatusChange,
   calibrationMode = false,
   overlayCanvasRef,
 }: Props) {
@@ -187,6 +195,19 @@ export default function ProctoringMonitor({
     if (!hys.current.has(e)) hys.current.set(e, { v: 0, c: 0 });
     return hys.current.get(e)!;
   };
+
+  const lastStatus = useRef<MonitorStatus>({ faceDetected: false, cameraCovered: false, micWorking: false });
+  const pushStatus = useCallback((updates: Partial<MonitorStatus>) => {
+    let changed = false;
+    const next = { ...lastStatus.current };
+    if (updates.faceDetected !== undefined && updates.faceDetected !== next.faceDetected) { next.faceDetected = updates.faceDetected; changed = true; }
+    if (updates.cameraCovered !== undefined && updates.cameraCovered !== next.cameraCovered) { next.cameraCovered = updates.cameraCovered; changed = true; }
+    if (updates.micWorking !== undefined && updates.micWorking !== next.micWorking) { next.micWorking = updates.micWorking; changed = true; }
+    if (changed) {
+      lastStatus.current = next;
+      onStatusChange?.(next);
+    }
+  }, [onStatusChange]);
 
   // DB path: proctoringFlags/{uid}/{testId}/flags
   const flagPath = useCallback(() => {
@@ -409,6 +430,7 @@ export default function ProctoringMonitor({
           if (!mounted) return;
           const count = results.multiFaceLandmarks.length;
           report('INVALID_FACE_COUNT', count !== 1, count === 0 ? 'medium' : 'critical');
+          pushStatus({ faceDetected: count === 1 });
 
           if (overlayCanvasRef?.current) {
             const cv = overlayCanvasRef.current;
@@ -539,6 +561,10 @@ export default function ProctoringMonitor({
           let sumSq = 0;
           for (let i = 0; i < timeBuf.length; i++) sumSq += timeBuf[i] * timeBuf[i];
           const rms = Math.sqrt(sumSq / timeBuf.length);
+          
+          const isMuted = rms < 0.0001; // hardware mute or completely dead
+          report('MIC_MUTED', isMuted, 'critical');
+          pushStatus({ micWorking: !isMuted });
 
           if (calibFrames < CALIB_FRAMES) {
             calibSum += rms; calibFrames++;
@@ -563,7 +589,9 @@ export default function ProctoringMonitor({
             let lum = 0;
             for (let i = 0; i < px.length; i += 4)
               lum += px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114;
-            report('CAMERA_COVERED', (lum / (64 * 64)) < 12, 'critical');
+            const covered = (lum / (64 * 64)) < 12;
+            report('CAMERA_COVERED', covered, 'critical');
+            pushStatus({ cameraCovered: covered });
           }
           rafId = requestAnimationFrame(tick);
         };
