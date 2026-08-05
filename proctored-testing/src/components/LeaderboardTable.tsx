@@ -24,11 +24,12 @@ interface Props {
   entries: LeaderboardEntry[];
   onAnalyze: (uid: string) => void;
   analyzing: string | null;
+  onDelete?: (uid: string) => void;
 }
 
 const PAGE_SIZE = 20;
 
-export default function LeaderboardTable({ entries, onAnalyze, analyzing }: Props) {
+export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDelete }: Props) {
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -108,6 +109,15 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing }: Prop
                             disabled={analyzing === entry.uid}
                           >
                             {analyzing === entry.uid ? 'Analyzing...' : 'AI Review'}
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ color: 'var(--accent-red-light)' }}
+                            onClick={() => onDelete(entry.uid)}
+                          >
+                            Delete
                           </button>
                         )}
                       </div>

@@ -8,6 +8,7 @@ import Link from 'next/link';
 
 interface Participant {
   email: string;
+  name?: string;
   allowed: boolean;
 }
 
@@ -33,18 +34,20 @@ function ParticipantsContent() {
     }
     const parsed = Object.keys(val).map(key => ({
       email: decodeEmail(key),
-      ...(val[key] as { allowed: boolean })
+      ...(val[key] as { allowed: boolean; name?: string })
     }));
     setParticipants(parsed);
   };
 
   useEffect(() => { fetchParticipants(); }, []);
 
-  const addEmail = async (email: string) => {
-    const trimmed = email.trim().toLowerCase();
-    if (!trimmed || !trimmed.includes('@')) return false;
-    const key = encodeEmail(trimmed);
-    await set(ref(rtdb, `participants/${key}`), { email: trimmed, allowed: true });
+  const addParticipant = async (name: string, email: string) => {
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedName = name.trim();
+    if (!trimmedEmail || !trimmedEmail.includes('@') || !trimmedName) return false;
+    const key = encodeEmail(trimmedEmail);
+    // Merge name and email in the existing participant record if it exists, or create a new one
+    await set(ref(rtdb, `participants/${key}`), { email: trimmedEmail, name: trimmedName, allowed: true });
     return true;
   };
 
@@ -52,12 +55,21 @@ function ParticipantsContent() {
     setLoading(true);
     setMsg(null);
     setError(null);
-    const emails = emailInput.split(/[,\n]/).map((e) => e.trim()).filter(Boolean);
+    const lines = emailInput.split('\n').map((e) => e.trim()).filter(Boolean);
     let count = 0;
-    for (const email of emails) {
-      if (await addEmail(email)) count++;
+    for (const line of lines) {
+      const parts = line.split(',');
+      if (parts.length >= 2) {
+        const name = parts[0].trim();
+        const email = parts[1].trim();
+        if (await addParticipant(name, email)) count++;
+      }
     }
-    setMsg(`Added ${count} participant(s).`);
+    if (count === 0 && lines.length > 0) {
+       setError('Failed to add participants. Ensure format is "Name, Email" and Name is provided.');
+    } else {
+       setMsg(`Added ${count} participant(s).`);
+    }
     setEmailInput('');
     await fetchParticipants();
     setLoading(false);
@@ -73,11 +85,12 @@ function ParticipantsContent() {
       const buffer = await csvFile.arrayBuffer();
       const wb = read(buffer);
       const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = utils.sheet_to_json<{ email?: string; Email?: string }>(sheet);
+      const rows = utils.sheet_to_json<{ email?: string; Email?: string; name?: string; Name?: string }>(sheet);
       let count = 0;
       for (const row of rows) {
         const email = String(row.email || row.Email || '').trim().toLowerCase();
-        if (await addEmail(email)) count++;
+        const name = String(row.name || row.Name || '').trim();
+        if (await addParticipant(name, email)) count++;
       }
       setMsg(`Imported ${count} participant(s) from file.`);
       await fetchParticipants();
@@ -111,12 +124,12 @@ function ParticipantsContent() {
           <div className="card">
             <h3 style={{ marginBottom: 'var(--space-md)' }}>Add Manually</h3>
             <div className="form-group">
-              <label htmlFor="email-input">Emails (comma or newline separated)</label>
+              <label htmlFor="email-input">Name and Email (one per line, comma separated)</label>
               <textarea
                 id="email-input"
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
-                placeholder="student1@example.com\nstudent2@example.com"
+                placeholder="John Doe, student1@example.com&#10;Jane Smith, student2@example.com"
                 rows={5}
               />
             </div>
@@ -129,7 +142,7 @@ function ParticipantsContent() {
           <div className="card">
             <h3 style={{ marginBottom: 'var(--space-md)' }}>Import CSV / XLSX</h3>
             <p style={{ fontSize: '0.875rem', marginBottom: 'var(--space-md)' }}>
-              Upload a CSV or Excel file with an <code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)' }}>email</code> column.
+              Upload a CSV or Excel file with a <code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)' }}>name</code> and an <code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)' }}>email</code> column.
             </p>
             <div className="form-group">
               <label htmlFor="csv-upload">Select File</label>
@@ -159,6 +172,7 @@ function ParticipantsContent() {
             <thead>
               <tr>
                 <th>#</th>
+                <th>Name</th>
                 <th>Email</th>
                 <th>Status</th>
                 <th>Action</th>
@@ -168,6 +182,7 @@ function ParticipantsContent() {
               {pageData.map((p, idx) => (
                 <tr key={p.email}>
                   <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{page * PAGE_SIZE + idx + 1}</td>
+                  <td style={{ fontWeight: 500 }}>{p.name || '—'}</td>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>{p.email}</td>
                   <td><span className="badge badge-green">Approved</span></td>
                   <td>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { rtdb } from '@/lib/firebase';
-import { ref, get, set, update } from 'firebase/database';
+import { ref, get, set, update, remove } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import LeaderboardTable, { LeaderboardEntry } from '@/components/LeaderboardTable';
 import Link from 'next/link';
@@ -34,6 +34,66 @@ function ResultsContent() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!selectedTestId) {
+      setLeaderboard([]);
+      return;
+    }
+    const fetchExistingResults = async () => {
+      setLoading(true);
+      try {
+        const resultsSnap = await get(ref(rtdb, `results/${selectedTestId}`));
+        const resultsVal = resultsSnap.val();
+        if (resultsVal) {
+          const partsSnap = await get(ref(rtdb, 'participants'));
+          const partsData = partsSnap.val() || {};
+          const uidToName: Record<string, string> = {};
+          Object.keys(partsData).forEach(key => {
+            if (partsData[key].uid) {
+              uidToName[partsData[key].uid] = partsData[key].name || partsData[key].email.split('@')[0];
+            }
+          });
+
+          const entries: LeaderboardEntry[] = [];
+          for (const uid of Object.keys(resultsVal)) {
+            const data = resultsVal[uid];
+            // Get proctoring flags
+            const flagsSnap = await get(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}/flags`));
+            const flagsData = flagsSnap.val();
+            const flags = flagsData ? Object.values(flagsData) as { event: string; severity: string; timestamp: string }[] : [];
+
+            entries.push({
+              uid,
+              name: uidToName[uid] || data.email?.split('@')[0] || uid,
+              email: data.email,
+              score: data.score,
+              total: data.total,
+              rank: data.rank,
+              roundStatus: data.roundStatus || 'Pending',
+              flagCount: flags.length,
+              flags,
+              aiSeverity: data.aiSeverity,
+              aiSummary: data.aiSummary,
+              interviewScheduled: data.interviewScheduled,
+              panelNo: data.panelNo,
+              venue: data.venue,
+              dateTime: data.dateTime,
+            });
+          }
+          entries.sort((a, b) => b.score - a.score);
+          setLeaderboard(entries);
+        } else {
+          setLeaderboard([]);
+        }
+      } catch (e) {
+        console.error("Failed to load existing results", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchExistingResults();
+  }, [selectedTestId]);
 
   const parseAnswerKeyText = (text: string): AnswerKey => {
     const key: AnswerKey = {};
@@ -126,10 +186,15 @@ function ResultsContent() {
       const participantsSnap = await get(ref(rtdb, 'participants'));
       const partsData = participantsSnap.val() || {};
 
-      // Map uid -> email from participants (indexed by email key)
-      const emailToData: Record<string, string> = {};
+      // Map uid -> {email, name} from participants (indexed by email key)
+      const uidToData: Record<string, {email: string, name: string}> = {};
       Object.keys(partsData).forEach(key => { 
-        emailToData[partsData[key].uid || ''] = partsData[key].email; 
+        if (partsData[key].uid) {
+          uidToData[partsData[key].uid] = { 
+            email: partsData[key].email,
+            name: partsData[key].name || partsData[key].email.split('@')[0]
+          };
+        }
       });
 
       // Score each submission
@@ -141,7 +206,7 @@ function ResultsContent() {
           const tag = questionTagMap[qId];
           if (tag && key![tag] === ans) score++;
         });
-        scored.push({ uid, email: emailToData[uid] || uid, score });
+        scored.push({ uid, email: uidToData[uid]?.email || uid, score });
       }
 
       // Sort by score descending, assign ranks
@@ -177,7 +242,7 @@ function ResultsContent() {
 
         entries.push({
           uid,
-          name: email.split('@')[0],
+          name: uidToData[uid]?.name || email.split('@')[0],
           email,
           score,
           total: totalQuestions,
@@ -253,6 +318,14 @@ function ResultsContent() {
     await update(ref(rtdb, `results/${selectedTestId}/${uid}`), detailsForm);
     setLeaderboard(prev => prev.map(e => e.uid === uid ? { ...e, ...detailsForm } : e));
     setEditingDetailsFor(null);
+  };
+
+  const deleteResult = async (uid: string) => {
+    if (!selectedTestId) return;
+    if (!confirm('Are you sure you want to delete this past test record?')) return;
+    await remove(ref(rtdb, `results/${selectedTestId}/${uid}`));
+    setLeaderboard(prev => prev.filter(e => e.uid !== uid));
+    setMsg('Test record deleted.');
   };
 
 
@@ -336,6 +409,7 @@ function ResultsContent() {
               entries={leaderboard}
               onAnalyze={analyzeStudent}
               analyzing={analyzing}
+              onDelete={deleteResult}
             />
 
             {/* Round status bulk editor */}
