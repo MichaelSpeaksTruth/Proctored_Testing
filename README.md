@@ -1,36 +1,58 @@
 # AeroSoc BIT Mesra Proctored Testing Platform
 
-**Author / Credits:** Anurag Kumar Verma
+**Author and Credits:** Anurag Kumar Verma
 
 ## 1. Purpose
 
-The platform is built specifically for AeroSoc BIT Mesra's Recruitment Online Assessment (OA). It addresses the need for a scalable, privacy-first testing environment that prevents cheating without using intrusive, instant-lockout mechanics. By employing an "observe and log" duration-based model, it ensures a seamless experience for candidates and zero media storage, while giving administrators concrete data on academic integrity.
+The platform is built specifically for AeroSoc BIT Mesra's Recruitment Online Assessment. It addresses the need for a scalable, privacy-first testing environment that prevents cheating without using intrusive, instant-lockout mechanics. By employing an observe-and-log duration-based model, it ensures a seamless experience for candidates and zero media storage, while giving administrators concrete data on academic integrity.
 
 ## 2. Architecture Overview
 
-**Core Framework:** Next.js 16.
+**Core Framework:** Next.js 16 (App Router).
 
-**Authentication and State:** Firebase (Google Auth with strict .env admin constraints, RTDB for telemetry, Firestore for exam data).
+**Authentication and State:** Firebase Realtime Database and Admin SDK. (Note: Firestore is not used in order to avoid document write limits).
 
-**Edge Proctoring Engine:** MediaPipe (FaceMesh for face presence, Vision Tasks for cell phone detection). All processing executes strictly on the client-side browser to guarantee zero audio/video storage.
+**Edge Proctoring Engine:** MediaPipe (FaceMesh for face presence, Vision Tasks for cell phone detection). All processing executes strictly on the client-side browser to guarantee zero audio or video storage.
 
-**Data Flow:** Local "stopwatch" logging computes the exact duration of an infraction (e.g., out of fullscreen, phone detected) and sends a single debounced write to Firebase RTDB upon completion.
+**Data Flow:** Local stopwatch logging computes the exact duration of an infraction (e.g., out of fullscreen, phone detected) and sends a single debounced write to Firebase Realtime Database upon completion.
 
-**AI Analytics:** Groq API ingests the duration-based RTDB logs to generate a final, human-readable proctoring summary for the administrative dashboard.
+**AI Analytics:** Groq API ingests the duration-based logs to generate a final, human-readable proctoring summary for the administrative dashboard.
 
-## 3. High-Concurrency Resilience
+## 3. High-Concurrency Resilience and Scalability
 
-The platform is engineered to handle "Thundering Herd" scenarios through a distributed, highly resilient architecture:
+The platform is engineered specifically to handle the Thundering Herd scenario, where 500 or more users click "Start Test" at the exact same millisecond. Traditional architectures fail under this stress due to database connection limits and strict API rate limiting. This platform guarantees stability for 500+ concurrent users processing 100+ MCQs through a four-pillar distributed architecture.
 
-- **Edge-Cached Question Delivery:** Questions are relayed through a serverless route (`/api/get-test-questions`) and aggressively cached at the Vercel Edge. This neutralizes database read spikes during simultaneous mass starts.
-  - *Cache Invalidation Strategy:* To purge stale content instantly (e.g., if a typo is hotfixed mid-exam), the architecture leverages Vercel's On-Demand Revalidation via an admin webhook.
-- **Offline-Resilient State:** A custom local storage integration guarantees perfect offline resilience. This eliminates continuous server syncing (protecting the Firebase RTDB 10GB/month bandwidth limit) and protects student progress against network instability.
-- **Secure Serverless Relay:** Submissions are processed by an isolated serverless API that verifies ID tokens server-side before executing mathematically isolated writes to eliminate database contention.
-  - *Defeating the Local Clock Exploit:* To prevent disconnected users from altering their local system clock to gain extra time, the Serverless API validates the final submission duration against a securely logged, server-side start timestamp, rejecting payloads that exceed the allowed delta.
+### 3.1 Overcoming Firebase Realtime Database Limitations
+
+**The Limitation:** Firebase Realtime Database imposes strict bandwidth limits (10GB per month on the free tier) and connection limits (100 concurrent connections on Spark). If 500 users maintain a persistent WebSocket connection to sync their MCQ answers in real time, the database will throttle, disconnect users, and exhaust the quota within hours.
+
+**The Workaround:** 
+1. **Zero-Connection Exam State:** The system strictly prohibits the client application from maintaining an open WebSocket connection to Firebase during the examination.
+2. **Offline-Resilient Persistence:** A custom `useTestState` hook tightly couples the React application state to the browser's `localStorage`. Every time a student selects one of the 100+ MCQs, the answer is synchronously updated on their local machine. This results in exactly zero database writes during the exam phase. If a student loses internet connection, closes the tab, or refreshes the page, their exact progress remains safe on their local SSD and instantly rehydrates upon load.
+
+### 3.2 Overcoming Vercel and Database Read Bottlenecks
+
+**The Limitation:** Fetching a 100+ MCQ JSON payload directly from the database for 500 simultaneous users will trigger massive read spikes, resulting in latency and potential API timeouts.
+
+**The Workaround:**
+**Edge-Cached Question Delivery:** Questions are relayed through a serverless route (`/api/get-test-questions`) rather than direct client-to-database calls. This route is configured with aggressive `Cache-Control` headers (`s-maxage=3600, stale-while-revalidate=86400`). When the first user requests the test, Vercel fetches the payload from Firebase and caches it globally across its Edge Network. The remaining 499 users receive the cached JSON instantly from the Edge node closest to them. The database experiences zero additional reads, neutralizing the traffic spike completely. To purge stale content instantly, administrators can trigger a webhook that executes Vercel's On-Demand Revalidation to clear the Edge cache.
+
+### 3.3 Overcoming Submission Bottlenecks
+
+**The Limitation:** When the global timer expires, 500 clients submit massive JSON payloads (100+ answers each) simultaneously. Writing to a single master document or incrementing a global counter causes severe document contention and write failures. Furthermore, clients cannot be trusted to write directly to the database without exposing security rules.
+
+**The Workaround:**
+**Secure Serverless Relay with Isolated Writes:** The final JSON payload is dispatched to a secure Vercel API route (`/api/grade-test`). Vercel automatically scales serverless functions, spinning up 500 independent execution environments instantly. Each function validates the Firebase Auth ID token server-side to prevent spoofing, and then executes a write to a mathematically isolated path (`submissions/{testId}/{uid}`) using the Firebase Admin SDK. Because the write paths are entirely isolated, there is zero database contention. 
+
+### 3.4 Defeating the Local Clock Exploit
+
+**The Vulnerability:** Because the test state is managed offline to save bandwidth, a disconnected user could theoretically alter their local system clock to prevent the timer from expiring, granting them infinite time to solve the 100+ MCQs.
+
+**The Workaround:** The Serverless API enforces strict server-side timestamp validation. When the payload is received, the server compares the current time against the securely logged test activation timestamp. If the calculated duration exceeds the allowed limit plus a rigid network buffer, the submission is accepted but permanently flagged with a `DELAYED_SUBMISSION` integrity flag and automatically marked as Disqualified pending administrative review.
 
 ## 4. Security and Integrity Mechanisms
 
-The system enforces a defense-in-depth security perimeter:
+The system enforces a strict defense-in-depth security perimeter:
 
 - **Hardware Verification Gate:** The local machine learning pipeline verifies that a face is present, the camera is uncovered, and the microphone is picking up ambient audio before granting access.
 - **Client-Side DOM Restrictions:** Rigorous DOM restrictions disable text selection, drag-to-copy, and context menus. Keydown listeners block keyboard shortcuts for copying or printing, and CSS print media queries obscure all content to defeat print-to-PDF screenshot attacks. 
