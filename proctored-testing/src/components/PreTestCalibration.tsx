@@ -59,7 +59,7 @@ export default function PreTestCalibration({ isAligned, onCalibrationComplete, i
     <div className="calibration-wrapper" style={{ marginTop: 'var(--space-md)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.875rem' }}>
         <span style={{ color: isAligned ? 'var(--accent-green)' : 'var(--accent-red)', fontWeight: 600 }}>
-          {isAligned ? '✓ Face Aligned' : '⚠ Center your face in the box'}
+          {isAligned ? '✓ Face Aligned' : '⚠ Center your face in the camera'}
         </span>
         <span style={{ color: 'var(--text-muted)' }}>{Math.round(progress)}%</span>
       </div>

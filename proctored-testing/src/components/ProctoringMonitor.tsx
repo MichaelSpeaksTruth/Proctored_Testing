@@ -601,8 +601,8 @@ export default function ProctoringMonitor({
             const foreheadPt = lm[IDX_FOREHEAD];
             const isOutOfFrame = foreheadPt.y < 0.02 && chinPt.y > 0.2;
 
-            const PITCH_DOWN_THRESHOLD = -15; // Threshold for looking down at lap
-            const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD || faceRatio < 0.85 || isOutOfFrame;
+            const PITCH_DOWN_THRESHOLD = -25; // Relaxed threshold for looking down at lap
+            const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD || faceRatio < 0.65 || isOutOfFrame;
             
             report('HEAD_PITCH_DOWN', isPitchDown, 'high');
 
@@ -651,18 +651,6 @@ export default function ProctoringMonitor({
                   const isProximityGood = (chin.y - forehead.y) > 0.25;
                   
                   const isAligned = isCenteredX && isCenteredY && isProximityGood;
-                  
-                  // Draw Dynamic Bounding Box
-                  const boxWidth = W * 0.3;
-                  const boxHeight = H * 0.4;
-                  const boxX = W / 2 - boxWidth / 2;
-                  const boxY = H / 2 - boxHeight / 2;
-                  
-                  gx.strokeStyle = isAligned ? 'rgba(0, 255, 120, 0.8)' : 'rgba(255, 34, 0, 0.8)';
-                  gx.lineWidth = 3;
-                  gx.setLineDash([10, 10]);
-                  gx.strokeRect(boxX, boxY, boxWidth, boxHeight);
-                  gx.setLineDash([]);
                   
                   if (lastAlignment.current !== isAligned) {
                     lastAlignment.current = isAligned;
