@@ -296,7 +296,10 @@ export default function ProctoringMonitor({
       const endMs = Date.now();
       const durationInSeconds = Math.round((endMs - record.startTime) / 1000);
       activeInfractions.current.delete(event);
-      if (durationInSeconds < 1) return;
+      
+      if (event === 'HEAD_PITCH_DOWN' && durationInSeconds < 5) return;
+      if (event !== 'HEAD_PITCH_DOWN' && durationInSeconds < 1) return;
+      
       const flag: DurationFlag = {
         event,
         severity: record.severity,
@@ -374,7 +377,8 @@ export default function ProctoringMonitor({
       const endMs = Date.now();
       activeInfractions.current.forEach((val, event) => {
         const dur = Math.round((endMs - val.startTime) / 1000);
-        if (dur >= 1 && !calibrationMode) {
+        const isValid = (event === 'HEAD_PITCH_DOWN' && dur >= 5) || (event !== 'HEAD_PITCH_DOWN' && dur >= 1);
+        if (isValid && !calibrationMode) {
           push(ref(rtdb, flagPath()), {
             event, severity: val.severity,
             startTime: new Date(val.startTime).toISOString(),
@@ -571,6 +575,19 @@ export default function ProctoringMonitor({
 
             report('GAZE_AWAY', gazeAway, 'medium');
 
+            // ── Head Pitch (Looking at lap) ──
+            const calculateHeadPitch = (landmarks: LM[]) => {
+              const f = landmarks[IDX_FOREHEAD];
+              const c = landmarks[IDX_CHIN];
+              const theta = Math.atan2(f.z - c.z, c.y - f.y);
+              return theta * (180 / Math.PI);
+            };
+            const headPitchDegrees = calculateHeadPitch(lm);
+            const PITCH_DOWN_THRESHOLD = -15; // Threshold for looking down at lap
+            const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD;
+            
+            report('HEAD_PITCH_DOWN', isPitchDown, 'high');
+
             if (overlayCanvasRef?.current) {
               const cv = overlayCanvasRef.current;
               const gx = cv.getContext('2d');
@@ -603,6 +620,11 @@ export default function ProctoringMonitor({
                     : `✓ FACE OK    Y:${yawDeg.toFixed(0)}° P:${pitchDeg.toFixed(0)}°`,
                   6, H - 8
                 );
+                
+                if (isPitchDown) {
+                  gx.fillStyle = '#ff2200';
+                  gx.fillText(`⚠ LOOKING DOWN (PITCH: ${headPitchDegrees.toFixed(1)}°)`, 6, H - 24);
+                }
               }
             }
           }
@@ -718,7 +740,8 @@ export default function ProctoringMonitor({
       const endMs = Date.now();
       activeInfractions.current.forEach((val, event) => {
         const dur = Math.round((endMs - val.startTime) / 1000);
-        if (dur >= 1 && !calibrationMode) {
+        const isValid = (event === 'HEAD_PITCH_DOWN' && dur >= 5) || (event !== 'HEAD_PITCH_DOWN' && dur >= 1);
+        if (isValid && !calibrationMode) {
           push(ref(rtdb, flagPath()), {
             event, severity: val.severity,
             startTime: new Date(val.startTime).toISOString(),

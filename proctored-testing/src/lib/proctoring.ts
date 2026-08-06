@@ -10,7 +10,8 @@ export type ProctoringEvent =
   | 'CAMERA_COVERED'
   | 'MIC_MUTED'
   | 'PHONE_DETECTED'
-  | 'GAZE_AWAY';
+  | 'GAZE_AWAY'
+  | 'HEAD_PITCH_DOWN';
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 
