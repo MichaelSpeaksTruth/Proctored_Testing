@@ -48,7 +48,7 @@
       ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
       ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
       "$email": {
-        ".read": "data.child('email').val() == auth.token.email"
+        ".read": "auth != null"
       }
     },
     "submissions": {
