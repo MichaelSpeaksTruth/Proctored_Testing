@@ -14,6 +14,7 @@ const ADMIN_TABS = [
   { label: 'System Calibration', href: '/admin/calibration', icon: <Activity size={24} color="var(--accent-green)" />, desc: 'Test AI proctoring models and sensors' },
   { label: 'Test Setup', href: '/admin/setup', icon: <Settings size={24} color="var(--text-muted)" />, desc: 'Create sections, questions, and timers' },
   { label: 'Participants', href: '/admin/participants', icon: <Users size={24} color="var(--text-muted)" />, desc: 'Upload and manage examinee emails' },
+  { label: 'Personnel Management', href: '/admin/personnel', icon: <Users size={24} color="var(--accent-blue)" />, desc: 'Approve and manage Question Setters and Spectators' },
   { label: 'Control Panel', href: '/admin/control', icon: <Zap size={24} color="var(--accent-red)" />, desc: 'Start, monitor, and end the live test' },
   { label: 'Results & Grading', href: '/admin/results', icon: <Award size={24} color="var(--accent-amber)" />, desc: 'Upload answer key, declare results, and review AI proctoring reports' },
 ];
