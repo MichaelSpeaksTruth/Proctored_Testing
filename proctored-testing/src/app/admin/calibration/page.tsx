@@ -53,13 +53,16 @@ function CalibrationContent() {
     setActiveFlags(prev => new Set(prev).add(event));
   }, []);
 
-  const handleViolation = useCallback((flag: DurationFlag) => {
+  const handleViolationClear = useCallback((event: ProctoringEvent) => {
     setActiveFlags(prev => {
       const next = new Set(prev);
-      next.delete(flag.event);
+      next.delete(event);
       return next;
     });
-    setFlags(prev => [...prev, { id: Date.now() + Math.random(), flag }]);
+  }, []);
+
+  const handleViolation = useCallback((flag: DurationFlag) => {
+    setFlags(prev => [...prev, { id: Date.now(), flag }]);
   }, []);
 
   useEffect(() => {
@@ -152,6 +155,7 @@ function CalibrationContent() {
                 videoRef={videoRef}
                 onViolation={handleViolation}
                 onViolationStart={handleViolationStart}
+                onViolationClear={handleViolationClear}
                 calibrationMode={true}
                 overlayCanvasRef={overlayCanvasRef}
               />

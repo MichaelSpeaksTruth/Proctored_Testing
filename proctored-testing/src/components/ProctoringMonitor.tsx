@@ -225,6 +225,7 @@ interface Props {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onViolation?: (flag: DurationFlag) => void;
   onViolationStart?: (event: ProctoringEvent, severity: Severity) => void;
+  onViolationClear?: (event: ProctoringEvent) => void;
   onStatusChange?: (status: MonitorStatus) => void;
   calibrationMode?: boolean;
   isSubmitting?: boolean;
@@ -240,6 +241,7 @@ export default function ProctoringMonitor({
   videoRef,
   onViolation,
   onViolationStart,
+  onViolationClear,
   onStatusChange,
   calibrationMode = false,
   isSubmitting = false,
@@ -301,6 +303,7 @@ export default function ProctoringMonitor({
       const endMs = Date.now();
       const durationInSeconds = Math.round((endMs - record.startTime) / 1000);
       activeInfractions.current.delete(event);
+      onViolationClear?.(event);
       
       const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN';
       if (isSlowEvent && durationInSeconds < 5) return;
