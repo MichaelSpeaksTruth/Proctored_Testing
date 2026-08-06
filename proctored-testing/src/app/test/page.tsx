@@ -151,24 +151,50 @@ function TestContent() {
   }, [isMobileDevice, testId, uid]);
 
   // ── Request camera + mic permissions ─────────────────────────
+  // NotReadableError means the hardware is still held by a previous page load.
+  // We retry up to 3 times with a 1.5s delay to let the OS release the device.
   const requestPermissions = async () => {
     setRequestingPermissions(true);
     setPermError(null);
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
+
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 1500;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        setStream(mediaStream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+        setPermissionsGranted(true);
+        setRequestingPermissions(false);
+        return; // success
+      } catch (err: any) {
+        console.error(`Permission attempt ${attempt}/${MAX_RETRIES}:`, err);
+
+        if (err.name === 'NotReadableError' && attempt < MAX_RETRIES) {
+          // Camera is still held by a previous page load — wait and retry
+          setPermError(`Camera hardware busy, retrying... (attempt ${attempt}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+          continue;
+        }
+
+        // Final failure or non-retryable error
+        setPermError(
+          err.name === 'NotReadableError'
+            ? 'Camera is being used by another application. Please close any other video apps (Teams, Zoom, another browser tab) and try again.'
+            : err.name === 'NotAllowedError'
+            ? 'Permission denied. Please click the camera icon in the browser address bar and set both Camera and Microphone to Allow, then try again.'
+            : err.name === 'NotFoundError'
+            ? 'No camera or microphone found. Please ensure your webcam is connected and not disabled in Windows Device Manager.'
+            : `Device error (${err.name}): ${err.message}`
+        );
+        break;
       }
-      setPermissionsGranted(true);
-    } catch (err: any) {
-      console.error('Permission error:', err);
-      setPermError(
-        `Camera and microphone access is required to proceed. Error: ${err.name} - ${err.message}. Please allow access in your browser settings and try again.`
-      );
-    } finally {
-      setRequestingPermissions(false);
     }
+
+    setRequestingPermissions(false);
   };
 
   const handleViolationStart = useCallback((event: ProctoringEvent) => {
