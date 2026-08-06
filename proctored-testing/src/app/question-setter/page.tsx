@@ -57,8 +57,8 @@ function QuestionSetterContent() {
     // Arrays helper
     const toArr = <T,>(v: unknown): T[] => {
       if (!v) return [];
-      if (Array.isArray(v)) return v as T[];
-      if (typeof v === 'object') return Object.values(v as Record<string, T>);
+      if (Array.isArray(v)) return (v as T[]).filter(Boolean);
+      if (typeof v === 'object') return Object.values(v as Record<string, T>).filter(Boolean);
       return [];
     };
 
@@ -98,9 +98,9 @@ function QuestionSetterContent() {
       timeLimit: sectionTime,
       questions: [],
     };
-    await update(ref(rtdb, `tests/${selectedTestId}`), {
-      sections: [...(test.sections || []), newSection],
-    });
+    const sectionsCount = test.sections ? test.sections.length : 0;
+    await set(ref(rtdb, `tests/${selectedTestId}/sections/${sectionsCount}`), newSection);
+    
     setSectionName('');
     await fetchTests();
     setLoading(false);
@@ -134,10 +134,10 @@ function QuestionSetterContent() {
     if (qTimeLimit) {
       newQ.timeLimit = qTimeLimit;
     }
-    const updatedSections = test.sections.map(s =>
-      s.id === qSectionId ? { ...s, questions: [...s.questions, newQ] } : s
-    );
-    await update(ref(rtdb, `tests/${selectedTestId}`), { sections: updatedSections });
+    const sIndex = test.sections.findIndex(s => s.id === qSectionId);
+    const qCount = test.sections[sIndex].questions ? test.sections[sIndex].questions.length : 0;
+    await set(ref(rtdb, `tests/${selectedTestId}/sections/${sIndex}/questions/${qCount}`), newQ);
+    
     setQText(''); setQOptions(['', '', '', '']); setQTimeLimit(0);
     await fetchTests();
     setLoading(false);
@@ -149,12 +149,10 @@ function QuestionSetterContent() {
     if (!confirm('Are you sure you want to delete this question?')) return;
     setLoading(true);
     const test = tests.find(t => t.id === testId)!;
-    const updatedSections = test.sections.map(s =>
-      s.id === sectionId
-        ? { ...s, questions: s.questions.filter(q => q.id !== questionId) }
-        : s
-    );
-    await update(ref(rtdb, `tests/${testId}`), { sections: updatedSections });
+    const sIndex = test.sections.findIndex(s => s.id === sectionId);
+    const qIndex = test.sections[sIndex].questions.findIndex(q => q.id === questionId);
+    await remove(ref(rtdb, `tests/${testId}/sections/${sIndex}/questions/${qIndex}`));
+    
     await fetchTests();
     setLoading(false);
     flash('Question deleted.');
