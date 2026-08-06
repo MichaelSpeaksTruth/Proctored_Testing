@@ -21,22 +21,39 @@ interface PersonnelRequest {
 
 function PersonnelManagement() {
   const [requests, setRequests] = useState<PersonnelRequest[]>([]);
+  const [approvedPersonnel, setApprovedPersonnel] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
 
   const fetchRequests = async () => {
     setLoading(true);
-    const snap = await get(ref(rtdb, 'personnel_requests'));
-    const val = snap.val();
-    if (val) {
-      const parsed: PersonnelRequest[] = Object.keys(val).map(key => ({
+    const [reqSnap, perSnap] = await Promise.all([
+      get(ref(rtdb, 'personnel_requests')),
+      get(ref(rtdb, 'personnel'))
+    ]);
+    
+    const reqVal = reqSnap.val();
+    if (reqVal) {
+      const parsed: PersonnelRequest[] = Object.keys(reqVal).map(key => ({
         id: key,
-        ...val[key]
+        ...reqVal[key]
       }));
       setRequests(parsed);
     } else {
       setRequests([]);
     }
+
+    const perVal = perSnap.val();
+    if (perVal) {
+      const parsed = Object.keys(perVal).map(key => ({
+        id: key,
+        ...perVal[key]
+      }));
+      setApprovedPersonnel(parsed);
+    } else {
+      setApprovedPersonnel([]);
+    }
+
     setLoading(false);
   };
 
@@ -68,6 +85,7 @@ function PersonnelManagement() {
   };
 
   const handleReject = async (req: PersonnelRequest) => {
+    if (!confirm(`Are you sure you want to reject ${req.name}?`)) return;
     setLoading(true);
     try {
       await remove(ref(rtdb, `personnel_requests/${req.id}`));
@@ -80,17 +98,31 @@ function PersonnelManagement() {
     }
   };
 
+  const handleRevoke = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to revoke personnel access for ${name}?`)) return;
+    setLoading(true);
+    try {
+      await remove(ref(rtdb, `personnel/${id}`));
+      setMsg(`Revoked access for ${name}`);
+      await fetchRequests();
+    } catch (e) {
+      console.error(e);
+      setMsg('Error revoking access');
+      setLoading(false);
+    }
+  };
+
   return (
     <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
       <div className="container">
         <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-xl)' }}>
           <Link href="/admin" className="btn btn-ghost btn-sm">← Back</Link>
-          <h1 style={{ fontSize: '1.75rem' }}>Personnel Requests</h1>
+          <h1 style={{ fontSize: '1.75rem' }}>Personnel Management</h1>
         </div>
 
         {msg && <div className="alert alert-success" style={{ marginBottom: 'var(--space-lg)' }}>{msg}</div>}
 
-        <div className="card">
+        <div className="card" style={{ marginBottom: 'var(--space-xl)' }}>
           <h3 style={{ marginBottom: 'var(--space-md)' }}>Pending Applications</h3>
           
           {loading ? (
@@ -123,6 +155,42 @@ function PersonnelManagement() {
                           <button className="btn btn-success btn-sm" onClick={() => handleApprove(req)}>Approve</button>
                           <button className="btn btn-danger btn-sm" onClick={() => handleReject(req)}>Reject</button>
                         </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <h3 style={{ marginBottom: 'var(--space-md)' }}>Approved Personnel</h3>
+          {loading ? (
+            <p>Loading...</p>
+          ) : approvedPersonnel.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)' }}>No approved personnel yet.</p>
+          ) : (
+            <div className="table-responsive">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Position</th>
+                    <th>Role</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {approvedPersonnel.map(person => (
+                    <tr key={person.id}>
+                      <td>{person.name}</td>
+                      <td>{person.email}</td>
+                      <td>{person.position}</td>
+                      <td><span className="badge badge-gray">{person.role}</span></td>
+                      <td>
+                        <button className="btn btn-danger btn-sm" onClick={() => handleRevoke(person.id, person.name)}>Revoke Access</button>
                       </td>
                     </tr>
                   ))}
