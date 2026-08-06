@@ -17,6 +17,7 @@ const EVENT_META: Record<ProctoringEvent, { label: string; color: string }> = {
   MIC_MUTED:          { label: 'Microphone Muted', color: '#e63946' },
   PHONE_DETECTED:     { label: 'Phone Detected', color: '#e63946' },
   GAZE_AWAY:          { label: 'Gaze Away', color: '#ffd166' },
+  HEAD_PITCH_DOWN:    { label: 'Looking Down', color: '#e63946' },
 };
 
 function CalibrationContent() {

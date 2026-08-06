@@ -208,6 +208,7 @@ function TestContent() {
       MIC_MUTED:          `🚨 Microphone muted/silent.`,
       PHONE_DETECTED:     `🚨 Mobile device detected.`,
       GAZE_AWAY:          `⚠ Looking away from screen.`,
+      HEAD_PITCH_DOWN:    `🚨 Looking down at lap detected.`,
     };
     setViolation(messages[event] || '⚠ Proctoring violation detected.');
     if (violationTimeoutRef.current) clearTimeout(violationTimeoutRef.current);
