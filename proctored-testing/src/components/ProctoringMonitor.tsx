@@ -615,7 +615,7 @@ export default function ProctoringMonitor({
             const isDucking = (chinPt.y > 0.95 && foreheadPt.y < 0.95) || (headVsChinRatio > 1.35);
 
             const PITCH_DOWN_THRESHOLD = -15; // Tightened threshold for looking down at lap
-            const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD || pitchDeg > 7 || faceRatio < 0.95 || isOutOfFrame;
+            const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD || pitchDeg > 4 || faceRatio < 0.75 || isOutOfFrame;
             
             report('HEAD_PITCH_DOWN', isPitchDown, 'high');
             report('DUCKING_DOWN', isDucking, 'critical');
