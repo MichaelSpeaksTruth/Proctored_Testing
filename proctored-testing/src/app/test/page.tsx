@@ -46,7 +46,8 @@ function TestContent() {
   const [violation, setViolation] = useState<string | null>(null);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [examStarted, setExamStarted] = useState(false);
-  const [testStartedAt, setTestStartedAt] = useState<string | null>(null);
+  // Student's personal exam start time (stored in localStorage to survive reloads)
+  const [studentExamStartedAt, setStudentExamStartedAt] = useState<string | null>(null);
   const [requestingPermissions, setRequestingPermissions] = useState(false);
   const [permError, setPermError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -79,9 +80,6 @@ function TestContent() {
       if (!data) return;
       if (data.status === 'ended') {
         setLocked(true);
-      }
-      if (data.startedAt) {
-        setTestStartedAt(data.startedAt);
       }
     });
     return () => unsub();
@@ -123,13 +121,34 @@ function TestContent() {
     }
   }, [uid, testId, router]);
 
+  // ── Restore student exam start time from localStorage on reload ──
+  // This ensures the timer continues from where it left off after a reload.
+  useEffect(() => {
+    if (!testId || !uid) return;
+    const lsKey = `pt_exam_start_${testId}_${uid}`;
+    const stored = localStorage.getItem(lsKey);
+    if (stored) {
+      setStudentExamStartedAt(stored);
+    }
+  }, [testId, uid]);
+
   // ── Enforce fullscreen ────────────────────────────────────────
   const enterFullscreenAndStart = useCallback(() => {
     if (!isMobileDevice && !document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(console.error);
     }
+    // Record the student's personal exam start time so the timer
+    // survives page reloads without resetting to the full duration.
+    // Key is per-test-per-user to avoid collisions.
+    const lsKey = `pt_exam_start_${testId}_${uid}`;
+    let startTime = localStorage.getItem(lsKey);
+    if (!startTime) {
+      startTime = new Date().toISOString();
+      localStorage.setItem(lsKey, startTime);
+    }
+    setStudentExamStartedAt(startTime);
     setExamStarted(true);
-  }, [isMobileDevice]);
+  }, [isMobileDevice, testId, uid]);
 
   // ── Request camera + mic permissions ─────────────────────────
   const requestPermissions = async () => {
@@ -209,6 +228,8 @@ function TestContent() {
 
         // Clear localStorage only after confirmed server write
         clearPersistedState();
+        // Also clear the exam start time so a future test session starts fresh
+        try { localStorage.removeItem(`pt_exam_start_${testId}_${uid}`); } catch { /* ignore */ }
         if (document.fullscreenElement) document.exitFullscreen();
         router.replace('/student-dashboard');
       } catch (err) {
@@ -428,20 +449,23 @@ function TestContent() {
           {currentSection && (
             <CountdownTimer
               durationSeconds={(() => {
-                // Determine elapsed time using the server's test start time.
-                // This prevents the timer from resetting to the full duration on page reload.
-                if (testStartedAt) {
-                  const elapsedSeconds = Math.floor((Date.now() - new Date(testStartedAt).getTime()) / 1000);
-                  // Calculate the total time allowed for all sections *up to* the current one.
-                  // For a single-section test, this is just 0.
+                // Use the student's personal exam start time (stored in localStorage)
+                // to compute the true remaining time for this section.
+                // This prevents the timer resetting to full duration on page reload.
+                // We do NOT use testStartedAt (admin start time) — that would
+                // compute a negative remaining time for students who join late.
+                if (studentExamStartedAt) {
+                  const elapsedSeconds = Math.floor(
+                    (Date.now() - new Date(studentExamStartedAt).getTime()) / 1000
+                  );
+                  // Subtract time used by previous sections
                   let previousSectionsTime = 0;
                   for (let i = 0; i < currentSectionIdx; i++) {
                     previousSectionsTime += testData!.sections[i].timeLimit;
                   }
-                  // The elapsed time spent on *this specific section*
                   const sectionElapsed = Math.max(0, elapsedSeconds - previousSectionsTime);
-                  // The remaining time for this section
-                  return Math.max(0, currentSection.timeLimit - sectionElapsed);
+                  // Never return 0 here — a 0 causes immediate onExpire
+                  return Math.max(1, currentSection.timeLimit - sectionElapsed);
                 }
                 return currentSection.timeLimit;
               })()}
