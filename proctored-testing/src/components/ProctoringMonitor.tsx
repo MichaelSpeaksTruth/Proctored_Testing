@@ -229,6 +229,7 @@ interface Props {
   calibrationMode?: boolean;
   isSubmitting?: boolean;
   overlayCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
+  onAlignmentUpdate?: (aligned: boolean) => void;
 }
 
 type LM = { x: number; y: number; z: number };
@@ -243,11 +244,14 @@ export default function ProctoringMonitor({
   calibrationMode = false,
   isSubmitting = false,
   overlayCanvasRef,
+  onAlignmentUpdate,
 }: Props) {
 
   const activeInfractions = useRef<Map<ProctoringEvent, { startTime: number; severity: Severity }>>(
     new Map()
   );
+  
+  const lastAlignment = useRef(false);
   // Keep a ref of isSubmitting to avoid re-binding event listeners
   const isSubmittingRef = useRef(isSubmitting);
   useEffect(() => {
@@ -638,6 +642,32 @@ export default function ProctoringMonitor({
                 if (isPitchDown) {
                   gx.fillStyle = '#ff2200';
                   gx.fillText(`⚠ LOOKING DOWN (PITCH: ${headPitchDegrees.toFixed(1)}°)`, 6, H - 24);
+                }
+                
+                // ── Calibration Geometric Centering ──
+                if (calibrationMode) {
+                  const isCenteredX = noseTip.x > 0.35 && noseTip.x < 0.65;
+                  const isCenteredY = noseTip.y > 0.35 && noseTip.y < 0.65;
+                  const isProximityGood = (chin.y - forehead.y) > 0.25;
+                  
+                  const isAligned = isCenteredX && isCenteredY && isProximityGood;
+                  
+                  // Draw Dynamic Bounding Box
+                  const boxWidth = W * 0.3;
+                  const boxHeight = H * 0.4;
+                  const boxX = W / 2 - boxWidth / 2;
+                  const boxY = H / 2 - boxHeight / 2;
+                  
+                  gx.strokeStyle = isAligned ? 'rgba(0, 255, 120, 0.8)' : 'rgba(255, 34, 0, 0.8)';
+                  gx.lineWidth = 3;
+                  gx.setLineDash([10, 10]);
+                  gx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+                  gx.setLineDash([]);
+                  
+                  if (lastAlignment.current !== isAligned) {
+                    lastAlignment.current = isAligned;
+                    onAlignmentUpdate?.(isAligned);
+                  }
                 }
               }
             }

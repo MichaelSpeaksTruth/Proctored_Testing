@@ -6,13 +6,13 @@ import { auth, rtdb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue, get } from 'firebase/database';
 import StudentGuard from '@/components/StudentGuard';
-import ProctoringMonitor from '@/components/ProctoringMonitor';
+import ProctoringMonitor, { MonitorStatus } from '@/components/ProctoringMonitor';
+import PreTestCalibration from '@/components/PreTestCalibration';
 import WebcamFeed from '@/components/WebcamFeed';
 import CountdownTimer from '@/components/CountdownTimer';
 import QuestionPanel, { Question } from '@/components/QuestionPanel';
 import { Lock, Camera, Monitor, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
 import { ProctoringEvent, DurationFlag } from '@/lib/proctoring';
-import { MonitorStatus } from '@/components/ProctoringMonitor';
 import { useTestState } from '@/lib/useTestState';
 
 interface Section {
@@ -53,6 +53,8 @@ function TestContent() {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [hardwareStatus, setHardwareStatus] = useState<MonitorStatus>({ faceDetected: false, cameraCovered: false, micWorking: false });
   const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [isAligned, setIsAligned] = useState(false);
+  const [calibrationComplete, setCalibrationComplete] = useState(false);
   const violationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -399,13 +401,19 @@ function TestContent() {
             )}
           </div>
 
+          <PreTestCalibration 
+            isAligned={isAligned} 
+            isHardwareReady={allGood} 
+            onCalibrationComplete={() => setCalibrationComplete(true)} 
+          />
+
           <button
             className="btn btn-success btn-lg"
-            style={{ width: '100%', justifyContent: 'center' }}
+            style={{ width: '100%', justifyContent: 'center', marginTop: 'var(--space-md)' }}
             onClick={enterFullscreenAndStart}
-            disabled={!allGood}
+            disabled={!allGood || !calibrationComplete}
           >
-            {allGood ? (isMobileDevice ? 'Start Exam' : 'Start Exam & Enter Fullscreen') : 'Waiting for hardware...'}
+            {allGood ? (calibrationComplete ? (isMobileDevice ? 'Start Exam' : 'Start Exam & Enter Fullscreen') : 'Hold still to calibrate...') : 'Waiting for hardware...'}
           </button>
         </div>
         
@@ -416,6 +424,7 @@ function TestContent() {
             onStatusChange={setHardwareStatus}
             videoRef={videoRef}
             overlayCanvasRef={overlayCanvasRef}
+            onAlignmentUpdate={setIsAligned}
           />
         )}
         <div style={{ position: 'fixed', opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
