@@ -612,7 +612,7 @@ export default function ProctoringMonitor({
             const headVsChinRatio = lowerMass > 0.001 ? headMass / lowerMass : 1.0;
             
             // Flag if the chin physically drops out of frame OR if the head proportion balloons
-            const isDucking = (chinPt.y > 0.95 && foreheadPt.y < 0.95) || (headVsChinRatio > 2.5);
+            const isDucking = (chinPt.y > 0.95 && foreheadPt.y < 0.95) || (headVsChinRatio > 1.6);
 
             const PITCH_DOWN_THRESHOLD = -25; // Relaxed threshold for looking down at lap
             const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD || faceRatio < 0.65 || isOutOfFrame;
@@ -660,7 +660,7 @@ export default function ProctoringMonitor({
                 
                 if (isDucking) {
                   gx.fillStyle = '#ff0000';
-                  gx.fillText(`🚨 FACE HIDDEN (DUCKING DOWN)`, 6, H - 40);
+                  gx.fillText(`🚨 FACE HIDDEN (DUCK RATIO: ${headVsChinRatio.toFixed(2)})`, 6, H - 40);
                 }
                 
                 // ── Calibration Geometric Centering ──
