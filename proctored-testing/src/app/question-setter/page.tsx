@@ -39,6 +39,7 @@ function QuestionSetterContent() {
   const [qOptions, setQOptions] = useState(['', '', '', '']);
   const [qSectionId, setQSectionId] = useState('');
   const [qTimeLimit, setQTimeLimit] = useState(0);
+  const [editQId, setEditQId] = useState<string | null>(null);
 
   // Upload solutions
   const [solutions, setSolutions] = useState<Record<string, string>>({}); // questionTag -> solution
@@ -142,6 +143,57 @@ function QuestionSetterContent() {
     await fetchTests();
     setLoading(false);
     flash(`Question added with Tag: ${newTag}`);
+  };
+
+  const handleEditClick = (testId: string, sectionId: string, q: Question) => {
+    setQSectionId(sectionId);
+    setQType(q.type);
+    setQText(q.text);
+    if (q.type === 'mcq' && q.options) {
+      const paddedOpts = [...q.options];
+      while (paddedOpts.length < 4) paddedOpts.push('');
+      setQOptions(paddedOpts.slice(0, 4));
+    } else {
+      setQOptions(['', '', '', '']);
+    }
+    setQTimeLimit(q.timeLimit || 0);
+    setEditQId(q.id);
+    
+    // Smooth scroll to top form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const saveEditedQuestion = async () => {
+    if (!selectedTestId || !qText.trim() || !qSectionId || !editQId) return;
+    setLoading(true);
+    const test = tests.find(t => t.id === selectedTestId)!;
+    const sIndex = test.sections.findIndex(s => s.id === qSectionId);
+    const qIndex = test.sections[sIndex].questions.findIndex(q => q.id === editQId);
+    
+    const oldQ = test.sections[sIndex].questions[qIndex];
+    
+    const updatedQ: Question = {
+      ...oldQ,
+      text: qText.trim(),
+      type: qType,
+    };
+    if (qType === 'mcq') {
+      updatedQ.options = qOptions.filter(Boolean);
+    } else {
+      delete updatedQ.options;
+    }
+    if (qTimeLimit) {
+      updatedQ.timeLimit = qTimeLimit;
+    } else {
+      delete updatedQ.timeLimit;
+    }
+    
+    await set(ref(rtdb, `tests/${selectedTestId}/sections/${sIndex}/questions/${qIndex}`), updatedQ);
+    
+    setQText(''); setQOptions(['', '', '', '']); setQTimeLimit(0); setEditQId(null);
+    await fetchTests();
+    setLoading(false);
+    flash(`Question updated.`);
   };
 
   // ── DELETE QUESTION ─────────────────────────────────────────────────────────
@@ -301,9 +353,22 @@ function QuestionSetterContent() {
                           ))}
                         </div>
                       )}
-                      <button className="btn btn-primary" onClick={addQuestion} disabled={loading || !qText.trim() || !qSectionId}>
-                        Add Question
-                      </button>
+                      <div className="flex gap-sm">
+                        {editQId ? (
+                          <>
+                            <button className="btn btn-primary" onClick={saveEditedQuestion} disabled={loading || !qText.trim() || !qSectionId}>
+                              Update Question
+                            </button>
+                            <button className="btn btn-ghost" onClick={() => { setEditQId(null); setQText(''); setQOptions(['', '', '', '']); setQTimeLimit(0); }} disabled={loading}>
+                              Cancel Edit
+                            </button>
+                          </>
+                        ) : (
+                          <button className="btn btn-primary" onClick={addQuestion} disabled={loading || !qText.trim() || !qSectionId}>
+                            Add Question
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -322,7 +387,10 @@ function QuestionSetterContent() {
                                 <span style={{ fontSize: '0.875rem' }}>{q.text.substring(0, 50)}...</span>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tag: {q.tag}</div>
                               </div>
-                              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-red-light)' }} onClick={() => deleteQuestion(selectedTest.id, sec.id, q.id)}>🗑 Delete</button>
+                              <div className="flex gap-sm">
+                                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-blue)' }} onClick={() => handleEditClick(selectedTest.id, sec.id, q)}>✎ Edit</button>
+                                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-red-light)' }} onClick={() => deleteQuestion(selectedTest.id, sec.id, q.id)}>🗑 Delete</button>
+                              </div>
                             </div>
                           ))}
                         </div>
