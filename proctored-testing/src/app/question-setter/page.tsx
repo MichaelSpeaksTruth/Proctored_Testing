@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { rtdb, auth } from '@/lib/firebase';
-import { ref, get, update } from 'firebase/database';
+import { ref, get, update, set, remove } from 'firebase/database';
 import RoleGuard from '@/components/RoleGuard';
 import { Question } from '@/components/QuestionPanel';
 import { generateQuestionTag } from '@/lib/adminUtils';
