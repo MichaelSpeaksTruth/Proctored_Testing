@@ -13,6 +13,7 @@ const FRAMES_TO_CLEAR = 20;
 const IDX_NOSE_TIP  = 4;
 const IDX_FOREHEAD  = 10;
 const IDX_CHIN      = 152;
+const IDX_NOSE_BRIDGE = 168;
 const IDX_LEFT_EAR  = 234;
 const IDX_RIGHT_EAR = 454;
 
@@ -583,8 +584,21 @@ export default function ProctoringMonitor({
               return theta * (180 / Math.PI);
             };
             const headPitchDegrees = calculateHeadPitch(lm);
+            
+            // 2D Proportion Ratio
+            const noseTipPt = lm[IDX_NOSE_TIP];
+            const chinPt = lm[IDX_CHIN];
+            const noseBridgePt = lm[IDX_NOSE_BRIDGE];
+            const dUpper = Math.abs(noseTipPt.y - noseBridgePt.y);
+            const dLower = Math.abs(chinPt.y - noseTipPt.y);
+            const faceRatio = dUpper > 0.001 ? dLower / dUpper : 1.0;
+            
+            // Boundary Check
+            const foreheadPt = lm[IDX_FOREHEAD];
+            const isOutOfFrame = foreheadPt.y < 0.02 && chinPt.y > 0.2;
+
             const PITCH_DOWN_THRESHOLD = -15; // Threshold for looking down at lap
-            const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD;
+            const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD || faceRatio < 0.85 || isOutOfFrame;
             
             report('HEAD_PITCH_DOWN', isPitchDown, 'high');
 
