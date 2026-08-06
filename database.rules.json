@@ -4,7 +4,7 @@
       ".read": "auth != null",
       "$emailKey": {
         ".write": "auth != null",
-        ".validate": "newData.child('email').val() == auth.token.email"
+        ".validate": "newData.child('uid').val() == auth.uid"
       }
     },
     "personnel": {
