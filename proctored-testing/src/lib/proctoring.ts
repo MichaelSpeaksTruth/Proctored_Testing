@@ -11,7 +11,8 @@ export type ProctoringEvent =
   | 'MIC_MUTED'
   | 'PHONE_DETECTED'
   | 'GAZE_AWAY'
-  | 'HEAD_PITCH_DOWN';
+  | 'HEAD_PITCH_DOWN'
+  | 'DUCKING_DOWN';
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 

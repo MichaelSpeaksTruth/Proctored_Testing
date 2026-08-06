@@ -302,8 +302,9 @@ export default function ProctoringMonitor({
       const durationInSeconds = Math.round((endMs - record.startTime) / 1000);
       activeInfractions.current.delete(event);
       
-      if (event === 'HEAD_PITCH_DOWN' && durationInSeconds < 5) return;
-      if (event !== 'HEAD_PITCH_DOWN' && durationInSeconds < 1) return;
+      const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN';
+      if (isSlowEvent && durationInSeconds < 5) return;
+      if (!isSlowEvent && durationInSeconds < 1) return;
       
       const flag: DurationFlag = {
         event,
@@ -382,7 +383,8 @@ export default function ProctoringMonitor({
       const endMs = Date.now();
       activeInfractions.current.forEach((val, event) => {
         const dur = Math.round((endMs - val.startTime) / 1000);
-        const isValid = (event === 'HEAD_PITCH_DOWN' && dur >= 5) || (event !== 'HEAD_PITCH_DOWN' && dur >= 1);
+        const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN';
+        const isValid = (isSlowEvent && dur >= 5) || (!isSlowEvent && dur >= 1);
         if (isValid && !calibrationMode) {
           push(ref(rtdb, flagPath()), {
             event, severity: val.severity,
@@ -600,11 +602,13 @@ export default function ProctoringMonitor({
             // Boundary Check
             const foreheadPt = lm[IDX_FOREHEAD];
             const isOutOfFrame = foreheadPt.y < 0.02 && chinPt.y > 0.2;
+            const isDucking = chinPt.y > 0.95 && foreheadPt.y < 0.95;
 
             const PITCH_DOWN_THRESHOLD = -25; // Relaxed threshold for looking down at lap
             const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD || faceRatio < 0.65 || isOutOfFrame;
             
             report('HEAD_PITCH_DOWN', isPitchDown, 'high');
+            report('DUCKING_DOWN', isDucking, 'critical');
 
             if (overlayCanvasRef?.current) {
               const cv = overlayCanvasRef.current;
@@ -642,6 +646,11 @@ export default function ProctoringMonitor({
                 if (isPitchDown) {
                   gx.fillStyle = '#ff2200';
                   gx.fillText(`⚠ LOOKING DOWN (PITCH: ${headPitchDegrees.toFixed(1)}°)`, 6, H - 24);
+                }
+                
+                if (isDucking) {
+                  gx.fillStyle = '#ff0000';
+                  gx.fillText(`🚨 FACE HIDDEN (DUCKING DOWN)`, 6, H - 40);
                 }
                 
                 // ── Calibration Geometric Centering ──

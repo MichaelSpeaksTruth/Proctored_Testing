@@ -211,6 +211,7 @@ function TestContent() {
       PHONE_DETECTED:     `🚨 Mobile device detected.`,
       GAZE_AWAY:          `⚠ Looking away from screen.`,
       HEAD_PITCH_DOWN:    `🚨 Looking down at lap detected.`,
+      DUCKING_DOWN:       `🚨 Face hidden below camera frame!`,
     };
     setViolation(messages[event] || '⚠ Proctoring violation detected.');
     if (violationTimeoutRef.current) clearTimeout(violationTimeoutRef.current);

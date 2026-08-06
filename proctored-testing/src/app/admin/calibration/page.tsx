@@ -18,6 +18,7 @@ const EVENT_META: Record<ProctoringEvent, { label: string; color: string }> = {
   PHONE_DETECTED:     { label: 'Phone Detected', color: '#e63946' },
   GAZE_AWAY:          { label: 'Gaze Away', color: '#ffd166' },
   HEAD_PITCH_DOWN:    { label: 'Looking Down', color: '#e63946' },
+  DUCKING_DOWN:       { label: 'Ducking Out of Frame', color: '#e63946' },
 };
 
 function CalibrationContent() {
