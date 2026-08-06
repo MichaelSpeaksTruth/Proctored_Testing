@@ -18,6 +18,10 @@ export interface LeaderboardEntry {
   panelNo?: string;
   venue?: string;
   dateTime?: string;
+  // Integrity flags from grade-test
+  integrityFlag?: string;
+  delaySeconds?: number;
+  flagNote?: string;
 }
 
 interface Props {
@@ -78,7 +82,16 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                     <td>
                       <span className={rs.className} style={{ fontWeight: rs.className ? 700 : 400 }}>{rs.symbol}</span>
                     </td>
-                    <td style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{entry.name}</td>
+                    <td style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+                      {entry.name}
+                      {entry.integrityFlag === 'DELAYED_SUBMISSION' && (
+                        <div style={{ marginTop: 4 }}>
+                          <span className="badge badge-red" style={{ fontSize: '0.7rem', letterSpacing: '0.04em' }}>
+                            DELAYED +{entry.delaySeconds}s
+                          </span>
+                        </div>
+                      )}
+                    </td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', wordBreak: 'break-all' }}>{entry.email}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
                       {entry.score}/{entry.total}

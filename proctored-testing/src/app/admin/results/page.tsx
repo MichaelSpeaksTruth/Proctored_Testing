@@ -86,6 +86,9 @@ function ResultsContent() {
               panelNo: data.panelNo,
               venue: data.venue,
               dateTime: data.dateTime,
+              integrityFlag: data.integrityFlag,
+              delaySeconds: data.delaySeconds,
+              flagNote: data.flagNote,
             });
           }
           entries.sort((a, b) => b.score - a.score);

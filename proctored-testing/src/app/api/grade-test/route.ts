@@ -89,57 +89,66 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, alreadySubmitted: true });
     }
 
-    // ── Guard: Clock Exploit Validation ────────────────────────────
+    // ── Deadline check: flag late, never reject ────────────────────
+    // Policy: "observe and log" — a late submission is accepted and stored,
+    // but receives a DELAYED_SUBMISSION integrity flag and is automatically
+    // marked Disqualified. Admins can review and override the status.
+    let isLateSubmission = false;
+    let delaySeconds = 0;
+
     const stateSnap = await db.ref('testState').once('value');
     const testState = stateSnap.val();
-    
-    // We only enforce duration if the test has a startedAt timestamp
+
     if (testState?.startedAt) {
       const testSnap = await db.ref(`tests/${testId}`).once('value');
       const testData = testSnap.val();
-      
+
       if (testData?.sections) {
-        // Calculate total allowed duration in seconds
         let totalAllowedSeconds = 0;
-        const sectionsArray = Array.isArray(testData.sections) 
-          ? testData.sections 
+        const sectionsArray = Array.isArray(testData.sections)
+          ? testData.sections
           : Object.values(testData.sections);
-          
+
         for (const sec of sectionsArray as any[]) {
-          if (sec.timeLimit) {
-            totalAllowedSeconds += sec.timeLimit;
-          }
+          if (sec.timeLimit) totalAllowedSeconds += sec.timeLimit;
         }
-        
-        // Add a 2-minute (120 seconds) buffer for network latency/submission delays
+
+        // 2-minute grace buffer for network latency
         const bufferSeconds = 120;
-        const maxAllowedDurationMs = (totalAllowedSeconds + bufferSeconds) * 1000;
-        
+        const maxAllowedMs = (totalAllowedSeconds + bufferSeconds) * 1000;
         const startTimeMs = new Date(testState.startedAt).getTime();
-        const currentTimeMs = Date.now();
-        const actualDurationMs = currentTimeMs - startTimeMs;
-        
-        if (actualDurationMs > maxAllowedDurationMs) {
-          console.warn(`[grade-test] Clock exploit detected for ${email}. Duration: ${actualDurationMs}ms, Allowed: ${maxAllowedDurationMs}ms`);
-          return NextResponse.json(
-            { success: false, error: 'Deadline exceeded. Submission rejected.' },
-            { status: 403 }
+        const actualDurationMs = Date.now() - startTimeMs;
+
+        if (actualDurationMs > maxAllowedMs) {
+          isLateSubmission = true;
+          // Exact seconds past the hard deadline (no buffer applied here)
+          delaySeconds = Math.round((actualDurationMs - totalAllowedSeconds * 1000) / 1000);
+          console.warn(
+            `[grade-test] DELAYED_SUBMISSION for ${email} — ` +
+            `${delaySeconds}s past deadline. Accepting with Disqualified status.`
           );
         }
       }
     }
 
     // ── Write isolated submission ──────────────────────────────────
-    // Each user writes to their own document path — no contention possible.
+    // Each user writes to their own isolated path — no contention possible.
     await db.ref(`submissions/${testId}/${uid}`).set({
       answers,
       submittedAt: new Date().toISOString(),
       autoSubmitted: autoSubmitted ?? false,
       email: email ?? '',
       name: name ?? '',
+      // Integrity flags
+      ...(isLateSubmission && {
+        integrityFlag: 'DELAYED_SUBMISSION',
+        delaySeconds,
+        roundStatus: 'Disqualified',
+        flagNote: `Submission received ${delaySeconds}s past the test deadline. Auto-disqualified pending admin review.`,
+      }),
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, lateSubmission: isLateSubmission, delaySeconds });
   } catch (err: any) {
     console.error('[grade-test] Error:', err);
     return NextResponse.json(
