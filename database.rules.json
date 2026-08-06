@@ -1,5 +1,16 @@
 {
   "rules": {
+    "personnel_requests": {
+      ".read": "auth != null",
+      "$emailKey": {
+        ".write": "auth != null",
+        ".validate": "newData.child('email').val() == auth.token.email"
+      }
+    },
+    "personnel": {
+      ".read": "auth != null",
+      ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'"
+    },
     "testState": {
       ".read": "auth != null",
       ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'"
@@ -20,7 +31,18 @@
     },
     "tests": {
       ".read": "auth != null",
-      ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'"
+      "$testId": {
+        ".write": "auth != null",
+        "sections": {
+          "$sectionIdx": {
+            "questions": {
+              "$questionIdx": {
+                ".validate": "newData.child('authorEmail').val() == auth.token.email || auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'"
+              }
+            }
+          }
+        }
+      }
     },
     "participants": {
       ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
@@ -43,14 +65,15 @@
       ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
       ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
       "$testId": {
+        ".read": "root.child('testState').child($testId).child('resultsDeclared').val() == true",
         "$uid": {
           ".read": "$uid == auth.uid"
         }
       }
     },
     "answerKeys": {
-      ".read": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'",
-      ".write": "auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'"
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
 }

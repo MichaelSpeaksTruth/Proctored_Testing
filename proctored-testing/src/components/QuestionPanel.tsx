@@ -9,6 +9,7 @@ export interface Question {
   type: 'mcq' | 'short';
   tag: string;
   timeLimit?: number;
+  authorEmail?: string;
 }
 
 interface Props {

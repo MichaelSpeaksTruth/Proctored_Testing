@@ -346,12 +346,16 @@ export default function ProctoringMonitor({
     const CALIB_FRAMES = 60;
 
     // ── 1. Tab & Window monitoring ────────────────────────────────────────────
+    let visibilityTimeout: ReturnType<typeof setTimeout> | null = null;
     const onVisibility = () => {
       if (isSubmittingRef.current) return;
       if (document.hidden) {
+        if (visibilityTimeout) { clearTimeout(visibilityTimeout); visibilityTimeout = null; }
         openInfraction('TAB_SWITCHED', 'critical');
       } else {
-        closeInfraction('TAB_SWITCHED');
+        visibilityTimeout = setTimeout(() => {
+          closeInfraction('TAB_SWITCHED');
+        }, 1500); // 1.5s buffer against micro-stutters
       }
     };
 
@@ -365,6 +369,31 @@ export default function ProctoringMonitor({
     };
     document.addEventListener('visibilitychange', onVisibility);
     document.addEventListener('fullscreenchange', onFullscreen);
+
+    const flushInfractions = () => {
+      const endMs = Date.now();
+      activeInfractions.current.forEach((val, event) => {
+        const dur = Math.round((endMs - val.startTime) / 1000);
+        if (dur >= 1 && !calibrationMode) {
+          push(ref(rtdb, flagPath()), {
+            event, severity: val.severity,
+            startTime: new Date(val.startTime).toISOString(),
+            endTime: new Date(endMs).toISOString(),
+            durationInSeconds: dur,
+          });
+        }
+      });
+      activeInfractions.current.clear();
+    };
+    window.addEventListener('beforeunload', flushInfractions);
+
+    // Global catch for MediaPipe crashes
+    const onUnhandledRejection = (e: PromiseRejectionEvent) => {
+      if (e.reason && e.reason.message && e.reason.message.includes('mediapipe')) {
+        openInfraction('CAMERA_COVERED', 'critical');
+      }
+    };
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
 
     // ── 2a. Custom Rectangle Detector (runs every 600ms - fast, no model load) ──
     const workCanvas = document.createElement('canvas');
@@ -682,6 +711,9 @@ export default function ProctoringMonitor({
       mounted = false;
       document.removeEventListener('visibilitychange', onVisibility);
       document.removeEventListener('fullscreenchange', onFullscreen);
+      window.removeEventListener('beforeunload', flushInfractions);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+      if (visibilityTimeout) clearTimeout(visibilityTimeout);
 
       const endMs = Date.now();
       activeInfractions.current.forEach((val, event) => {

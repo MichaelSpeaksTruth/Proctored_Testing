@@ -5,6 +5,7 @@ import { rtdb } from '@/lib/firebase';
 import { ref, get, set, update, remove } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import LeaderboardTable, { LeaderboardEntry } from '@/components/LeaderboardTable';
+import ExcelExport from '@/components/ExcelExport';
 import Link from 'next/link';
 
 interface TestOption { id: string; title: string; }
@@ -146,9 +147,14 @@ function ResultsContent() {
         setLoading(false);
         return;
       }
-      await set(ref(rtdb, `answerKeys/${selectedTestId}`), key);
-      setAnswerKey(key);
-      setMsg(`Answer key uploaded with ${Object.keys(key).length} entries.`);
+      // Merge with existing answer keys in RTDB so we don't overwrite setter's answers
+      const existingSnap = await get(ref(rtdb, `answerKeys/${selectedTestId}`));
+      const existingKey = existingSnap.val() || {};
+      const newKey = { ...existingKey, ...key };
+
+      await set(ref(rtdb, `answerKeys/${selectedTestId}`), newKey);
+      setAnswerKey(newKey);
+      setMsg(`Answer key uploaded/merged with ${Object.keys(newKey).length} total entries.`);
     } catch (e) {
       setError('Failed to upload answer key.');
     } finally {
@@ -162,32 +168,43 @@ function ResultsContent() {
     setError(null);
     setMsg(null);
     try {
-      // Load answer key if not in state
-      let key = answerKey;
-      if (!key) {
-        const keySnap = await get(ref(rtdb, `answerKeys/${selectedTestId}`));
-        if (!keySnap.exists()) { setError('No answer key found. Please upload it first.'); setLoading(false); return; }
-        key = keySnap.val() as AnswerKey;
-        setAnswerKey(key);
-      }
+      // Load answer key
+      const keySnap = await get(ref(rtdb, `answerKeys/${selectedTestId}`));
+      const key = (keySnap.val() || {}) as AnswerKey;
+      setAnswerKey(key);
 
-      // Load test structure (to get question tags)
+      // Load test structure
       const testSnap = await get(ref(rtdb, `tests/${selectedTestId}`));
       const testData = testSnap.val();
+      
       const questionTagMap: Record<string, string> = {}; // questionId -> tag
-      // RTDB returns arrays as numbered objects - normalise both sections and questions
+      const missingQuestions: { tag: string, authorEmail: string }[] = [];
+
       const toArr = <T,>(v: unknown): T[] => {
         if (!v) return [];
         if (Array.isArray(v)) return v as T[];
         if (typeof v === 'object') return Object.values(v as Record<string, T>);
         return [];
       };
+
       toArr<{ questions: unknown; id: string; tag: string }>(testData?.sections).forEach((sec) => {
-        toArr<{ id: string; tag: string }>(sec.questions).forEach((q) => {
+        toArr<{ id: string; tag: string; authorEmail?: string }>(sec.questions).forEach((q) => {
           questionTagMap[q.id] = q.tag;
+          if (!key[q.tag] || key[q.tag].trim() === '') {
+            missingQuestions.push({ tag: q.tag, authorEmail: q.authorEmail || 'Admin' });
+          }
         });
       });
+      
       const totalQuestions = Object.keys(questionTagMap).length;
+
+      // Validate all answers are received
+      if (missingQuestions.length > 0) {
+        const missingDetails = missingQuestions.map(mq => `${mq.tag} (${mq.authorEmail})`).join(', ');
+        setError(`Cannot declare results! Missing solutions for questions: ${missingDetails}`);
+        setLoading(false);
+        return;
+      }
 
       // Load all submissions
       const submissionsSnap = await get(ref(rtdb, `submissions/${selectedTestId}`));
@@ -196,13 +213,13 @@ function ResultsContent() {
       const participantsSnap = await get(ref(rtdb, 'participants'));
       const partsData = participantsSnap.val() || {};
 
-      // Map uid -> {email, name} from participants (indexed by email key)
+      // Map uid -> {email, name} from participants
       const uidToData: Record<string, {email: string, name: string}> = {};
-      Object.keys(partsData).forEach(key => { 
-        if (partsData[key].uid) {
-          uidToData[partsData[key].uid] = { 
-            email: partsData[key].email,
-            name: partsData[key].name || partsData[key].email.split('@')[0]
+      Object.keys(partsData).forEach(k => { 
+        if (partsData[k].uid) {
+          uidToData[partsData[k].uid] = { 
+            email: partsData[k].email,
+            name: partsData[k].name || partsData[k].email.split('@')[0]
           };
         }
       });
@@ -232,13 +249,11 @@ function ResultsContent() {
         const { uid, email, name, score } = scored[i];
         const rank = i + 1;
 
-        // Check for existing result first to preserve fields
         const existingResultSnap = await get(ref(rtdb, `results/${selectedTestId}/${uid}`));
         const existingVal = existingResultSnap.val() || {};
 
         const roundStatus = roundStatusUpdates[uid] || existingVal.roundStatus || 'Pending';
 
-        // Save result to RTDB
         await update(ref(rtdb, `results/${selectedTestId}/${uid}`), {
           score,
           total: totalQuestions,
@@ -248,7 +263,6 @@ function ResultsContent() {
           name,
         });
 
-        // Fetch flags from RTDB - stored at new path uid/testId/flags
         const flagsSnap = await get(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}/flags`));
         const flagsData = flagsSnap.val();
         const flags = flagsData
@@ -274,6 +288,11 @@ function ResultsContent() {
         });
       }
 
+      // Set global testState flag to unlock Spectator view
+      await update(ref(rtdb, `testState/${selectedTestId}`), {
+        resultsDeclared: true
+      });
+
       setLeaderboard(entries);
       setMsg(`Results declared for ${entries.length} students.`);
     } catch (e) {
@@ -296,7 +315,6 @@ function ResultsContent() {
       });
       const data = await res.json();
 
-      // Persist AI result to RTDB
       if (selectedTestId && data.severity) {
         await update(ref(rtdb, `results/${selectedTestId}/${uid}`), {
           aiSeverity: data.severity,
@@ -382,7 +400,7 @@ function ResultsContent() {
           <div className="card">
             <h3 style={{ marginBottom: 'var(--space-md)' }}>Upload Answer Key</h3>
             <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 'var(--space-md)' }}>
-              Upload XLSX (columns: tag, answer) or enter manually (tag:answer per line).
+              Question Setters upload solutions to their own questions. You can manually merge an XLSX file here if needed.
             </p>
             <div className="form-group">
               <label htmlFor="answer-key-file">XLSX File</label>
@@ -405,7 +423,7 @@ function ResultsContent() {
               onClick={uploadAnswerKey}
               disabled={loading || (!answerKeyFile && !answerKeyText.trim()) || !selectedTestId}
             >
-              Upload Key
+              Upload / Merge Key
             </button>
           </div>
         </div>
@@ -415,7 +433,10 @@ function ResultsContent() {
           <div className="card">
             <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)' }}>
               <h2 style={{ fontSize: '1.375rem' }}>Leaderboard</h2>
-              <span className="badge badge-gray">{leaderboard.length} candidates</span>
+              <div className="flex items-center gap-sm">
+                <span className="badge badge-gray">{leaderboard.length} candidates</span>
+                <ExcelExport data={leaderboard as any} filename={`leaderboard_${selectedTestId}.xlsx`} />
+              </div>
             </div>
 
             <div className="alert alert-info" style={{ marginBottom: 'var(--space-lg)' }}>
