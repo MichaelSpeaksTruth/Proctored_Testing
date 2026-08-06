@@ -324,7 +324,7 @@ function QuestionSetterContent() {
                                 <span style={{ fontSize: '0.875rem' }}>{q.text.substring(0, 50)}...</span>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tag: {q.tag}</div>
                               </div>
-                              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-red-light)' }} onClick={() => deleteQuestion(selectedTestId, sec.id, q.id)}>🗑 Delete</button>
+                              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-red-light)' }} onClick={() => deleteQuestion(selectedTest.id, sec.id, q.id)}>🗑 Delete</button>
                             </div>
                           ))}
                         </div>
