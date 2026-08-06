@@ -119,7 +119,9 @@ function ControlContent() {
     await set(ref(rtdb, 'testState'), {
       status: 'ended',
       endedAt: new Date().toISOString(),
+      activeTestId: selectedTestId,
     });
+    await update(ref(rtdb, `tests/${selectedTestId}`), { status: 'ended' });
     setMsg('Test forcefully ended. All student screens are now locked.');
     setLoading(false);
   };

@@ -82,7 +82,7 @@ function QuestionSetterContent() {
   };
 
   const selectedTest = tests.find(t => t.id === selectedTestId) || null;
-  const isTestClosed = selectedTest?.status === 'closed' || selectedTest?.status === 'stopped';
+  const isTestClosed = selectedTest?.status === 'closed' || selectedTest?.status === 'stopped' || selectedTest?.status === 'ended';
 
   // ── ADD SECTION ─────────────────────────────────────────────────────────────
   const addSection = async () => {
