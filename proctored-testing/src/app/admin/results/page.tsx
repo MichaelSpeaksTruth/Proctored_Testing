@@ -39,6 +39,7 @@ function ResultsContent() {
   useEffect(() => {
     if (!selectedTestId) {
       setLeaderboard([]);
+      setAnswerKeyText('');
       return;
     }
     const fetchExistingResults = async () => {
@@ -103,7 +104,20 @@ function ResultsContent() {
         setLoading(false);
       }
     };
+
+    const fetchAnswerKeys = async () => {
+      const snap = await get(ref(rtdb, `answerKeys/${selectedTestId}`));
+      const keys = snap.val();
+      if (keys) {
+        const text = Object.entries(keys).map(([k, v]) => `${k}:${v}`).join('\n');
+        setAnswerKeyText(text);
+      } else {
+        setAnswerKeyText('');
+      }
+    };
+
     fetchExistingResults();
+    fetchAnswerKeys();
   }, [selectedTestId]);
 
   const parseAnswerKeyText = (text: string): AnswerKey => {
