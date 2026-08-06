@@ -161,9 +161,10 @@ function TestContent() {
         videoRef.current.srcObject = mediaStream;
       }
       setPermissionsGranted(true);
-    } catch (err) {
+    } catch (err: any) {
+      console.error('Permission error:', err);
       setPermError(
-        'Camera and microphone access is required to proceed. Please allow access in your browser settings and try again.'
+        `Camera and microphone access is required to proceed. Error: ${err.name} - ${err.message}. Please allow access in your browser settings and try again.`
       );
     } finally {
       setRequestingPermissions(false);
