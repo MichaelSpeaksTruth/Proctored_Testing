@@ -26,24 +26,21 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminDb, getAdminAuth } from '@/lib/firebaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const { getAdminDb } = await import('@/lib/firebaseAdmin');
-    // Just try to initialize it to see if it throws
-    getAdminDb();
-    return NextResponse.json({ success: true, message: 'Grade test route is reachable and firebase initialized' });
+    getAdminDb(); // warm-up probe
+    return NextResponse.json({ success: true, message: 'firebase-admin initialized successfully' });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: `GET init failed: ${err.message}` }, { status: 500 });
+    return NextResponse.json({ success: false, error: `Init failed: ${err.message}` }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { getAdminDb, getAdminAuth } = await import('@/lib/firebaseAdmin');
-    
     const body = await req.json() as {
       testId?: string;
       uid?: string;
