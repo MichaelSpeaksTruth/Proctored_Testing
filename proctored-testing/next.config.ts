@@ -2,9 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Turbopack is the default bundler in Next.js 16
-  turbopack: {},
-
   // turbopack: {},
+
+  // firebase-admin → jwks-rsa → jose (pure ESM). Turbopack must NOT bundle
+  // these packages; they must be loaded from node_modules at runtime.
+  // Without this, Vercel's CommonJS wrapper calls require() on an ESM-only
+  // module and the lambda crashes with ERR_REQUIRE_ESM.
+  serverExternalPackages: ['firebase-admin', 'jwks-rsa', 'jose'],
 
   async headers() {
     return [
