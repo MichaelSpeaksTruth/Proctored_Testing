@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { rtdb } from '@/lib/firebase';
+import { rtdb, auth } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
 import RoleGuard from '@/components/RoleGuard';
 import ExcelExport from '@/components/ExcelExport';
@@ -82,7 +82,15 @@ function SpectatorContent() {
   return (
     <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
       <div className="container" style={{ maxWidth: '1200px' }}>
-        <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xl)' }}>Spectator Dashboard</h1>
+        <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-xl)' }}>
+          <h1 style={{ fontSize: '1.75rem', margin: 0 }}>Spectator Dashboard</h1>
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => auth.signOut()}
+          >
+            Sign Out
+          </button>
+        </div>
         
         <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
           <h3 style={{ marginBottom: 'var(--space-md)' }}>Select Test</h3>

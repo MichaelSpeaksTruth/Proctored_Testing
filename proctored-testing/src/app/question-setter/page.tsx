@@ -268,7 +268,15 @@ function QuestionSetterContent() {
   return (
     <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
       <div className="container">
-        <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xl)' }}>Question Setter Dashboard</h1>
+        <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-xl)' }}>
+          <h1 style={{ fontSize: '1.75rem', margin: 0 }}>Question Setter Dashboard</h1>
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => auth.signOut()}
+          >
+            Sign Out
+          </button>
+        </div>
         
         {msg && <div className="alert alert-success" style={{ marginBottom: 'var(--space-lg)' }}>{msg}</div>}
 
