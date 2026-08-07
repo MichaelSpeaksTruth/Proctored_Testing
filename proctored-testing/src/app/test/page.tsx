@@ -826,6 +826,7 @@ function TestContent() {
           videoRef={videoRef}
           onViolation={handleViolation}
           onViolationStart={handleViolationStart}
+          onViolationClear={handleViolationClear}
           overlayCanvasRef={overlayCanvasRef}
           isSubmitting={submitted}
         />
