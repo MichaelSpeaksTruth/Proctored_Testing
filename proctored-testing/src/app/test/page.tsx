@@ -773,7 +773,7 @@ function TestContent() {
             <h2 style={{ color: '#ff2a4f', marginBottom: 20 }}>🚨 Shoulders Out of Frame</h2>
             <p style={{ color: 'white', marginBottom: 20 }}>Adjust your camera/position so your shoulders touch or surpass the white dotted line.</p>
             <div style={{ position: 'relative', width: 480, height: 360, background: '#000', border: '2px solid #333', borderRadius: 8, overflow: 'hidden' }}>
-              <WebcamFeed stream={stream} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <WebcamFeed stream={stream} embedded={true} />
               <div style={{ position: 'absolute', top: '65%', left: 0, right: 0, borderTop: '2px dashed #fff' }} />
             </div>
           </div>
