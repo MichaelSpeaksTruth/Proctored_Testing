@@ -614,8 +614,8 @@ export default function ProctoringMonitor({
             // Flag if the chin physically drops out of frame OR if the head proportion balloons
             const isDucking = (chinPt.y > 0.95 && foreheadPt.y < 0.95) || (headVsChinRatio > 1.35);
 
-            // Dynamic Shoulder Alignment Proxy: If chin drops below 0.65 of frame, shoulders are too low/out
-            const isShouldersOut = chinPt.y > 0.65;
+            // Dynamic Shoulder Alignment Proxy: If chin drops below 0.85 of frame, shoulders are too low/out
+            const isShouldersOut = chinPt.y > 0.85;
 
             const PITCH_DOWN_THRESHOLD = -15; // Tightened threshold for looking down at lap
             const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD || pitchDeg > 0.5 || faceRatio < 0.75 || isOutOfFrame;

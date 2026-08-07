@@ -137,6 +137,31 @@ function CalibrationContent() {
                     pointerEvents: 'none',
                   }}
                 />
+
+                {/* Animated Laptop Lid Icon Overlay */}
+                {activeFlags.has('SHOULDERS_OUT_OF_FRAME') && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <h2 style={{ color: '#ff2a4f', marginBottom: 8, fontSize: '1.25rem' }}>🚨 Shoulders Out of Frame</h2>
+                    <div style={{
+                      width: 80, height: 60, margin: '16px auto', display: 'flex', flexDirection: 'column', alignItems: 'center'
+                    }}>
+                      <div style={{
+                        width: 60, height: 40, border: '3px solid #ff2a4f', borderRadius: '4px 4px 0 0',
+                        borderBottom: 'none', transformOrigin: 'bottom center',
+                        animation: 'lid-tilt 2s infinite ease-in-out',
+                        background: 'rgba(255, 42, 79, 0.2)'
+                      }} />
+                      <div style={{
+                        width: 80, height: 6, background: '#ff2a4f', borderRadius: 2
+                      }} />
+                    </div>
+                    <p style={{ color: 'white', marginBottom: 0, maxWidth: 300, textAlign: 'center', fontSize: '0.875rem' }}>
+                      Adjust your laptop lid angle to get your face into the target box.
+                    </p>
+                    <div style={{ position: 'absolute', top: '15%', bottom: '35%', left: '20%', right: '20%', border: '2px dashed #00ff00', borderRadius: 12, boxShadow: '0 0 15px rgba(0,255,0,0.3) inset', pointerEvents: 'none' }} />
+                  </div>
+                )}
+
                 {/* Live badge */}
                 <div style={{
                   position: 'absolute', bottom: 10, left: 10,

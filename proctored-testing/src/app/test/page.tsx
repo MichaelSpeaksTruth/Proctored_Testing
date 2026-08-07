@@ -769,12 +769,31 @@ function TestContent() {
 
       {isShouldersMisaligned && !reEntryFullscreenLock && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)' }}>
-          <div style={{ textAlign: 'center' }}>
-            <h2 style={{ color: '#ff2a4f', marginBottom: 20 }}>🚨 Shoulders Out of Frame</h2>
-            <p style={{ color: 'white', marginBottom: 20 }}>Adjust your camera/position so your shoulders touch or surpass the white dotted line.</p>
+          <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <h2 style={{ color: '#ff2a4f', marginBottom: 8 }}>🚨 Shoulders Out of Frame</h2>
+            
+            {/* Animated Laptop Lid Icon */}
+            <div style={{
+              width: 80, height: 60, margin: '16px auto', display: 'flex', flexDirection: 'column', alignItems: 'center'
+            }}>
+              <div style={{
+                width: 60, height: 40, border: '3px solid #ff2a4f', borderRadius: '4px 4px 0 0',
+                borderBottom: 'none', transformOrigin: 'bottom center',
+                animation: 'lid-tilt 2s infinite ease-in-out',
+                background: 'rgba(255, 42, 79, 0.2)'
+              }} />
+              <div style={{
+                width: 80, height: 6, background: '#ff2a4f', borderRadius: 2
+              }} />
+            </div>
+
+            <p style={{ color: 'white', marginBottom: 20, maxWidth: 400 }}>
+              Adjust your laptop lid angle to get your face into the target box and align your shoulders.
+            </p>
             <div style={{ position: 'relative', width: 480, height: 360, background: '#000', border: '2px solid #333', borderRadius: 8, overflow: 'hidden' }}>
               <WebcamFeed stream={stream} embedded={true} />
-              <div style={{ position: 'absolute', top: '65%', left: 0, right: 0, borderTop: '2px dashed #fff' }} />
+              {/* Target Alignment Box */}
+              <div style={{ position: 'absolute', top: '15%', bottom: '35%', left: '20%', right: '20%', border: '2px dashed #00ff00', borderRadius: 12, boxShadow: '0 0 15px rgba(0,255,0,0.3) inset' }} />
             </div>
           </div>
         </div>
