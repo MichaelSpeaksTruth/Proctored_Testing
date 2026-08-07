@@ -255,8 +255,8 @@ function TestContent() {
       SHOULDERS_OUT_OF_FRAME: `Camera alignment required`,
     };
 
-    // 1. Handle dynamic shoulder/face alignment (does not deduct lives, just blurs until fixed)
-    if (event === 'SHOULDERS_OUT_OF_FRAME' || event === 'DUCKING_DOWN' || event === 'NO_FACE' || event === 'HEAD_PITCH_DOWN') {
+    // 1. Handle dynamic shoulder alignment (does not deduct lives, just blurs until fixed)
+    if (event === 'SHOULDERS_OUT_OF_FRAME') {
       setIsShouldersMisaligned(true);
       return;
     }
@@ -277,16 +277,19 @@ function TestContent() {
       if (event === 'LEFT_FULLSCREEN' && !isMobileDevice) {
         setReEntryFullscreenLock(true);
       }
-    } else if (event === 'MULTIPLE_FACES') {
+    } else if (event === 'MULTIPLE_FACES' || event === 'NO_FACE' || event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN') {
       deductLife = true;
-      // Removed isCritical = true to prevent the 5-second Penalty Box lock
+      // We will suppress the UI for these below, but they still deduct a life
     }
 
     if (deductLife) {
       setLives(l => Math.max(0, l - 1));
     }
 
-
+    // Completely suppress UI feedback for these events (no toast, no penalty box)
+    if (event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'NO_FACE' || event === 'MULTIPLE_FACES') {
+      return;
+    }
 
     if (isCritical) {
       setPenaltyBoxEndTime(Date.now() + 5000); // 5-second mandatory blur
@@ -299,7 +302,7 @@ function TestContent() {
   }, [isMobileDevice]);
 
   const handleViolationClear = useCallback((event: ProctoringEvent) => {
-    if (event === 'SHOULDERS_OUT_OF_FRAME' || event === 'DUCKING_DOWN' || event === 'NO_FACE' || event === 'HEAD_PITCH_DOWN') {
+    if (event === 'SHOULDERS_OUT_OF_FRAME') {
       setIsShouldersMisaligned(false);
     }
     
