@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import AdminGuard from '@/components/AdminGuard';
 import WebcamFeed from '@/components/WebcamFeed';
 import ProctoringMonitor from '@/components/ProctoringMonitor';
+import { Monitor } from 'lucide-react';
 import { ProctoringEvent, DurationFlag } from '@/lib/proctoring';
 import Link from 'next/link';
 
@@ -140,25 +141,37 @@ function CalibrationContent() {
 
                 {/* Animated Laptop Lid Icon Overlay */}
                 {activeFlags.has('SHOULDERS_OUT_OF_FRAME') && (
-                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                    <h2 style={{ color: '#ff2a4f', marginBottom: 8, fontSize: '1.25rem' }}>🚨 Shoulders Out of Frame</h2>
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(5, 5, 10, 0.9)', backdropFilter: 'blur(10px)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <Monitor size={18} color="#e63946" />
+                      <h2 style={{ color: '#e63946', margin: 0, fontSize: '1rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Alignment Required</h2>
+                    </div>
+                    
                     <div style={{
-                      width: 80, height: 60, margin: '16px auto', display: 'flex', flexDirection: 'column', alignItems: 'center'
+                      width: 60, height: 45, margin: '16px auto', display: 'flex', flexDirection: 'column', alignItems: 'center'
                     }}>
                       <div style={{
-                        width: 60, height: 40, border: '3px solid #ff2a4f', borderRadius: '4px 4px 0 0',
+                        width: 45, height: 30, border: '2px solid rgba(255, 255, 255, 0.9)', borderRadius: '3px 3px 0 0',
                         borderBottom: 'none', transformOrigin: 'bottom center',
                         animation: 'lid-tilt 2s infinite ease-in-out',
-                        background: 'rgba(255, 42, 79, 0.2)'
+                        background: 'rgba(255, 255, 255, 0.05)'
                       }} />
                       <div style={{
-                        width: 80, height: 6, background: '#ff2a4f', borderRadius: 2
+                        width: 60, height: 3, background: 'rgba(255, 255, 255, 0.9)', borderRadius: 2
                       }} />
                     </div>
-                    <p style={{ color: 'white', marginBottom: 0, maxWidth: 300, textAlign: 'center', fontSize: '0.875rem' }}>
-                      Adjust your laptop lid angle to get your face into the target box.
+                    
+                    <p style={{ color: 'var(--text-muted)', marginBottom: 0, maxWidth: 300, textAlign: 'center', fontSize: '0.8125rem' }}>
+                      Adjust your screen angle to align within the target box.
                     </p>
-                    <div style={{ position: 'absolute', top: '15%', bottom: '35%', left: '20%', right: '20%', border: '2px dashed #00ff00', borderRadius: 12, boxShadow: '0 0 15px rgba(0,255,0,0.3) inset', pointerEvents: 'none' }} />
+                    
+                    {/* Premium HUD Target Frame */}
+                    <div style={{ position: 'absolute', top: '15%', bottom: '35%', left: '20%', right: '20%', pointerEvents: 'none' }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0, width: 20, height: 20, borderTop: '2px solid rgba(255,255,255,0.7)', borderLeft: '2px solid rgba(255,255,255,0.7)' }} />
+                      <div style={{ position: 'absolute', top: 0, right: 0, width: 20, height: 20, borderTop: '2px solid rgba(255,255,255,0.7)', borderRight: '2px solid rgba(255,255,255,0.7)' }} />
+                      <div style={{ position: 'absolute', bottom: 0, left: 0, width: 20, height: 20, borderBottom: '2px solid rgba(255,255,255,0.7)', borderLeft: '2px solid rgba(255,255,255,0.7)' }} />
+                      <div style={{ position: 'absolute', bottom: 0, right: 0, width: 20, height: 20, borderBottom: '2px solid rgba(255,255,255,0.7)', borderRight: '2px solid rgba(255,255,255,0.7)' }} />
+                    </div>
                   </div>
                 )}
 

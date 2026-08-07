@@ -224,18 +224,18 @@ function TestContent() {
 
   const handleViolationStart = useCallback((event: ProctoringEvent) => {
     const messages: Record<ProctoringEvent, string> = {
-      NO_FACE:            `🚨 No face detected in frame.`,
-      MULTIPLE_FACES:     `🚨 Multiple faces detected.`,
-      TAB_SWITCHED:       `🚨 Tab switching detected.`,
-      LEFT_FULLSCREEN:    `⚠ Exited fullscreen.`,
-      LOUD_AUDIO:         `⚠ Loud audio detected.`,
-      CAMERA_COVERED:     `🚨 Camera covered.`,
-      MIC_MUTED:          `🚨 Microphone muted/silent.`,
-      PHONE_DETECTED:     `🚨 Mobile device detected.`,
-      GAZE_AWAY:          `⚠ Looking away from screen.`,
-      HEAD_PITCH_DOWN:    `🚨 Looking down at lap detected.`,
-      DUCKING_DOWN:       `🚨 Face hidden below camera frame!`,
-      SHOULDERS_OUT_OF_FRAME: `🚨 Shoulders out of frame.`,
+      NO_FACE:            `No face detected in frame`,
+      MULTIPLE_FACES:     `Multiple faces detected`,
+      TAB_SWITCHED:       `Tab switching detected`,
+      LEFT_FULLSCREEN:    `Exited fullscreen`,
+      LOUD_AUDIO:         `Loud audio detected`,
+      CAMERA_COVERED:     `Camera covered`,
+      MIC_MUTED:          `Microphone muted`,
+      PHONE_DETECTED:     `Mobile device detected`,
+      GAZE_AWAY:          `Looking away from screen`,
+      HEAD_PITCH_DOWN:    `Looking down detected`,
+      DUCKING_DOWN:       `Face out of frame boundaries`,
+      SHOULDERS_OUT_OF_FRAME: `Camera alignment required`,
     };
 
     // 1. Handle dynamic shoulder alignment (does not deduct lives, just blurs until fixed)
@@ -254,7 +254,7 @@ function TestContent() {
       if (now - lastIncidentTimeRef.current > 1500) {
         deductLife = true;
         isCritical = true;
-        setCriticalViolationMsg(`🚨 Window unfocused or exited fullscreen!`);
+        setCriticalViolationMsg(`Window unfocused or exited fullscreen`);
       }
       lastIncidentTimeRef.current = now;
       if (event === 'LEFT_FULLSCREEN' && !isMobileDevice) {
@@ -274,7 +274,7 @@ function TestContent() {
       setPenaltyBoxEndTime(Date.now() + 5000); // 5-second mandatory blur
     } else {
       // Show normal non-critical toast warning
-      setViolation(messages[event] || '⚠ Proctoring violation detected.');
+      setViolation(messages[event] || 'Proctoring violation detected');
       if (violationTimeoutRef.current) clearTimeout(violationTimeoutRef.current);
       violationTimeoutRef.current = setTimeout(() => setViolation(null), 3500);
     }
@@ -768,32 +768,41 @@ function TestContent() {
       )}
 
       {isShouldersMisaligned && !reEntryFullscreenLock && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(5, 5, 10, 0.9)', backdropFilter: 'blur(20px)' }}>
           <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <h2 style={{ color: '#ff2a4f', marginBottom: 8 }}>🚨 Shoulders Out of Frame</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <Monitor size={24} color="#e63946" />
+              <h2 style={{ color: '#e63946', margin: 0, fontSize: '1.25rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Camera Alignment Required</h2>
+            </div>
             
             {/* Animated Laptop Lid Icon */}
             <div style={{
-              width: 80, height: 60, margin: '16px auto', display: 'flex', flexDirection: 'column', alignItems: 'center'
+              width: 80, height: 60, margin: '24px auto', display: 'flex', flexDirection: 'column', alignItems: 'center'
             }}>
               <div style={{
-                width: 60, height: 40, border: '3px solid #ff2a4f', borderRadius: '4px 4px 0 0',
+                width: 60, height: 40, border: '2px solid rgba(255, 255, 255, 0.9)', borderRadius: '4px 4px 0 0',
                 borderBottom: 'none', transformOrigin: 'bottom center',
                 animation: 'lid-tilt 2s infinite ease-in-out',
-                background: 'rgba(255, 42, 79, 0.2)'
+                background: 'rgba(255, 255, 255, 0.05)'
               }} />
               <div style={{
-                width: 80, height: 6, background: '#ff2a4f', borderRadius: 2
+                width: 80, height: 4, background: 'rgba(255, 255, 255, 0.9)', borderRadius: 2
               }} />
             </div>
 
-            <p style={{ color: 'white', marginBottom: 20, maxWidth: 400 }}>
-              Adjust your laptop lid angle to get your face into the target box and align your shoulders.
+            <p style={{ color: 'var(--text-muted)', marginBottom: 32, maxWidth: 400, fontSize: '0.9375rem', lineHeight: 1.6 }}>
+              Adjust your screen angle until your torso is visible within the alignment frame.
             </p>
-            <div style={{ position: 'relative', width: 480, height: 360, background: '#000', border: '2px solid #333', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ position: 'relative', width: 480, height: 360, background: '#000', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
               <WebcamFeed stream={stream} embedded={true} />
-              {/* Target Alignment Box */}
-              <div style={{ position: 'absolute', top: '15%', bottom: '35%', left: '20%', right: '20%', border: '2px dashed #00ff00', borderRadius: 12, boxShadow: '0 0 15px rgba(0,255,0,0.3) inset' }} />
+              
+              {/* Premium HUD Target Frame */}
+              <div style={{ position: 'absolute', top: '15%', bottom: '35%', left: '20%', right: '20%', pointerEvents: 'none' }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, width: 24, height: 24, borderTop: '2px solid rgba(255,255,255,0.7)', borderLeft: '2px solid rgba(255,255,255,0.7)' }} />
+                <div style={{ position: 'absolute', top: 0, right: 0, width: 24, height: 24, borderTop: '2px solid rgba(255,255,255,0.7)', borderRight: '2px solid rgba(255,255,255,0.7)' }} />
+                <div style={{ position: 'absolute', bottom: 0, left: 0, width: 24, height: 24, borderBottom: '2px solid rgba(255,255,255,0.7)', borderLeft: '2px solid rgba(255,255,255,0.7)' }} />
+                <div style={{ position: 'absolute', bottom: 0, right: 0, width: 24, height: 24, borderBottom: '2px solid rgba(255,255,255,0.7)', borderRight: '2px solid rgba(255,255,255,0.7)' }} />
+              </div>
             </div>
           </div>
         </div>
