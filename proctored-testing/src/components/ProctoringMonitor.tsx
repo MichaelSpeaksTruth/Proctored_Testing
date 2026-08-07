@@ -560,7 +560,7 @@ export default function ProctoringMonitor({
               gx.font = 'bold 15px monospace';
               gx.textAlign = 'center';
               gx.fillText(
-                count === 0 ? '⚠ NO FACE DETECTED' : `⚠ ${count} FACES`,
+                count === 0 ? 'NO FACE DETECTED' : `${count} FACES DETECTED`,
                 W / 2, H / 2
               );
               gx.textAlign = 'left';
@@ -620,7 +620,7 @@ export default function ProctoringMonitor({
             const PITCH_DOWN_THRESHOLD = -15; // Tightened threshold for looking down at lap
             const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD || pitchDeg > 0.5 || faceRatio < 0.75 || isOutOfFrame;
             
-            report('HEAD_PITCH_DOWN', isPitchDown, 'high');
+            report('HEAD_PITCH_DOWN', isPitchDown, 'critical');
             report('DUCKING_DOWN', isDucking, 'critical');
             report('SHOULDERS_OUT_OF_FRAME', isShouldersOut, 'high');
 
@@ -652,19 +652,19 @@ export default function ProctoringMonitor({
                 gx.fillStyle = gazeAway ? '#ff7800' : '#00ff78';
                 gx.fillText(
                   gazeAway
-                    ? `⚠ GAZE AWAY  Y:${yawDeg.toFixed(0)}° P:${pitchDeg.toFixed(0)}°`
-                    : `✓ FACE OK    Y:${yawDeg.toFixed(0)}° P:${pitchDeg.toFixed(0)}°`,
+                    ? `GAZE AWAY  Y:${yawDeg.toFixed(0)}° P:${pitchDeg.toFixed(0)}°`
+                    : `FACE OK    Y:${yawDeg.toFixed(0)}° P:${pitchDeg.toFixed(0)}°`,
                   6, H - 8
                 );
                 
                 if (isPitchDown) {
                   gx.fillStyle = '#ff2200';
-                  gx.fillText(`⚠ LOOKING DOWN (PITCH: ${headPitchDegrees.toFixed(1)}°)`, 6, H - 24);
+                  gx.fillText(`LOOKING DOWN (PITCH: ${headPitchDegrees.toFixed(1)}°)`, 6, H - 24);
                 }
                 
                 if (isDucking) {
                   gx.fillStyle = '#ff0000';
-                  gx.fillText(`🚨 FACE HIDDEN (DUCK RATIO: ${headVsChinRatio.toFixed(2)})`, 6, H - 40);
+                  gx.fillText(`FACE HIDDEN (DUCK RATIO: ${headVsChinRatio.toFixed(2)})`, 6, H - 40);
                 }
                 
                 // ── Calibration Geometric Centering ──

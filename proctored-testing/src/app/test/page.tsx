@@ -65,6 +65,9 @@ function TestContent() {
   const [criticalViolationMsg, setCriticalViolationMsg] = useState<string | null>(null);
   const lastIncidentTimeRef = useRef<number>(0);
 
+  // Escalate specific warnings to critical penalties if they persist
+  const activeTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
   // ── Penalty Box Countdown Loop ──
   const [penaltyRemaining, setPenaltyRemaining] = useState(0);
   useEffect(() => {
@@ -274,6 +277,21 @@ function TestContent() {
       setLives(l => Math.max(0, l - 1));
     }
 
+    if (event === 'HEAD_PITCH_DOWN') {
+      // 3. Grace Period Escalation: Show warning immediately, penalize only if it lasts 5s
+      setViolation(messages[event]);
+      if (violationTimeoutRef.current) clearTimeout(violationTimeoutRef.current);
+      violationTimeoutRef.current = setTimeout(() => setViolation(null), 3500);
+
+      if (activeTimersRef.current[event]) clearTimeout(activeTimersRef.current[event]);
+      activeTimersRef.current[event] = setTimeout(() => {
+        setLives(l => Math.max(0, l - 1));
+        setCriticalViolationMsg(`Looking down detected`);
+        setPenaltyBoxEndTime(Date.now() + 5000);
+      }, 5000);
+      return;
+    }
+
     if (isCritical) {
       setPenaltyBoxEndTime(Date.now() + 5000); // 5-second mandatory blur
     } else {
@@ -287,6 +305,12 @@ function TestContent() {
   const handleViolationClear = useCallback((event: ProctoringEvent) => {
     if (event === 'SHOULDERS_OUT_OF_FRAME') {
       setIsShouldersMisaligned(false);
+    }
+    
+    // Clear escalation timer if user corrected the behavior before the grace period ended
+    if (activeTimersRef.current[event]) {
+      clearTimeout(activeTimersRef.current[event]);
+      delete activeTimersRef.current[event];
     }
   }, []);
 
