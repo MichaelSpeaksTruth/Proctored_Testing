@@ -19,6 +19,7 @@ const EVENT_META: Record<ProctoringEvent, { label: string; color: string }> = {
   GAZE_AWAY:          { label: 'Gaze Away', color: '#ffd166' },
   HEAD_PITCH_DOWN:    { label: 'Looking Down', color: '#e63946' },
   DUCKING_DOWN:       { label: 'Ducking Out of Frame', color: '#e63946' },
+  SHOULDERS_OUT_OF_FRAME: { label: 'Shoulders Out of Frame', color: '#e63946' },
 };
 
 function CalibrationContent() {

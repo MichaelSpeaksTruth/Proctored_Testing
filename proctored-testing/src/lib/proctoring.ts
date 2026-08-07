@@ -12,7 +12,8 @@ export type ProctoringEvent =
   | 'PHONE_DETECTED'
   | 'GAZE_AWAY'
   | 'HEAD_PITCH_DOWN'
-  | 'DUCKING_DOWN';
+  | 'DUCKING_DOWN'
+  | 'SHOULDERS_OUT_OF_FRAME';
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 

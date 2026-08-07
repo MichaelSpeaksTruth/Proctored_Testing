@@ -614,11 +614,15 @@ export default function ProctoringMonitor({
             // Flag if the chin physically drops out of frame OR if the head proportion balloons
             const isDucking = (chinPt.y > 0.95 && foreheadPt.y < 0.95) || (headVsChinRatio > 1.35);
 
+            // Dynamic Shoulder Alignment Proxy: If chin drops below 0.65 of frame, shoulders are too low/out
+            const isShouldersOut = chinPt.y > 0.65;
+
             const PITCH_DOWN_THRESHOLD = -15; // Tightened threshold for looking down at lap
-            const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD || pitchDeg > 4 || faceRatio < 0.75 || isOutOfFrame;
+            const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD || pitchDeg > 0.5 || faceRatio < 0.75 || isOutOfFrame;
             
             report('HEAD_PITCH_DOWN', isPitchDown, 'high');
             report('DUCKING_DOWN', isDucking, 'critical');
+            report('SHOULDERS_OUT_OF_FRAME', isShouldersOut, 'high');
 
             if (overlayCanvasRef?.current) {
               const cv = overlayCanvasRef.current;

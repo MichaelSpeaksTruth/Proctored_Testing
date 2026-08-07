@@ -57,6 +57,29 @@ function TestContent() {
   const [calibrationComplete, setCalibrationComplete] = useState(false);
   const violationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Enterprise Proctoring State ──
+  const [lives, setLives] = useState(3);
+  const [isShouldersMisaligned, setIsShouldersMisaligned] = useState(false);
+  const [penaltyBoxEndTime, setPenaltyBoxEndTime] = useState<number | null>(null);
+  const [reEntryFullscreenLock, setReEntryFullscreenLock] = useState(false);
+  const [criticalViolationMsg, setCriticalViolationMsg] = useState<string | null>(null);
+  const lastIncidentTimeRef = useRef<number>(0);
+
+  // ── Penalty Box Countdown Loop ──
+  const [penaltyRemaining, setPenaltyRemaining] = useState(0);
+  useEffect(() => {
+    if (!penaltyBoxEndTime) {
+      setPenaltyRemaining(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      const remain = Math.max(0, Math.ceil((penaltyBoxEndTime - Date.now()) / 1000));
+      setPenaltyRemaining(remain);
+      if (remain === 0) setPenaltyBoxEndTime(null);
+    }, 200);
+    return () => clearInterval(interval);
+  }, [penaltyBoxEndTime]);
+
   useEffect(() => {
     if (typeof navigator !== 'undefined') {
       setIsMobileDevice(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
@@ -212,10 +235,55 @@ function TestContent() {
       GAZE_AWAY:          `⚠ Looking away from screen.`,
       HEAD_PITCH_DOWN:    `🚨 Looking down at lap detected.`,
       DUCKING_DOWN:       `🚨 Face hidden below camera frame!`,
+      SHOULDERS_OUT_OF_FRAME: `🚨 Shoulders out of frame.`,
     };
-    setViolation(messages[event] || '⚠ Proctoring violation detected.');
-    if (violationTimeoutRef.current) clearTimeout(violationTimeoutRef.current);
-    violationTimeoutRef.current = setTimeout(() => setViolation(null), 3500);
+
+    // 1. Handle dynamic shoulder alignment (does not deduct lives, just blurs until fixed)
+    if (event === 'SHOULDERS_OUT_OF_FRAME') {
+      setIsShouldersMisaligned(true);
+      return;
+    }
+
+    // 2. Atomic Offense Deduplication (Tab Switch & Fullscreen Exit)
+    let isCritical = false;
+    let deductLife = false;
+
+    if (event === 'TAB_SWITCHED' || event === 'LEFT_FULLSCREEN') {
+      const now = Date.now();
+      // If both fire within 1500ms, only count as 1 offense
+      if (now - lastIncidentTimeRef.current > 1500) {
+        deductLife = true;
+        isCritical = true;
+        setCriticalViolationMsg(`🚨 Window unfocused or exited fullscreen!`);
+      }
+      lastIncidentTimeRef.current = now;
+      if (event === 'LEFT_FULLSCREEN' && !isMobileDevice) {
+        setReEntryFullscreenLock(true);
+      }
+    } else if (event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'NO_FACE' || event === 'MULTIPLE_FACES') {
+      deductLife = true;
+      isCritical = true;
+      setCriticalViolationMsg(messages[event]);
+    }
+
+    if (deductLife) {
+      setLives(l => Math.max(0, l - 1));
+    }
+
+    if (isCritical) {
+      setPenaltyBoxEndTime(Date.now() + 5000); // 5-second mandatory blur
+    } else {
+      // Show normal non-critical toast warning
+      setViolation(messages[event] || '⚠ Proctoring violation detected.');
+      if (violationTimeoutRef.current) clearTimeout(violationTimeoutRef.current);
+      violationTimeoutRef.current = setTimeout(() => setViolation(null), 3500);
+    }
+  }, [isMobileDevice]);
+
+  const handleViolationClear = useCallback((event: ProctoringEvent) => {
+    if (event === 'SHOULDERS_OUT_OF_FRAME') {
+      setIsShouldersMisaligned(false);
+    }
   }, []);
 
   const handleViolation = useCallback((flag: DurationFlag) => {
@@ -441,8 +509,7 @@ function TestContent() {
   // ── Main test interface ───────────────────────────────────
   return (
     <main className="exam-secure-zone" style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
-      {/* Hidden element shown only when printing — blocks print-to-PDF screenshot */}
-      <div className="no-print-notice">📵 Printing is not allowed during the exam.</div>
+
       {/* Restoration banner — slides in when progress is recovered from localStorage */}
       {showRestoredBanner && (
         <div
@@ -559,7 +626,7 @@ function TestContent() {
       )}
 
       {/* Body */}
-      <div className="test-body">
+      <div className="test-body" style={{ filter: (reEntryFullscreenLock || isShouldersMisaligned || penaltyRemaining > 0) ? 'blur(16px)' : 'none', transition: 'filter 0.3s ease' }}>
         {/* Question panel first on mobile */}
         <div className="test-question-area">
           {currentQuestion ? (
@@ -661,7 +728,67 @@ function TestContent() {
         </div>
       </div>
 
+      {/* ── Gamified 3-Lives HUD ── */}
+      <div style={{
+        position: 'fixed',
+        bottom: 'var(--space-xl)',
+        right: 'var(--space-xl)',
+        display: 'flex',
+        gap: 8,
+        background: 'rgba(10, 15, 20, 0.8)',
+        padding: '12px 16px',
+        borderRadius: 24,
+        border: '1px solid rgba(255,255,255,0.1)',
+        backdropFilter: 'blur(10px)',
+        zIndex: 50,
+      }}>
+        {[...Array(3)].map((_, i) => (
+          <div key={i} style={{
+            color: i < lives ? '#ff2a4f' : 'rgba(255, 255, 255, 0.1)',
+            transition: 'color 0.4s ease',
+            fontSize: '1.25rem'
+          }}>
+            ❤
+          </div>
+        ))}
+      </div>
 
+      {/* ── Enforcement Overlays ── */}
+      {reEntryFullscreenLock && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}>
+          <div className="card" style={{ maxWidth: 400, textAlign: 'center' }}>
+            <h2>Window Unfocused</h2>
+            <p style={{ color: 'var(--text-muted)', marginBottom: 20 }}>You exited fullscreen or switched tabs. Click below to resume your exam.</p>
+            <button className="btn btn-primary" onClick={() => {
+              document.documentElement.requestFullscreen().catch(console.error);
+              setReEntryFullscreenLock(false);
+            }}>Resume Fullscreen</button>
+          </div>
+        </div>
+      )}
+
+      {isShouldersMisaligned && !reEntryFullscreenLock && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)' }}>
+          <div style={{ textAlign: 'center' }}>
+            <h2 style={{ color: '#ff2a4f', marginBottom: 20 }}>🚨 Shoulders Out of Frame</h2>
+            <p style={{ color: 'white', marginBottom: 20 }}>Adjust your camera/position so your shoulders touch or surpass the white dotted line.</p>
+            <div style={{ position: 'relative', width: 480, height: 360, background: '#000', border: '2px solid #333', borderRadius: 8, overflow: 'hidden' }}>
+              <WebcamFeed stream={stream} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div style={{ position: 'absolute', top: '65%', left: 0, right: 0, borderTop: '2px dashed #fff' }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {penaltyRemaining > 0 && !reEntryFullscreenLock && !isShouldersMisaligned && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9997, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 42, 79, 0.1)' }}>
+          <div className="card" style={{ maxWidth: 400, textAlign: 'center', border: '1px solid #ff2a4f' }}>
+            <h2 style={{ color: '#ff2a4f' }}>Penalty Applied</h2>
+            <p style={{ color: 'white', margin: '16px 0' }}>{criticalViolationMsg}</p>
+            <div style={{ fontSize: '2rem', fontWeight: 700, fontFamily: 'monospace' }}>{penaltyRemaining}s</div>
+          </div>
+        </div>
+      )}
 
       {/* Proctoring engine */}
       {uid && examStarted && (
