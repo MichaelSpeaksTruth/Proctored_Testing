@@ -95,7 +95,11 @@ export default function LoginPage() {
           setLoading(false);
           return;
         }
-        await update(ref(rtdb, `participants/${key}`), { uid: user.uid });
+        try {
+          await update(ref(rtdb, `participants/${key}`), { uid: user.uid });
+        } catch (e) {
+          console.warn('Could not update participant uid (likely permission denied, which is fine):', e);
+        }
         router.replace('/waiting-room');
       } else if (signInMode === 'personnel') {
         const personnelSnap = await get(ref(rtdb, `personnel/${key}`));
