@@ -149,8 +149,8 @@ function TestContent() {
     }
   }, [uid, testId, router]);
 
-  // ── Restore student exam start time from localStorage on reload ──
-  // This ensures the timer continues from where it left off after a reload.
+  // ── Restore student exam start time and lives from localStorage on reload ──
+  // This ensures the timer and lives continue from where it left off after a reload.
   useEffect(() => {
     if (!testId || !uid) return;
     const lsKey = `pt_exam_start_${testId}_${uid}`;
@@ -158,7 +158,21 @@ function TestContent() {
     if (stored) {
       setStudentExamStartedAt(stored);
     }
+
+    const livesKey = `pt_lives_${testId}_${uid}`;
+    const storedLives = localStorage.getItem(livesKey);
+    if (storedLives) {
+      const parsed = parseInt(storedLives, 10);
+      if (!isNaN(parsed)) setLives(parsed);
+    }
   }, [testId, uid]);
+
+  // Persist lives to localStorage whenever they change
+  useEffect(() => {
+    if (!testId || !uid) return;
+    const livesKey = `pt_lives_${testId}_${uid}`;
+    localStorage.setItem(livesKey, lives.toString());
+  }, [lives, testId, uid]);
 
   // ── Enforce fullscreen ────────────────────────────────────────
   const enterFullscreenAndStart = useCallback(() => {
