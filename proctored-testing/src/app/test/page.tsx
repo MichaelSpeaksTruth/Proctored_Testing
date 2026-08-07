@@ -260,7 +260,11 @@ function TestContent() {
       if (event === 'LEFT_FULLSCREEN' && !isMobileDevice) {
         setReEntryFullscreenLock(true);
       }
-    } else if (event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'NO_FACE' || event === 'MULTIPLE_FACES') {
+    } else if (event === 'DUCKING_DOWN') {
+      deductLife = true;
+      isCritical = true;
+      setCriticalViolationMsg(`Face out of frame boundaries`);
+    } else if (event === 'NO_FACE' || event === 'MULTIPLE_FACES') {
       deductLife = true;
       isCritical = true;
       setCriticalViolationMsg(messages[event]);

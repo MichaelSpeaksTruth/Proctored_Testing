@@ -10,14 +10,24 @@ interface Props {
 const WebcamFeed = forwardRef<HTMLVideoElement, Props>(function WebcamFeed({ stream, embedded = false }, externalRef) {
   const internalRef = useRef<HTMLVideoElement>(null);
 
+  // Safely sync the internal ref to the parent's external ref
   useEffect(() => {
-    // If an external ref is provided, try to use it. Otherwise, use the internal ref.
-    const activeRef = (externalRef as React.MutableRefObject<HTMLVideoElement>)?.current ? (externalRef as React.MutableRefObject<HTMLVideoElement>) : internalRef;
-    
-    if (activeRef.current && stream) {
-      activeRef.current.srcObject = stream;
+    if (externalRef) {
+      if (typeof externalRef === 'function') {
+        externalRef(internalRef.current);
+      } else {
+        (externalRef as React.MutableRefObject<HTMLVideoElement | null>).current = internalRef.current;
+      }
     }
-  }, [stream, externalRef]);
+  }, [externalRef]);
+
+  // Robustly attach stream to the exact video node we render
+  useEffect(() => {
+    const videoNode = internalRef.current;
+    if (videoNode && stream) {
+      videoNode.srcObject = stream;
+    }
+  }, [stream]);
 
   return (
     <div className={embedded ? "" : "webcam-container"} style={embedded ? { width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 } : {}}>
@@ -28,12 +38,7 @@ const WebcamFeed = forwardRef<HTMLVideoElement, Props>(function WebcamFeed({ str
         </div>
       )}
       <video
-        ref={(node) => {
-          // Keep both refs in sync
-          if (typeof externalRef === 'function') externalRef(node);
-          else if (externalRef) (externalRef as React.MutableRefObject<HTMLVideoElement | null>).current = node;
-          internalRef.current = node;
-        }}
+        ref={internalRef}
         className={embedded ? "" : "webcam-feed"}
         autoPlay
         playsInline
