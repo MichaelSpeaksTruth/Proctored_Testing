@@ -58,6 +58,7 @@ function TestContent() {
   const violationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Enterprise Proctoring State ──
+  const [lives, setLives] = useState(5);
   const [isShouldersMisaligned, setIsShouldersMisaligned] = useState(false);
   const [penaltyBoxEndTime, setPenaltyBoxEndTime] = useState<number | null>(null);
   const [reEntryFullscreenLock, setReEntryFullscreenLock] = useState(false);
@@ -262,12 +263,16 @@ function TestContent() {
       if (event === 'LEFT_FULLSCREEN' && !isMobileDevice) {
         setReEntryFullscreenLock(true);
       }
+    } else if (event === 'DUCKING_DOWN') {
+      deductLife = true;
+      // Removed isCritical = true to prevent the 5-second Penalty Box lock
     } else if (event === 'NO_FACE' || event === 'MULTIPLE_FACES') {
       deductLife = true;
-      isCritical = true;
-      setCriticalViolationMsg(messages[event]);
+      // Removed isCritical = true to prevent the 5-second Penalty Box lock
     }
 
+    if (deductLife) {
+      setLives(l => Math.max(0, l - 1));
     }
 
     if (event === 'HEAD_PITCH_DOWN') {
@@ -739,7 +744,30 @@ function TestContent() {
         </div>
       </div>
 
-      {/* Gamified 3-Lives HUD has been removed per request */}
+      {/* ── Gamified 5-Lives HUD ── */}
+      <div style={{
+        position: 'fixed',
+        bottom: 'var(--space-xl)',
+        right: 'var(--space-xl)',
+        display: 'flex',
+        gap: 8,
+        background: 'rgba(10, 15, 20, 0.8)',
+        padding: '12px 16px',
+        borderRadius: 24,
+        border: '1px solid rgba(255,255,255,0.1)',
+        backdropFilter: 'blur(10px)',
+        zIndex: 50,
+      }}>
+        {[...Array(5)].map((_, i) => (
+          <div key={i} style={{
+            color: i < lives ? '#ff2a4f' : 'rgba(255, 255, 255, 0.1)',
+            transition: 'color 0.4s ease',
+            fontSize: '1.25rem'
+          }}>
+            ❤
+          </div>
+        ))}
+      </div>
 
       {/* ── Enforcement Overlays ── */}
       {reEntryFullscreenLock && (
