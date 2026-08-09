@@ -11,7 +11,7 @@ import PreTestCalibration from '@/components/PreTestCalibration';
 import WebcamFeed from '@/components/WebcamFeed';
 import CountdownTimer from '@/components/CountdownTimer';
 import QuestionPanel, { Question } from '@/components/QuestionPanel';
-import { Lock, Camera, Monitor, CheckCircle2, XCircle, RotateCcw, X, ShieldAlert, ArrowDown } from 'lucide-react';
+import { Lock, Camera, Monitor, CheckCircle2, XCircle, RotateCcw, X, ShieldAlert, ArrowDown, Maximize } from 'lucide-react';
 import { ProctoringEvent, DurationFlag } from '@/lib/proctoring';
 import { useTestState } from '@/lib/useTestState';
 

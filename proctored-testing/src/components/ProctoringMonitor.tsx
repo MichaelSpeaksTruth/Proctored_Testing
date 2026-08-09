@@ -370,7 +370,7 @@ export default function ProctoringMonitor({
     let fmRaf: number | null = null;
     let audioCtx: AudioContext | null = null;
     let audioStream: MediaStream | null = null;
-    let faceMeshInst: { close: () => void } | null = null;
+    let faceMeshInst: { close: () => void; send: (options: { image: HTMLVideoElement }) => Promise<void> } | null = null;
     let rafId: number | null = null;
     let cocoTimer: ReturnType<typeof setInterval> | null = null;
     let rectTimer: ReturnType<typeof setInterval> | null = null;

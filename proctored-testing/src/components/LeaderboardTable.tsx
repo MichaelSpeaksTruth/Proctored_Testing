@@ -13,7 +13,7 @@ export interface LeaderboardEntry {
   flagCount: number;
   aiSeverity?: string;
   aiSummary?: string;
-  flags?: { event: string; severity: string; timestamp?: string; startTime?: string }[];
+  flags?: { event: string; severity: string; timestamp?: string; startTime?: string; snapshotBase64?: string }[];
   interviewScheduled?: boolean;
   panelNo?: string;
   venue?: string;
