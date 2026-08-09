@@ -57,7 +57,15 @@ export default function LoginPage() {
         // Check if they are in candidate participants list
         const pSnap = await get(ref(rtdb, `participants/${key}`));
         if (pSnap.exists() && pSnap.val()?.allowed === true) {
-          router.replace('/waiting-room');
+          const val = pSnap.val();
+          const tests = val.tests || {};
+          const testIds = Object.keys(tests);
+          if (testIds.length === 1) {
+            localStorage.setItem('pt_selected_test', testIds[0]);
+            router.replace('/waiting-room');
+          } else {
+            router.replace('/select-test');
+          }
           return;
         }
 
@@ -100,7 +108,16 @@ export default function LoginPage() {
         } catch (e) {
           console.warn('Could not update participant uid (likely permission denied, which is fine):', e);
         }
-        router.replace('/waiting-room');
+        
+        const val = pSnap.val();
+        const tests = val.tests || {};
+        const testIds = Object.keys(tests);
+        if (testIds.length === 1) {
+          localStorage.setItem('pt_selected_test', testIds[0]);
+          router.replace('/waiting-room');
+        } else {
+          router.replace('/select-test');
+        }
       } else if (signInMode === 'personnel') {
         const personnelSnap = await get(ref(rtdb, `personnel/${key}`));
         if (personnelSnap.exists()) {
@@ -176,17 +193,8 @@ export default function LoginPage() {
   }
 
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 'var(--space-xl)',
-      }}
-    >
-      <div style={{ textAlign: 'center', marginBottom: 'var(--space-xl)' }}>
+    <main className="landing-layout">
+      <div style={{ textAlign: 'center' }}>
         <div
           style={{
             width: 72, height: 72, borderRadius: '50%',
@@ -212,7 +220,7 @@ export default function LoginPage() {
         {mode === 'candidate' && (
           <>
             <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-sm)' }}>Candidate Sign In</h2>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 'var(--space-xl)' }}>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 'var(--space-lg)' }}>
               Use your registered Google account to access the examination portal. Only pre-approved candidates may sign in.
             </p>
             {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--space-lg)', textAlign: 'left' }}>{error}</div>}

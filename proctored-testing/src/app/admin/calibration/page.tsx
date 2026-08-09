@@ -64,7 +64,7 @@ function CalibrationContent() {
   }, []);
 
   const handleViolation = useCallback((flag: DurationFlag) => {
-    setFlags(prev => [...prev, { id: Date.now(), flag }]);
+    setFlags(prev => [...prev, { id: Date.now() + Math.random(), flag }]);
   }, []);
 
   useEffect(() => {

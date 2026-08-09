@@ -11,7 +11,7 @@ import PreTestCalibration from '@/components/PreTestCalibration';
 import WebcamFeed from '@/components/WebcamFeed';
 import CountdownTimer from '@/components/CountdownTimer';
 import QuestionPanel, { Question } from '@/components/QuestionPanel';
-import { Lock, Camera, Monitor, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
+import { Lock, Camera, Monitor, CheckCircle2, XCircle, RotateCcw, X, ShieldAlert, ArrowDown } from 'lucide-react';
 import { ProctoringEvent, DurationFlag } from '@/lib/proctoring';
 import { useTestState } from '@/lib/useTestState';
 
@@ -59,6 +59,7 @@ function TestContent() {
 
   // ── Enterprise Proctoring State ──
   const [lives, setLives] = useState(5);
+  const [proctoringAgreementAccepted, setProctoringAgreementAccepted] = useState(false);
   const [isShouldersMisaligned, setIsShouldersMisaligned] = useState(false);
   const [penaltyBoxEndTime, setPenaltyBoxEndTime] = useState<number | null>(null);
   const [reEntryFullscreenLock, setReEntryFullscreenLock] = useState(false);
@@ -114,8 +115,11 @@ function TestContent() {
   }, []);
 
   useEffect(() => {
+    const selectedTestId = localStorage.getItem('pt_selected_test');
+    const url = selectedTestId ? `/api/get-test-questions?testId=${selectedTestId}` : '/api/get-test-questions';
+    
     // Fetch questions from the edge-cached API route
-    fetch('/api/get-test-questions')
+    fetch(url)
       .then(async (res) => {
         if (!res.ok) return; // No active test or error — handled elsewhere
         const payload = await res.json() as { testId: string; title: string; sections: Section[] };
@@ -137,13 +141,30 @@ function TestContent() {
     }
   }, [wasRestored]);
 
-  // ── Check if already submitted ─────────────────────────────
+  // ── Check if already submitted & Sync Flags ────────────────
   useEffect(() => {
     if (uid && testId) {
       get(ref(rtdb, `submissions/${testId}/${uid}`)).then(snap => {
         if (snap.exists()) {
           setSubmitted(true);
           router.replace('/student-dashboard');
+        }
+      });
+
+      // If the admin deleted their record, their backend flags will be gone.
+      // If they have < 5 lives locally but 0 flags on the backend, it means their attempt was reset!
+      get(ref(rtdb, `proctoringFlags/${uid}/${testId}/flags`)).then(snap => {
+        const flagsData = snap.val();
+        if (!flagsData) {
+          const storedLives = localStorage.getItem(`pt_lives_${testId}_${uid}`);
+          if (storedLives && parseInt(storedLives, 10) < 5) {
+            console.log('Admin reset detected. Clearing local state.');
+            setLives(5);
+            localStorage.removeItem(`pt_lives_${testId}_${uid}`);
+            localStorage.removeItem(`pt_exam_start_${testId}_${uid}`);
+            localStorage.removeItem(`pt_section_times_${testId}_${uid}`);
+            // Note: answers are handled separately by useTestState, but the timers/lives are now reset.
+          }
         }
       });
     }
@@ -354,8 +375,12 @@ function TestContent() {
 
         // Clear localStorage only after confirmed server write
         clearPersistedState();
-        // Also clear the exam start time so a future test session starts fresh
-        try { localStorage.removeItem(`pt_exam_start_${testId}_${uid}`); } catch { /* ignore */ }
+        // Also clear local timing and proctoring state so a future test session starts fresh
+        try { 
+          localStorage.removeItem(`pt_exam_start_${testId}_${uid}`);
+          localStorage.removeItem(`pt_lives_${testId}_${uid}`);
+          localStorage.removeItem(`pt_section_times_${testId}_${uid}`);
+        } catch { /* ignore */ }
         if (document.fullscreenElement) document.exitFullscreen();
         router.replace('/student-dashboard');
       } catch (err) {
@@ -523,7 +548,7 @@ function TestContent() {
             onAlignmentUpdate={setIsAligned}
           />
         )}
-        <div style={{ position: 'fixed', opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
+        <div style={{ position: 'fixed', opacity: 0.01, pointerEvents: 'none', zIndex: -1, width: 10, height: 10, overflow: 'hidden' }}>
            <div style={{ position: 'relative' }}>
              <WebcamFeed ref={videoRef} stream={stream} />
              <canvas ref={overlayCanvasRef} style={{ position: 'absolute', inset: 0 }} />
@@ -579,38 +604,48 @@ function TestContent() {
             {currentSection?.name}
           </div>
           {currentSection && (
-            <CountdownTimer
-              durationSeconds={(() => {
-                // Use the student's personal exam start time (stored in localStorage)
-                // to compute the true remaining time for this section.
-                // This prevents the timer resetting to full duration on page reload.
-                // We do NOT use testStartedAt (admin start time) — that would
-                // compute a negative remaining time for students who join late.
-                if (studentExamStartedAt) {
-                  const elapsedSeconds = Math.floor(
-                    (Date.now() - new Date(studentExamStartedAt).getTime()) / 1000
-                  );
-                  // Subtract time used by previous sections
-                  let previousSectionsTime = 0;
-                  for (let i = 0; i < currentSectionIdx; i++) {
-                    previousSectionsTime += testData!.sections[i].timeLimit;
-                  }
-                  const sectionElapsed = Math.max(0, elapsedSeconds - previousSectionsTime);
-                  // Never return 0 here — a 0 causes immediate onExpire
-                  return Math.max(1, currentSection.timeLimit - sectionElapsed);
-                }
-                return currentSection.timeLimit;
-              })()}
-              label=""
-              onExpire={() => {
-                if (currentSectionIdx < totalSections - 1) {
-                  setCurrentSectionIdx((i) => i + 1);
-                  setCurrentQuestionIdx(0);
-                } else {
-                  handleSubmit(true);
-                }
-              }}
-            />
+             proctoringAgreementAccepted ? (
+               <CountdownTimer
+                 key={currentSection.id}
+                 durationSeconds={(() => {
+                   if (!testId || !uid) return currentSection.timeLimit;
+                   const storageKey = `pt_section_times_${testId}_${uid}`;
+                   try {
+                     const stored = localStorage.getItem(storageKey);
+                     if (stored) {
+                       const parsed = JSON.parse(stored);
+                       if (typeof parsed[currentSectionIdx] === 'number') {
+                         return Math.max(1, parsed[currentSectionIdx]);
+                       }
+                     }
+                   } catch (e) {
+                     console.error('Failed to parse section times', e);
+                   }
+                   return currentSection.timeLimit;
+                 })()}
+                 label=""
+                 onTick={(rem) => {
+                   if (!testId || !uid) return;
+                   const storageKey = `pt_section_times_${testId}_${uid}`;
+                   try {
+                     const stored = localStorage.getItem(storageKey);
+                     const parsed = stored ? JSON.parse(stored) : {};
+                     parsed[currentSectionIdx] = rem;
+                     localStorage.setItem(storageKey, JSON.stringify(parsed));
+                   } catch (e) {}
+                 }}
+                 onExpire={() => {
+                   if (currentSectionIdx < totalSections - 1) {
+                     setCurrentSectionIdx((i) => i + 1);
+                     setCurrentQuestionIdx(0);
+                   } else {
+                     handleSubmit(true);
+                   }
+                 }}
+               />
+             ) : (
+               <div className="timer">--:--:--</div>
+             )
           )}
         </div>
 
@@ -653,7 +688,7 @@ function TestContent() {
       )}
 
       {/* Body */}
-      <div className="test-body" style={{ filter: (reEntryFullscreenLock || isShouldersMisaligned || penaltyRemaining > 0) ? 'blur(16px)' : 'none', transition: 'filter 0.3s ease' }}>
+      <div className="test-body" style={{ filter: (!proctoringAgreementAccepted || reEntryFullscreenLock || isShouldersMisaligned || penaltyRemaining > 0) ? 'blur(16px)' : 'none', transition: 'filter 0.3s ease' }}>
         {/* Question panel first on mobile */}
         <div className="test-question-area">
           {currentQuestion ? (
@@ -755,41 +790,71 @@ function TestContent() {
         </div>
       </div>
 
-      {/* ── Gamified 5-Lives HUD ── */}
-      <div style={{
-        position: 'fixed',
-        bottom: 'var(--space-xl)',
-        right: 'var(--space-xl)',
-        display: 'flex',
-        gap: 8,
-        background: 'rgba(10, 15, 20, 0.8)',
-        padding: '12px 16px',
-        borderRadius: 24,
-        border: '1px solid rgba(255,255,255,0.1)',
-        backdropFilter: 'blur(10px)',
-        zIndex: 50,
-      }}>
-        {[...Array(5)].map((_, i) => (
-          <div key={i} style={{
-            color: i < lives ? '#ff2a4f' : 'rgba(255, 255, 255, 0.1)',
-            transition: 'color 0.4s ease',
-            fontSize: '1.25rem'
+      {/* ── Proctoring Agreement Overlay ── */}
+      {!proctoringAgreementAccepted && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          background: 'rgba(5, 5, 8, 0.75)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <div style={{
+            background: 'var(--bg-card)',
+            border: '1px solid rgba(255, 42, 79, 0.2)',
+            borderRadius: 16,
+            padding: '32px 40px',
+            maxWidth: 480,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(155, 34, 38, 0.1)',
+            textAlign: 'center',
           }}>
-            ❤
+            <ShieldAlert size={48} color="#9b2226" style={{ marginBottom: 16 }} />
+            <h2 style={{ color: '#c0c0c0', marginBottom: 16, fontSize: '1.5rem', letterSpacing: '0.02em' }}>Proctoring Agreement</h2>
+            <p style={{ color: 'var(--text-muted)', marginBottom: 24, fontSize: '0.9375rem', lineHeight: 1.6 }}>
+              This exam uses an advanced monitoring system. Suspicious behavior will be continuously logged and flagged for administrative review. Please ensure you remain in fullscreen, stay visible in the camera, and minimize background noise.
+            </p>
+            <button
+              className="btn btn-primary btn-lg"
+              onClick={() => setProctoringAgreementAccepted(true)}
+              style={{ width: '100%', background: '#1a1a1a', color: '#c0c0c0', border: '1px solid #333' }}
+            >
+              Agree & Proceed
+            </button>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
       {/* ── Enforcement Overlays ── */}
       {reEntryFullscreenLock && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}>
-          <div className="card" style={{ maxWidth: 400, textAlign: 'center' }}>
-            <h2>Window Unfocused</h2>
-            <p style={{ color: 'var(--text-muted)', marginBottom: 20 }}>You exited fullscreen or switched tabs. Click below to resume your exam.</p>
-            <button className="btn btn-primary" onClick={() => {
-              document.documentElement.requestFullscreen().catch(console.error);
-              setReEntryFullscreenLock(false);
-            }}>Resume Fullscreen</button>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(5, 5, 10, 0.9)', backdropFilter: 'blur(20px)' }}>
+          <div style={{
+            background: 'var(--bg-card)',
+            border: '1px solid rgba(255, 42, 79, 0.3)',
+            borderRadius: 16,
+            padding: '40px 48px',
+            maxWidth: 480,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(255, 42, 79, 0.1)',
+            textAlign: 'center',
+          }}>
+            <Maximize size={48} color="#ff2a4f" style={{ marginBottom: 20, opacity: 0.9 }} />
+            <h2 style={{ color: '#f5f5f5', marginBottom: 16, fontSize: '1.5rem', letterSpacing: '0.02em' }}>Fullscreen Required</h2>
+            <p style={{ color: 'var(--text-muted)', marginBottom: 32, fontSize: '0.9375rem', lineHeight: 1.6 }}>
+              You have exited fullscreen mode or switched away from the exam window. To maintain the integrity of this exam, you must remain in fullscreen at all times.
+            </p>
+            <button
+              className="btn btn-primary btn-lg"
+              onClick={() => {
+                document.documentElement.requestFullscreen().catch(console.error);
+                setReEntryFullscreenLock(false);
+              }}
+              style={{ width: '100%', background: '#ff2a4f', color: '#fff', border: 'none', fontWeight: 600, letterSpacing: '0.05em' }}
+            >
+              Resume Fullscreen
+            </button>
           </div>
         </div>
       )}
@@ -831,22 +896,51 @@ function TestContent() {
                 <div style={{ position: 'absolute', bottom: 0, right: 0, width: 24, height: 24, borderBottom: '2px solid rgba(255,255,255,0.7)', borderRight: '2px solid rgba(255,255,255,0.7)' }} />
               </div>
             </div>
+            
+            <button className="btn btn-ghost" style={{ marginTop: 24, color: 'var(--text-muted)' }} onClick={() => {
+              document.documentElement.requestFullscreen().catch(console.error);
+            }}>Resume Fullscreen</button>
           </div>
         </div>
       )}
 
       {penaltyRemaining > 0 && !reEntryFullscreenLock && !isShouldersMisaligned && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9997, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 42, 79, 0.1)' }}>
-          <div className="card" style={{ maxWidth: 400, textAlign: 'center', border: '1px solid #ff2a4f' }}>
-            <h2 style={{ color: '#ff2a4f' }}>Penalty Applied</h2>
-            <p style={{ color: 'white', margin: '16px 0' }}>{criticalViolationMsg}</p>
-            <div style={{ fontSize: '2rem', fontWeight: 700, fontFamily: 'monospace' }}>{penaltyRemaining}s</div>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9997, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(5, 5, 10, 0.9)', backdropFilter: 'blur(20px)' }}>
+          <div style={{
+            background: 'var(--bg-card)',
+            border: '1px solid rgba(255, 42, 79, 0.3)',
+            borderRadius: 16,
+            padding: '40px 48px',
+            maxWidth: 480,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(255, 42, 79, 0.1)',
+            textAlign: 'center',
+          }}>
+            <ShieldAlert size={48} color="#ff2a4f" style={{ marginBottom: 20, opacity: 0.9 }} />
+            <h2 style={{ color: '#ff2a4f', marginBottom: 16, fontSize: '1.5rem', letterSpacing: '0.02em', textTransform: 'uppercase' }}>Security Penalty</h2>
+            <p style={{ color: 'var(--text-muted)', marginBottom: 24, fontSize: '0.9375rem', lineHeight: 1.6 }}>
+              {criticalViolationMsg}
+            </p>
+            <div style={{ 
+              fontSize: '3.5rem', 
+              fontWeight: 800, 
+              fontFamily: 'var(--font-mono)', 
+              color: '#f5f5f5',
+              background: 'rgba(255, 42, 79, 0.1)',
+              padding: '16px',
+              borderRadius: '12px',
+              border: '1px solid rgba(255, 42, 79, 0.2)'
+            }}>
+              {penaltyRemaining}s
+            </div>
+            <p style={{ color: 'var(--text-muted)', marginTop: 24, fontSize: '0.8125rem', fontStyle: 'italic' }}>
+              Your exam timer is paused while this penalty is active. Repeated violations may result in exam termination.
+            </p>
           </div>
         </div>
       )}
 
       {/* Proctoring engine */}
-      {uid && examStarted && (
+      {uid && examStarted && !submitted && (
         <ProctoringMonitor
           uid={uid}
           testId={testId ?? undefined}

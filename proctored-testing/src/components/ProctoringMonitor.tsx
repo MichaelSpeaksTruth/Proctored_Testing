@@ -249,7 +249,7 @@ export default function ProctoringMonitor({
   onAlignmentUpdate,
 }: Props) {
 
-  const activeInfractions = useRef<Map<ProctoringEvent, { startTime: number; severity: Severity }>>(
+  const activeInfractions = useRef<Map<ProctoringEvent, { startTime: number; severity: Severity; snapshotBase64?: string }>>(
     new Map()
   );
   
@@ -287,13 +287,34 @@ export default function ProctoringMonitor({
       : `proctoringFlags/${uid}/flags`;
   }, [uid, testId, calibrationMode]);
 
+  const captureSnapshot = useCallback(() => {
+    if (!videoRef.current || videoRef.current.readyState < 2) return undefined;
+    try {
+      const cv = document.createElement('canvas');
+      cv.width = 320;
+      cv.height = 240;
+      const ctx = cv.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0, cv.width, cv.height);
+        return cv.toDataURL('image/jpeg', 0.4);
+      }
+    } catch (e) {
+      console.warn('Failed to capture snapshot', e);
+    }
+    return undefined;
+  }, [videoRef]);
+
   const openInfraction = useCallback(
     (event: ProctoringEvent, severity: Severity) => {
       if (activeInfractions.current.has(event)) return;
-      activeInfractions.current.set(event, { startTime: Date.now(), severity });
+      let snapshotBase64 = undefined;
+      if (severity === 'critical' || severity === 'high') {
+        snapshotBase64 = captureSnapshot();
+      }
+      activeInfractions.current.set(event, { startTime: Date.now(), severity, snapshotBase64 });
       onViolationStart?.(event, severity);
     },
-    [onViolationStart]
+    [onViolationStart, captureSnapshot]
   );
 
   const closeInfraction = useCallback(
@@ -316,6 +337,9 @@ export default function ProctoringMonitor({
         endTime: new Date(endMs).toISOString(),
         durationInSeconds,
       };
+      if (record.snapshotBase64) {
+        flag.snapshotBase64 = record.snapshotBase64;
+      }
       onViolation?.(flag);
       if (!calibrationMode) push(ref(rtdb, flagPath()), flag);
     },
@@ -343,7 +367,7 @@ export default function ProctoringMonitor({
   );
 
   useEffect(() => {
-    let camera: { start: () => void; stop: () => void } | null = null;
+    let fmRaf: number | null = null;
     let audioCtx: AudioContext | null = null;
     let audioStream: MediaStream | null = null;
     let faceMeshInst: { close: () => void } | null = null;
@@ -689,26 +713,29 @@ export default function ProctoringMonitor({
         let processing = false;
 
         if (videoRef.current) {
-          camera = new Camera(videoRef.current, {
-            onFrame: async () => {
-              if (!videoRef.current || !mounted || processing) return;
-              try {
-                processing = true;
-                if (overlayCanvasRef?.current && videoRef.current.videoWidth > 0) {
-                  const cv = overlayCanvasRef.current;
-                  if (cv.width !== videoRef.current.videoWidth) cv.width = videoRef.current.videoWidth;
-                  if (cv.height !== videoRef.current.videoHeight) cv.height = videoRef.current.videoHeight;
-                  cv.getContext('2d')?.clearRect(0, 0, cv.width, cv.height);
+          const processFrame = async () => {
+            if (!videoRef.current || !mounted || !faceMeshInst) return;
+            
+            const video = videoRef.current;
+            if (video.readyState >= 2 && !video.paused && !video.ended) {
+              if (!processing) {
+                try {
+                  processing = true;
+                  if (overlayCanvasRef?.current && video.videoWidth > 0) {
+                    const cv = overlayCanvasRef.current;
+                    if (cv.width !== video.videoWidth) cv.width = video.videoWidth;
+                    if (cv.height !== video.videoHeight) cv.height = video.videoHeight;
+                    cv.getContext('2d')?.clearRect(0, 0, cv.width, cv.height);
+                  }
+                  await faceMeshInst.send({ image: video });
+                } catch { /* suppress */ } finally {
+                  processing = false;
                 }
-                await faceMesh.send({ image: videoRef.current });
-              } catch { /* suppress */ } finally {
-                processing = false;
               }
-            },
-            width: 640,
-            height: 480,
-          });
-          camera.start();
+            }
+            fmRaf = requestAnimationFrame(processFrame);
+          };
+          processFrame();
         }
       } catch (e) {
         console.warn('[Proctor] FaceMesh load failed:', e);
@@ -764,7 +791,7 @@ export default function ProctoringMonitor({
           }
 
           // Camera covered
-          if (hCtx && videoRef.current && videoRef.current.readyState === 4) {
+          if (hCtx && videoRef.current && videoRef.current.readyState >= 2) {
             hCtx.drawImage(videoRef.current, 0, 0, 64, 64);
             const px = hCtx.getImageData(0, 0, 64, 64).data;
             let lum = 0;
@@ -810,7 +837,7 @@ export default function ProctoringMonitor({
       if (rafId !== null) cancelAnimationFrame(rafId);
       if (cocoTimer !== null) clearInterval(cocoTimer);
       if (rectTimer !== null) clearInterval(rectTimer);
-      if (camera) camera.stop();
+      if (fmRaf !== null) cancelAnimationFrame(fmRaf);
       if (faceMeshInst) faceMeshInst.close();
       if (audioCtx) audioCtx.close();
       if (audioStream) audioStream.getTracks().forEach((t) => t.stop());

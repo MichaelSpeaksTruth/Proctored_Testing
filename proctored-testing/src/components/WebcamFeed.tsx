@@ -26,6 +26,7 @@ const WebcamFeed = forwardRef<HTMLVideoElement, Props>(function WebcamFeed({ str
     const videoNode = internalRef.current;
     if (videoNode && stream) {
       videoNode.srcObject = stream;
+      videoNode.play().catch(() => {});
     }
   }, [stream]);
 

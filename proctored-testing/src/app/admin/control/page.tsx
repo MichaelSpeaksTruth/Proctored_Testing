@@ -155,8 +155,8 @@ function ControlContent() {
               {testStatus === 'active' && 'Test Live'}
               {testStatus === 'ended' && 'Test Ended'}
             </div>
-            <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-              {selectedTestId || 'No test selected'}
+            <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+              {selectedTestId ? (tests.find(t => t.id === selectedTestId)?.title || selectedTestId) : 'No test selected'}
             </div>
           </div>
         </div>

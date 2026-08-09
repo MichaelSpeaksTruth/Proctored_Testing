@@ -10,10 +10,18 @@ interface Participant {
   email: string;
   name?: string;
   allowed: boolean;
+  tests?: Record<string, boolean>;
+}
+
+interface TestOption {
+  id: string;
+  title: string;
 }
 
 function ParticipantsContent() {
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [tests, setTests] = useState<TestOption[]>([]);
+  const [selectedTestId, setSelectedTestId] = useState('');
   const [emailInput, setEmailInput] = useState('');
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,7 +35,16 @@ function ParticipantsContent() {
   const encodeEmail = (e: string) => e.replace(/\./g, ',');
   const decodeEmail = (e: string) => e.replace(/,/g, '.');
 
-  const fetchParticipants = async () => {
+  const fetchTestsAndParticipants = async () => {
+    // Fetch tests
+    const testsSnap = await get(ref(rtdb, 'tests'));
+    const testsVal = testsSnap.val();
+    const testsArr = testsVal 
+      ? Object.keys(testsVal).map(key => ({ id: key, title: testsVal[key].title || key }))
+      : [];
+    setTests(testsArr);
+
+    // Fetch participants
     const snap = await get(ref(rtdb, 'participants'));
     const val = snap.val();
     if (!val) {
@@ -36,20 +53,33 @@ function ParticipantsContent() {
     }
     const parsed = Object.keys(val).map(key => ({
       email: decodeEmail(key),
-      ...(val[key] as { allowed: boolean; name?: string })
+      ...(val[key] as { allowed: boolean; name?: string; tests?: Record<string, boolean> })
     }));
     setParticipants(parsed);
   };
 
-  useEffect(() => { fetchParticipants(); }, []);
+  useEffect(() => { fetchTestsAndParticipants(); }, []);
 
   const addParticipant = async (name: string, email: string) => {
+    if (!selectedTestId) return false;
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedName = name.trim();
     if (!trimmedEmail || !trimmedEmail.includes('@') || !trimmedName) return false;
     const key = encodeEmail(trimmedEmail);
-    // Merge name and email in the existing participant record if it exists, or create a new one
-    await set(ref(rtdb, `participants/${key}`), { email: trimmedEmail, name: trimmedName, allowed: true });
+    
+    // Check existing participant to avoid overwriting other tests
+    const existingSnap = await get(ref(rtdb, `participants/${key}`));
+    const existing = existingSnap.val() || {};
+    
+    const newTests = { ...(existing.tests || {}), [selectedTestId]: true };
+    
+    await set(ref(rtdb, `participants/${key}`), { 
+      ...existing,
+      email: trimmedEmail, 
+      name: trimmedName, 
+      allowed: true,
+      tests: newTests
+    });
     return true;
   };
 
@@ -73,7 +103,7 @@ function ParticipantsContent() {
        setMsg(`Added ${count} participant(s).`);
     }
     setEmailInput('');
-    await fetchParticipants();
+    await fetchTestsAndParticipants();
     setLoading(false);
   };
 
@@ -95,7 +125,7 @@ function ParticipantsContent() {
         if (await addParticipant(name, email)) count++;
       }
       setMsg(`Imported ${count} participant(s) from file.`);
-      await fetchParticipants();
+      await fetchTestsAndParticipants();
     } catch (e) {
       setError('Failed to parse file. Ensure it has an "email" column.');
     } finally {
@@ -105,9 +135,22 @@ function ParticipantsContent() {
   };
 
   const handleRemove = async (email: string) => {
+    if (!selectedTestId) return;
     const key = encodeEmail(email);
-    await remove(ref(rtdb, `participants/${key}`));
-    setParticipants((prev) => prev.filter((p) => p.email !== email));
+    const existingSnap = await get(ref(rtdb, `participants/${key}`));
+    const existing = existingSnap.val();
+    if (existing && existing.tests) {
+      delete existing.tests[selectedTestId];
+      if (Object.keys(existing.tests).length === 0) {
+        // If they belong to no tests, remove them completely
+        await remove(ref(rtdb, `participants/${key}`));
+      } else {
+        await set(ref(rtdb, `participants/${key}`), existing);
+      }
+    } else {
+      await remove(ref(rtdb, `participants/${key}`));
+    }
+    await fetchTestsAndParticipants();
   };
 
   const handleSaveEdit = async (oldEmail: string) => {
@@ -123,22 +166,34 @@ function ParticipantsContent() {
     setError(null);
     setMsg(null);
     
+    const oldKey = encodeEmail(oldEmail);
+    const existingSnap = await get(ref(rtdb, `participants/${oldKey}`));
+    const existing = existingSnap.val() || {};
+    
     if (newEmailTrimmed !== oldEmail) {
-      const oldKey = encodeEmail(oldEmail);
       await remove(ref(rtdb, `participants/${oldKey}`));
     }
     
     const newKey = encodeEmail(newEmailTrimmed);
-    await set(ref(rtdb, `participants/${newKey}`), { email: newEmailTrimmed, name: newNameTrimmed, allowed: true });
+    await set(ref(rtdb, `participants/${newKey}`), { 
+      ...existing,
+      email: newEmailTrimmed, 
+      name: newNameTrimmed, 
+      allowed: true 
+    });
     
     setEditingEmail(null);
     setMsg('Participant updated successfully.');
-    await fetchParticipants();
+    await fetchTestsAndParticipants();
     setLoading(false);
   };
 
-  const totalPages = Math.ceil(participants.length / PAGE_SIZE);
-  const pageData = participants.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const filteredParticipants = selectedTestId 
+    ? participants.filter(p => p.tests && p.tests[selectedTestId])
+    : [];
+
+  const totalPages = Math.ceil(filteredParticipants.length / PAGE_SIZE);
+  const pageData = filteredParticipants.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
     <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
@@ -148,7 +203,24 @@ function ParticipantsContent() {
           <h1 style={{ fontSize: '1.75rem' }}>Participant Management</h1>
         </div>
 
-        <div className="grid-2" style={{ gap: 'var(--space-lg)', marginBottom: 'var(--space-xl)' }}>
+        <div className="card" style={{ marginBottom: 'var(--space-xl)' }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label htmlFor="test-select" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Select Test to Manage Participants</label>
+            <select 
+              id="test-select" 
+              value={selectedTestId} 
+              onChange={e => setSelectedTestId(e.target.value)}
+              style={{ maxWidth: 400 }}
+            >
+              <option value="">-- Select a test --</option>
+              {tests.map(t => (<option key={t.id} value={t.id}>{t.title}</option>))}
+            </select>
+          </div>
+        </div>
+
+        {selectedTestId ? (
+        <>
+          <div className="grid-2" style={{ gap: 'var(--space-lg)', marginBottom: 'var(--space-xl)' }}>
           {/* Manual add */}
           <div className="card">
             <h3 style={{ marginBottom: 'var(--space-md)' }}>Add Manually</h3>
@@ -158,7 +230,7 @@ function ParticipantsContent() {
                 id="email-input"
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
-                placeholder="John Doe, student1@example.com&#10;Jane Smith, student2@example.com"
+                placeholder={"John Doe, student1@example.com\nJane Smith, student2@example.com"}
                 rows={5}
               />
             </div>
@@ -299,6 +371,12 @@ function ParticipantsContent() {
             </div>
           )}
         </div>
+        </>
+        ) : (
+          <div className="card" style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}>
+            <p style={{ color: 'var(--text-muted)' }}>Please select a test above to view and manage participants.</p>
+          </div>
+        )}
       </div>
     </main>
   );

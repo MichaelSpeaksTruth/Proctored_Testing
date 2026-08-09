@@ -5,24 +5,28 @@ import { useEffect, useState, useRef } from 'react';
 interface Props {
   durationSeconds: number;
   onExpire?: () => void;
+  onTick?: (remaining: number) => void;
   label?: string;
 }
 
-export default function CountdownTimer({ durationSeconds, onExpire, label }: Props) {
+export default function CountdownTimer({ durationSeconds, onExpire, onTick, label }: Props) {
   const [remaining, setRemaining] = useState(durationSeconds);
   const expiredRef = useRef(false);
   const onExpireRef = useRef(onExpire);
+  const onTickRef = useRef(onTick);
 
   useEffect(() => {
     onExpireRef.current = onExpire;
-  }, [onExpire]);
+    onTickRef.current = onTick;
+  }, [onExpire, onTick]);
 
   useEffect(() => {
     expiredRef.current = false;
     setRemaining(durationSeconds);
     const interval = setInterval(() => {
       setRemaining((prev) => {
-        if (prev <= 1) {
+        const next = prev - 1;
+        if (next <= 0) {
           clearInterval(interval);
           if (!expiredRef.current) {
             expiredRef.current = true;
@@ -30,7 +34,8 @@ export default function CountdownTimer({ durationSeconds, onExpire, label }: Pro
           }
           return 0;
         }
-        return prev - 1;
+        onTickRef.current?.(next);
+        return next;
       });
     }, 1000);
     return () => clearInterval(interval);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 
 export interface LeaderboardEntry {
   uid: string;
@@ -77,8 +77,8 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
               const rs = rankStyle(entry.rank);
               const isExpanded = expanded === entry.uid;
               return (
-                <>
-                  <tr key={entry.uid}>
+                <Fragment key={entry.uid}>
+                  <tr>
                     <td>
                       <span className={rs.className} style={{ fontWeight: rs.className ? 700 : 400 }}>{rs.symbol}</span>
                     </td>
@@ -198,6 +198,11 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                                   <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
                                     {new Date(f.startTime || f.timestamp || '').toLocaleTimeString()}
                                   </span>
+                                  {f.snapshotBase64 && (
+                                    <div style={{ marginTop: 'var(--space-sm)' }}>
+                                      <img src={f.snapshotBase64} alt="Infraction Snapshot" style={{ width: '100%', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }} />
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -208,7 +213,7 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>

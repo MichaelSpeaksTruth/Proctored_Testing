@@ -23,6 +23,7 @@ export interface DurationFlag {
   startTime: string;
   endTime: string;
   durationInSeconds: number;
+  snapshotBase64?: string;
 }
 
 export function reportFlag(uid: string, flag: DurationFlag) {

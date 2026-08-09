@@ -13,34 +13,38 @@
  * revalidation tag via Vercel's dashboard if the test changes mid-session.
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 
 export const dynamic = 'force-static';
 export const revalidate = 3600; // 1 hour ISR
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const db = getAdminDb();
+
+    const url = new URL(req.url);
+    let testId = url.searchParams.get('testId');
 
     // Step 1: Read the current test state
     const stateSnap = await db.ref('testState').once('value');
     const state = stateSnap.val();
 
-    if (!state || state.status !== 'active' || !state.activeTestId) {
-      return NextResponse.json(
-        { error: 'No active test.' },
-        {
-          status: 404,
-          headers: {
-            // Don't cache "no active test" responses
-            'Cache-Control': 'no-store',
-          },
-        }
-      );
+    if (!testId) {
+      if (!state || state.status !== 'active' || !state.activeTestId) {
+        return NextResponse.json(
+          { error: 'No active test.' },
+          {
+            status: 404,
+            headers: {
+              // Don't cache "no active test" responses
+              'Cache-Control': 'no-store',
+            },
+          }
+        );
+      }
+      testId = state.activeTestId;
     }
-
-    const testId: string = state.activeTestId;
 
     // Step 2: Read the test data
     const testSnap = await db.ref(`tests/${testId}`).once('value');
