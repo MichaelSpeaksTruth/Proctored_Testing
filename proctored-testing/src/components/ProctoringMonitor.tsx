@@ -249,7 +249,7 @@ export default function ProctoringMonitor({
   onAlignmentUpdate,
 }: Props) {
 
-  const activeInfractions = useRef<Map<ProctoringEvent, { startTime: number; severity: Severity; snapshotBase64?: string }>>(
+  const activeInfractions = useRef<Map<ProctoringEvent, { startTime: number; severity: Severity }>>(
     new Map()
   );
   
@@ -287,34 +287,15 @@ export default function ProctoringMonitor({
       : `proctoringFlags/${uid}/flags`;
   }, [uid, testId, calibrationMode]);
 
-  const captureSnapshot = useCallback(() => {
-    if (!videoRef.current || videoRef.current.readyState < 2) return undefined;
-    try {
-      const cv = document.createElement('canvas');
-      cv.width = 320;
-      cv.height = 240;
-      const ctx = cv.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(videoRef.current, 0, 0, cv.width, cv.height);
-        return cv.toDataURL('image/jpeg', 0.4);
-      }
-    } catch (e) {
-      console.warn('Failed to capture snapshot', e);
-    }
-    return undefined;
-  }, [videoRef]);
+
 
   const openInfraction = useCallback(
     (event: ProctoringEvent, severity: Severity) => {
       if (activeInfractions.current.has(event)) return;
-      let snapshotBase64 = undefined;
-      if (severity === 'critical' || severity === 'high') {
-        snapshotBase64 = captureSnapshot();
-      }
-      activeInfractions.current.set(event, { startTime: Date.now(), severity, snapshotBase64 });
+      activeInfractions.current.set(event, { startTime: Date.now(), severity });
       onViolationStart?.(event, severity);
     },
-    [onViolationStart, captureSnapshot]
+    [onViolationStart]
   );
 
   const closeInfraction = useCallback(
@@ -337,9 +318,6 @@ export default function ProctoringMonitor({
         endTime: new Date(endMs).toISOString(),
         durationInSeconds,
       };
-      if (record.snapshotBase64) {
-        flag.snapshotBase64 = record.snapshotBase64;
-      }
       onViolation?.(flag);
       if (!calibrationMode) push(ref(rtdb, flagPath()), flag);
     },

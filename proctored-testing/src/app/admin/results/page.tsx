@@ -373,8 +373,9 @@ function ResultsContent() {
     await remove(ref(rtdb, `results/${selectedTestId}/${uid}`));
     await remove(ref(rtdb, `submissions/${selectedTestId}/${uid}`));
     await remove(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}`));
+    await remove(ref(rtdb, `tests/${selectedTestId}/participants/${uid}`));
     setLeaderboard(prev => prev.filter(e => e.uid !== uid));
-    setMsg('Test record, submission, and proctoring logs deleted.');
+    setMsg('Test record, submission, proctoring logs, and terms agreement deleted.');
   };
 
 

@@ -32,35 +32,27 @@ Total Time in Violation (Seconds): ${JSON.stringify(durationSummary)}
 Total individual events logged: ${flags.length}
 
 Event definitions:
-- INVALID_FACE_COUNT / MULTIPLE_FACES: Student's face was missing, or multiple faces were in the frame.
+- INVALID_FACE_COUNT / MULTIPLE_FACES / NO_FACE: Student's face was missing, or multiple faces were in the frame.
 - TAB_SWITCHED: Student switched browser tabs or minimized the window.
 - LEFT_FULLSCREEN: Student exited mandatory fullscreen mode.
 - LOUD_AUDIO: Significant audio spike detected (possible talking).
 - CAMERA_COVERED: The webcam lens was physically covered or the room was pitch black.
-Based on the total duration and combination of these events (and any photos provided), determine the overall cheating risk.
+- PHONE_DETECTED: A smartphone was visible in the camera frame.
+- HEAD_PITCH_DOWN / DUCKING_DOWN / SHOULDERS_OUT_OF_FRAME: Looking down or hiding from camera.
+
+Based on the total duration and combination of these events, determine the overall cheating risk.
 Consider: 
-- 1-5 seconds of face missing or audio might be accidental. Low risk.
+- 1-5 seconds of face missing or audio might be accidental (e.g., dropping a pen, clearing throat). Low risk.
 - Tab switching or leaving fullscreen for more than a few seconds is highly suspicious.
 - ANY duration of PHONE_DETECTED or multiple faces is a critical cheating indicator.
-- If snapshots are provided, explicitly state if you observe cheating behavior in them.
 
 Respond ONLY with a JSON object matching exactly this schema:
-{ "severity": "low|medium|high", "summary": "A practical, concise 2-sentence analysis for the exam administrator, explicitly mentioning the total durations in seconds and what was found in the photos if any. (e.g., 'Student left fullscreen for 45 seconds total...')" }`;
-
-    const contentArray: any[] = [{ type: 'text', text: promptText }];
-    
-    // Add up to 3 snapshots to avoid token/size limits
-    const snapshots = flags.filter((f: any) => !!f.snapshotBase64).slice(0, 3);
-    for (const flag of snapshots) {
-      contentArray.push({
-        type: 'image_url',
-        image_url: { url: flag.snapshotBase64 }
-      });
-    }
+{ "severity": "low|medium|high", "summary": "A practical, concise 2-sentence analysis for the exam administrator, explicitly mentioning the total durations in seconds. (e.g., 'Student left fullscreen for 45 seconds total...')" }`;
 
     const completion = await groq.chat.completions.create({
-      messages: [{ role: 'user', content: contentArray }],
-      model: 'qwen/qwen3.6-27b',
+      messages: [{ role: 'user', content: promptText }],
+      model: 'llama-3.3-70b-versatile',
+      response_format: { type: 'json_object' },
       temperature: 0.1,
       max_tokens: 256,
     });
@@ -68,13 +60,7 @@ Respond ONLY with a JSON object matching exactly this schema:
     const raw = completion.choices[0]?.message?.content || '{}';
     let result: any = {};
     try {
-      // Find the first { and last } to extract just the JSON object
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (match) {
-        result = JSON.parse(match[0]);
-      } else {
-        console.warn('No JSON object found in response:', raw);
-      }
+      result = JSON.parse(raw);
     } catch (e) {
       console.warn('Failed to parse output as json:', raw, e);
     }

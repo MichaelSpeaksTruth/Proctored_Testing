@@ -14,6 +14,8 @@ function WaitingRoomContent() {
   const [user, setUser] = useState<{ displayName: string | null; email: string | null } | null>(null);
   const [testStatus, setTestStatus] = useState<string>('pending');
   const [scheduledStart, setScheduledStart] = useState<string | null>(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -30,7 +32,6 @@ function WaitingRoomContent() {
       const data = snap.val();
       if (!data) return;
       
-      // If a different test is currently active/scheduled globally, ignore it
       if (data.activeTestId && selectedTestId && data.activeTestId !== selectedTestId) {
         setTestStatus('pending');
         return;
@@ -38,12 +39,24 @@ function WaitingRoomContent() {
       
       setTestStatus(data.status || 'pending');
       setScheduledStart(data.scheduledStart || null);
-      if (data.status === 'active' && data.activeTestId === selectedTestId) {
-        router.replace('/test');
-      }
     });
     return () => unsub();
-  }, [router]);
+  }, []);
+
+  const handleProceed = async () => {
+    if (!agreedToTerms) return;
+    const selectedTestId = localStorage.getItem('pt_selected_test');
+    if (!selectedTestId || !auth.currentUser) return;
+
+    setIsRedirecting(true);
+    try {
+      const { set } = await import('firebase/database');
+      await set(ref(rtdb, `tests/${selectedTestId}/participants/${auth.currentUser.uid}/TermsAgreeRecord`), `Agree,${new Date().toISOString()}`);
+    } catch (err) {
+      console.error('Failed to log terms agreement:', err);
+    }
+    router.replace('/test');
+  };
 
   return (
     <main
@@ -148,6 +161,33 @@ function WaitingRoomContent() {
                 </li>
               ))}
             </ul>
+
+            <div style={{ marginTop: 'var(--space-lg)', padding: 'var(--space-md)', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  style={{ marginTop: '4px', width: '16px', height: '16px', accentColor: 'var(--primary)' }}
+                />
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                  <strong>Terms & Conditions:</strong> I agree that since this is a proctored test, photo, video, and audio might be taken for internal processing to ensure a free and fair result. I agree to these terms to continue.
+                </span>
+              </label>
+            </div>
+
+            {testStatus === 'active' && (
+              <div style={{ marginTop: 'var(--space-md)', display: 'flex', justifyContent: 'center' }}>
+                <button
+                  className="btn btn-primary btn-lg"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={handleProceed}
+                  disabled={!agreedToTerms || isRedirecting}
+                >
+                  {isRedirecting ? 'Proceeding...' : 'Proceed to Test'}
+                </button>
+              </div>
+            )}
             
             <div className="divider" style={{ margin: 'var(--space-lg) 0 var(--space-md)' }} />
             

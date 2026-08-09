@@ -461,8 +461,7 @@ function TestContent() {
           </div>
           <h2 style={{ marginBottom: 'var(--space-sm)' }}>Camera & Microphone Required</h2>
           <p style={{ marginBottom: 'var(--space-xl)' }}>
-            This proctored examination requires access to your camera and microphone. Your video is
-            processed locally and never sent to any server.
+            This proctored examination requires access to your camera and microphone.
           </p>
           {permError && (
             <div className="alert alert-danger" style={{ marginBottom: 'var(--space-lg)' }}>
