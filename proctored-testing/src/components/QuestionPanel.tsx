@@ -51,7 +51,7 @@ export default function QuestionPanel({
               <button
                 key={idx}
                 id={`option-${question.id}-${letter}`}
-                onClick={() => onChange(letter)}
+                onClick={() => onChange(isSelected ? '' : letter)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
