@@ -68,11 +68,15 @@ Respond ONLY with a JSON object matching exactly this schema:
     const raw = completion.choices[0]?.message?.content || '{}';
     let result: any = {};
     try {
-      // Try parsing if it returns markdown json block
-      const cleaned = raw.replace(/```json\n?/, '').replace(/```/, '').trim();
-      result = JSON.parse(cleaned);
+      // Find the first { and last } to extract just the JSON object
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (match) {
+        result = JSON.parse(match[0]);
+      } else {
+        console.warn('No JSON object found in response:', raw);
+      }
     } catch (e) {
-      console.warn('Failed to parse qwen output as json:', raw);
+      console.warn('Failed to parse output as json:', raw, e);
     }
 
     return NextResponse.json({
