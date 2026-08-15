@@ -45,6 +45,7 @@ function TestContent() {
   const [submitted, setSubmitted] = useState(false);
   const [testFetchError, setTestFetchError] = useState(false);
   const [violation, setViolation] = useState<string | null>(null);
+  const wakeLockRef = useRef<any>(null);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [examStarted, setExamStarted] = useState(false);
   // Student's personal exam start time (stored in localStorage to survive reloads)
@@ -205,6 +206,13 @@ function TestContent() {
     if (!isMobileDevice && !document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(console.error);
     }
+    // Android fix (Bug A7): Request Screen Wake Lock so the display doesn't
+    // turn off mid-exam (causing a visibilitychange TAB_SWITCHED false violation).
+    if ('wakeLock' in navigator) {
+      (navigator as any).wakeLock.request('screen')
+        .then((lock: any) => { wakeLockRef.current = lock; })
+        .catch(() => { /* Wake lock not supported / denied — non-critical */ });
+    }
     // Record the student's personal exam start time so the timer
     // survives page reloads without resetting to the full duration.
     // Key is per-test-per-user to avoid collisions.
@@ -230,7 +238,12 @@ function TestContent() {
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          // Android fix (Bug A1): specify facingMode to force the front camera.
+          // Without this, Android OEMs (Samsung, Xiaomi) often open the rear camera.
+          video: { facingMode: { ideal: 'user' } },
+          audio: true,
+        });
         setStream(mediaStream);
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
@@ -251,11 +264,13 @@ function TestContent() {
         // Final failure or non-retryable error
         setPermError(
           err.name === 'NotReadableError'
-            ? 'Camera is being used by another application. Please close any other video apps (Teams, Zoom, another browser tab) and try again.'
+            ? 'Camera is being used by another application. Please close any other video apps and try again.'
             : err.name === 'NotAllowedError'
-            ? 'Permission denied. Please click the camera icon in the browser address bar and set both Camera and Microphone to Allow, then try again.'
+            ? (isMobileDevice
+                ? 'Permission denied. Please go to your browser Settings → Site Settings → Camera & Microphone, find this site, and allow access. Then reload the page.'
+                : 'Permission denied. Please click the camera icon in the browser address bar and set both Camera and Microphone to Allow, then try again.')
             : err.name === 'NotFoundError'
-            ? 'No camera or microphone found. Please ensure your webcam is connected and not disabled in Windows Device Manager.'
+            ? 'No camera or microphone found. Please ensure your device has a working camera and microphone.'
             : `Device error (${err.name}): ${err.message}`
         );
         break;
@@ -354,6 +369,11 @@ function TestContent() {
     async (autoSubmit = false) => {
       if (submitted || !uid || !testId) return;
       setSubmitted(true);
+      // Release Screen Wake Lock on submit
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
       try {
         // Get a fresh Firebase ID token to authenticate the server request.
         const idToken = await auth.currentUser?.getIdToken();
@@ -453,7 +473,7 @@ function TestContent() {
     return (
       <main
         style={{
-          minHeight: '100vh',
+          minHeight: '100dvh',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -496,7 +516,7 @@ function TestContent() {
     const allGood = hardwareStatus.faceDetected && !hardwareStatus.cameraCovered && hardwareStatus.micWorking;
     
     return (
-      <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)' }}>
+      <main style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)' }}>
         <div className="card" style={{ maxWidth: 480, width: '100%' }}>
           <div style={{ textAlign: 'center', marginBottom: 'var(--space-md)' }}>
             <Monitor size={40} color="var(--text-primary)" />
@@ -550,6 +570,8 @@ function TestContent() {
             videoRef={videoRef}
             overlayCanvasRef={overlayCanvasRef}
             onAlignmentUpdate={setIsAligned}
+            stream={stream}
+            isMobile={isMobileDevice}
           />
         )}
         <div style={{ position: 'fixed', opacity: 0.01, pointerEvents: 'none', zIndex: -1, width: 10, height: 10, overflow: 'hidden' }}>
@@ -994,6 +1016,8 @@ function TestContent() {
           onViolationClear={handleViolationClear}
           overlayCanvasRef={overlayCanvasRef}
           isSubmitting={submitted}
+          stream={stream}
+          isMobile={isMobileDevice}
         />
       )}
       {/* Hidden webcam feed + canvas overlay (not visible to student) */}

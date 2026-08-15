@@ -231,6 +231,10 @@ interface Props {
   isSubmitting?: boolean;
   overlayCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
   onAlignmentUpdate?: (aligned: boolean) => void;
+  /** Parent's MediaStream — audio track is reused to avoid opening a second getUserMedia session (Android fix) */
+  stream?: MediaStream | null;
+  /** When true, skips heavy ML models (COCO-SSD) to prevent OOM on low-RAM Android devices */
+  isMobile?: boolean;
 }
 
 type LM = { x: number; y: number; z: number };
@@ -247,6 +251,8 @@ export default function ProctoringMonitor({
   isSubmitting = false,
   overlayCanvasRef,
   onAlignmentUpdate,
+  stream,
+  isMobile = false,
 }: Props) {
 
   const activeInfractions = useRef<Map<ProctoringEvent, { startTime: number; severity: Severity }>>(
@@ -259,6 +265,13 @@ export default function ProctoringMonitor({
   useEffect(() => {
     isSubmittingRef.current = isSubmitting;
   }, [isSubmitting]);
+
+  // Keep stable refs for isMobile and stream to avoid re-running the heavy
+  // monitoring useEffect when they change (they're set once on mount anyway).
+  const isMobileRef = useRef(isMobile);
+  const streamRef = useRef<MediaStream | null>(stream ?? null);
+  useEffect(() => { isMobileRef.current = isMobile; }, [isMobile]);
+  useEffect(() => { streamRef.current = stream ?? null; }, [stream]);
 
   const hys = useRef<Map<ProctoringEvent, { v: number; c: number }>>(new Map());
   const getHys = (e: ProctoringEvent) => {
@@ -367,9 +380,12 @@ export default function ProctoringMonitor({
         if (visibilityTimeout) { clearTimeout(visibilityTimeout); visibilityTimeout = null; }
         openInfraction('TAB_SWITCHED', 'critical');
       } else {
+        // Android: use a longer buffer because visibilitychange fires on keyboard
+        // open/close, notification shade pull-down, and system dialogs.
+        const buffer = isMobileRef.current ? 3000 : 1500;
         visibilityTimeout = setTimeout(() => {
           closeInfraction('TAB_SWITCHED');
-        }, 1500); // 1.5s buffer against micro-stutters
+        }, buffer);
       }
     };
 
@@ -457,8 +473,22 @@ export default function ProctoringMonitor({
       if (!mounted) return;
       try {
         const tf = await import('@tensorflow/tfjs');
-        await tf.setBackend('webgl');
-        await tf.ready();
+        // Try backends in order: WebGL (fastest) → WASM (any Android) → CPU (fallback)
+        // Some mid-range Android GPUs crash or run out of VRAM with WebGL.
+        const backends = ['webgl', 'wasm', 'cpu'] as const;
+        let backendReady = false;
+        for (const backend of backends) {
+          try {
+            await tf.setBackend(backend);
+            await tf.ready();
+            backendReady = true;
+            break;
+          } catch {
+            console.warn(`[Proctor] TF backend '${backend}' failed, trying next...`);
+          }
+        }
+        if (!backendReady) throw new Error('No TF backend available');
+
         const cocoSsd = await import('@tensorflow-models/coco-ssd');
         const model = await cocoSsd.load({ base: 'mobilenet_v2' });
 
@@ -473,9 +503,10 @@ export default function ProctoringMonitor({
           try {
             detecting = true;
             if (detectCtx && videoRef.current.videoWidth > 0) {
-              detectCtx.filter = 'contrast(1.15) brightness(1.05)';
+              // canvas.filter is unsupported in Android WebView / Samsung Internet < 14
+              if ('filter' in detectCtx) detectCtx.filter = 'contrast(1.15) brightness(1.05)';
               detectCtx.drawImage(videoRef.current, 0, 0, DETECT_W, DETECT_H);
-              detectCtx.filter = 'none';
+              if ('filter' in detectCtx) detectCtx.filter = 'none';
             }
             const preds = await model.detect(detectCanvas);
             const predsNative = await model.detect(videoRef.current);
@@ -523,7 +554,12 @@ export default function ProctoringMonitor({
         console.warn('[Proctor] COCO-SSD load failed:', e);
       }
     };
-    initCoco();
+    // Skip COCO-SSD on mobile: the student IS on their phone so phone-detection
+    // is meaningless, and loading two ML models simultaneously causes OOM crashes
+    // on devices with ≤3GB RAM (Snapdragon 4xx/6xx, older Mali GPUs).
+    if (!isMobileRef.current) {
+      initCoco();
+    }
 
     // ── 3. FaceMesh + Head Pose + Gaze ────────────────────────────────────────
     const initFace = async () => {
@@ -729,8 +765,21 @@ export default function ProctoringMonitor({
       const hCtx = hiddenCv.getContext('2d', { willReadFrequently: true });
 
       try {
-        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        // Android fix (Bug A5): Reuse the parent component's already-open stream
+        // instead of calling getUserMedia again. Some OEMs (Huawei, Xiaomi) throw
+        // NotReadableError when two concurrent getUserMedia sessions are open.
+        if (streamRef.current && streamRef.current.getAudioTracks().length > 0) {
+          audioStream = new MediaStream(streamRef.current.getAudioTracks());
+        } else {
+          audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        }
+
         audioCtx = new AudioContext();
+        // Android fix (Bug A2): AudioContext starts 'suspended' on Android Chrome
+        // due to the Web Audio autoplay policy. Resume it explicitly.
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume();
+        }
         const analyser = audioCtx.createAnalyser();
         analyser.fftSize = 512;
         analyser.smoothingTimeConstant = 0.75;

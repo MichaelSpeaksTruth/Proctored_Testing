@@ -65,7 +65,7 @@ function StudentDashboardContent() {
   }
 
   return (
-    <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
+    <main style={{ minHeight: '100dvh', padding: 'var(--space-xl)' }}>
       <div className="container-narrow" style={{ paddingTop: 'var(--space-2xl)' }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 'var(--space-2xl)' }}>

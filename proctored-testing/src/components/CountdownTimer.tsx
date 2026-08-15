@@ -23,21 +23,29 @@ export default function CountdownTimer({ durationSeconds, onExpire, onTick, labe
   useEffect(() => {
     expiredRef.current = false;
     setRemaining(durationSeconds);
+
+    // Android fix: setInterval(1000) drifts on Android Chrome because the
+    // browser throttles timers when under memory/CPU pressure.
+    // Use a wall-clock (Date.now()) approach instead: poll every 500ms but
+    // compute the remaining time from the actual elapsed wall time.
+    const startTime = Date.now();
+
     const interval = setInterval(() => {
-      setRemaining((prev) => {
-        const next = prev - 1;
-        if (next <= 0) {
-          clearInterval(interval);
-          if (!expiredRef.current) {
-            expiredRef.current = true;
-            onExpireRef.current?.();
-          }
-          return 0;
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      const next = Math.max(0, durationSeconds - elapsed);
+      setRemaining(next);
+
+      if (next <= 0) {
+        clearInterval(interval);
+        if (!expiredRef.current) {
+          expiredRef.current = true;
+          onExpireRef.current?.();
         }
-        onTickRef.current?.(next);
-        return next;
-      });
-    }, 1000);
+        return;
+      }
+      onTickRef.current?.(next);
+    }, 500); // Poll at 500ms so display updates feel instant but uses wall-clock for accuracy
+
     return () => clearInterval(interval);
   }, [durationSeconds]);
 
