@@ -95,29 +95,8 @@ function StudentDashboardContent() {
                     result.roundStatus === 'Eliminated' ? 'badge-red' : 'badge-gray'
                   }`}
                 >
-                  {result.roundStatus || 'Pending'}
+                  {result.roundStatus || 'Results awaited'}
                 </span>
-              </div>
-
-              <div className="grid-3" style={{ gap: 'var(--space-md)', textAlign: 'center' }}>
-                <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--space-md)' }}>
-                  <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 4 }}>Score</div>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--white)' }}>
-                    {result.score}<span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/{result.total}</span>
-                  </div>
-                </div>
-                <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--space-md)' }}>
-                  <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 4 }}>Rank</div>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--white)' }}>
-                    #{result.rank}
-                  </div>
-                </div>
-                <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--space-md)' }}>
-                  <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 4 }}>Percentage</div>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--white)' }}>
-                    {result.total > 0 ? ((result.score / result.total) * 100).toFixed(1) : '0'}%
-                  </div>
-                </div>
               </div>
               
               {result.interviewScheduled && (
