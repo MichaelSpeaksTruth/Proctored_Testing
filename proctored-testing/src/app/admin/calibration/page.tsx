@@ -192,6 +192,7 @@ function CalibrationContent() {
               <ProctoringMonitor
                 uid="admin_calibration"
                 videoRef={videoRef}
+                stream={stream}
                 onViolation={handleViolation}
                 onViolationStart={handleViolationStart}
                 onViolationClear={handleViolationClear}

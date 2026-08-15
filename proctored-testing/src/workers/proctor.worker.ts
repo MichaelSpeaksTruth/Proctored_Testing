@@ -378,6 +378,13 @@ self.addEventListener('message', async (e: MessageEvent<WorkerMessage>) => {
     if (!offscreenCtx || !msg.bitmap) return;
     const bmp = msg.bitmap;
     
+    if (canvasW !== bmp.width || canvasH !== bmp.height) {
+      canvasW = bmp.width;
+      canvasH = bmp.height;
+      offscreenCtx.canvas.width = canvasW;
+      offscreenCtx.canvas.height = canvasH;
+    }
+    
     // Clear canvas
     offscreenCtx.clearRect(0, 0, canvasW, canvasH);
     
