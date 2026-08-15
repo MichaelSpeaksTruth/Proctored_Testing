@@ -508,8 +508,16 @@ export default function ProctoringMonitor({
               detectCtx.drawImage(videoRef.current, 0, 0, DETECT_W, DETECT_H);
               if ('filter' in detectCtx) detectCtx.filter = 'none';
             }
-            const preds = await model.detect(detectCanvas);
-            const predsNative = await model.detect(videoRef.current);
+            let preds: import('@tensorflow-models/coco-ssd').DetectedObject[] = [];
+            let predsNative: import('@tensorflow-models/coco-ssd').DetectedObject[] = [];
+            
+            tf.engine().startScope();
+            try {
+              preds = await model.detect(detectCanvas);
+              predsNative = await model.detect(videoRef.current);
+            } finally {
+              tf.engine().endScope();
+            }
             const all = [...preds, ...predsNative];
 
             // Draw COCO boxes (don't clear - FaceMesh draws first)
@@ -554,10 +562,11 @@ export default function ProctoringMonitor({
         console.warn('[Proctor] COCO-SSD load failed:', e);
       }
     };
-    // Skip COCO-SSD on mobile: the student IS on their phone so phone-detection
-    // is meaningless, and loading two ML models simultaneously causes OOM crashes
-    // on devices with ≤3GB RAM (Snapdragon 4xx/6xx, older Mali GPUs).
-    if (!isMobileRef.current) {
+    // Skip COCO-SSD on mobile OR low-end hardware (≤4 cores): the student IS on their phone so phone-detection
+    // is meaningless on mobile, and loading two ML models simultaneously causes OOM crashes
+    // on devices with ≤4GB RAM or dual/quad-core CPUs.
+    const isLowEndHardware = typeof navigator !== 'undefined' && navigator.hardwareConcurrency <= 4;
+    if (!isMobileRef.current && !isLowEndHardware) {
       initCoco();
     }
 
@@ -727,12 +736,16 @@ export default function ProctoringMonitor({
         let processing = false;
 
         if (videoRef.current) {
+          let lastFrameTime = 0;
           const processFrame = async () => {
             if (!videoRef.current || !mounted || !faceMeshInst) return;
             
             const video = videoRef.current;
             if (video.readyState >= 2 && !video.paused && !video.ended) {
-              if (!processing) {
+              const now = Date.now();
+              // Throttle AI inference to ~12 FPS (83ms delta) to save CPU/RAM
+              if (!processing && now - lastFrameTime >= 83) {
+                lastFrameTime = now;
                 try {
                   processing = true;
                   if (overlayCanvasRef?.current && video.videoWidth > 0) {

@@ -240,8 +240,8 @@ function TestContent() {
       try {
         const mediaStream = await navigator.mediaDevices.getUserMedia({
           // Android fix (Bug A1): specify facingMode to force the front camera.
-          // Without this, Android OEMs (Samsung, Xiaomi) often open the rear camera.
-          video: { facingMode: { ideal: 'user' } },
+          // Performance fix: clamp resolution to 640x480 max to save CPU/RAM on AI
+          video: { facingMode: { ideal: 'user' }, width: { ideal: 640 }, height: { ideal: 480 } },
           audio: true,
         });
         setStream(mediaStream);

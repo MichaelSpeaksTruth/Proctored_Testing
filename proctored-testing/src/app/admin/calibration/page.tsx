@@ -40,7 +40,10 @@ function CalibrationContent() {
     setRequestingPermissions(true);
     setPermError(null);
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const s = await navigator.mediaDevices.getUserMedia({ 
+        video: { width: { ideal: 640 }, height: { ideal: 480 } }, 
+        audio: true 
+      });
       setStream(s);
       if (videoRef.current) videoRef.current.srcObject = s;
       setPermissionsGranted(true);
