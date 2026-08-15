@@ -6,6 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { ref, get } from 'firebase/database';
 import StudentGuard from '@/components/StudentGuard';
 import { Trophy } from 'lucide-react';
+import ShootingStars from '@/components/ShootingStars';
 
 interface Result {
   score: number;
@@ -65,9 +66,8 @@ function StudentDashboardContent() {
   }
 
   return (
-    <main style={{ minHeight: '100dvh', padding: 'var(--space-xl)', background: 'radial-gradient(ellipse at top, var(--bg-secondary) 0%, var(--bg-primary) 100%)', position: 'relative', overflow: 'hidden' }}>
-      {/* Ambient glows */}
-      <div style={{ position: 'absolute', top: '-10%', left: '50%', transform: 'translateX(-50%)', width: '80%', height: '500px', background: 'radial-gradient(circle, rgba(251, 191, 36, 0.05) 0%, transparent 70%)', filter: 'blur(60px)', pointerEvents: 'none' }} />
+    <main style={{ minHeight: '100dvh', padding: 'var(--space-xl)', position: 'relative', overflow: 'hidden' }}>
+      <ShootingStars />
       
       <div className="container-narrow" style={{ paddingTop: 'var(--space-2xl)', position: 'relative', zIndex: 1 }}>
         {/* Header */}
@@ -84,7 +84,7 @@ function StudentDashboardContent() {
         </div>
 
         {results.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: 'var(--space-2xl)', background: 'rgba(39, 39, 42, 0.4)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '24px', boxShadow: '0 24px 48px rgba(0,0,0,0.2)' }}>
+          <div className="card" style={{ textAlign: 'center', padding: 'var(--space-2xl)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '24px', boxShadow: '0 12px 40px rgba(0,0,0,0.2)' }}>
             <div style={{ width: 64, height: 64, margin: '0 auto var(--space-md)', borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
             </div>
@@ -99,9 +99,8 @@ function StudentDashboardContent() {
               <div 
                 key={result.testId} 
                 style={{ 
-                  background: 'rgba(39, 39, 42, 0.4)', 
-                  backdropFilter: 'blur(12px)', 
-                  border: '1px solid rgba(255,255,255,0.08)', 
+                  background: 'var(--bg-card)', 
+                  border: '1px solid var(--border)', 
                   borderRadius: '24px', 
                   padding: 'var(--space-xl)',
                   boxShadow: '0 12px 40px rgba(0,0,0,0.2)',
@@ -109,7 +108,7 @@ function StudentDashboardContent() {
                   transition: 'transform 0.3s ease, border-color 0.3s ease',
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
               >
                 <div className="flex justify-between items-start" style={{ marginBottom: 'var(--space-xl)' }}>
                   <div>
