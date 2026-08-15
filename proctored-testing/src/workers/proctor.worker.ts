@@ -367,7 +367,7 @@ function processFaceMeshResults(results: any) {
 self.addEventListener('message', async (e: MessageEvent<WorkerMessage>) => {
   const msg = e.data;
   if (msg.type === 'INIT') {
-    offscreenCtx = msg.canvas.getContext('2d', { alpha: true, desynchronized: true });
+    offscreenCtx = msg.canvas.getContext('2d', { alpha: true });
     canvasW = msg.canvas.width;
     canvasH = msg.canvas.height;
     isMobileMode = msg.isMobile;

@@ -71,6 +71,13 @@ function CalibrationContent() {
     flagsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [flags]);
 
+  // Sync stream to video element once it mounts
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream, permissionsGranted]);
+
   useEffect(() => () => { stream?.getTracks().forEach(t => t.stop()); }, [stream]);
 
   return (
