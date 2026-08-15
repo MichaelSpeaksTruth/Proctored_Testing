@@ -43,6 +43,7 @@ function TestContent() {
   const [showRestoredBanner, setShowRestoredBanner] = useState(false);
   const [locked, setLocked] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [testFetchError, setTestFetchError] = useState(false);
   const [violation, setViolation] = useState<string | null>(null);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [examStarted, setExamStarted] = useState(false);
@@ -121,14 +122,18 @@ function TestContent() {
     // Fetch questions from the edge-cached API route
     fetch(url)
       .then(async (res) => {
-        if (!res.ok) return; // No active test or error — handled elsewhere
+        if (!res.ok) {
+          setTestFetchError(true);
+          return;
+        }
         const payload = await res.json() as { testId: string; title: string; sections: Section[] };
         setTestId(payload.testId);
         setTestData({ title: payload.title, sections: payload.sections });
+        setTestFetchError(false);
       })
       .catch(() => {
-        // Network failure during question load — student sees the spinner.
-        // They can refresh; localStorage will restore their answers.
+        // Network failure during question load
+        setTestFetchError(true);
       });
   }, []);
 
@@ -738,6 +743,33 @@ function TestContent() {
                 )}
               </div>
             </>
+          ) : testFetchError ? (
+            <div className="loading-center">
+              <div style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
+                <p style={{ color: 'var(--accent-red-light)', marginBottom: 'var(--space-md)', fontSize: '0.9375rem' }}>
+                  Failed to load questions. Please check your connection.
+                </p>
+                <button
+                  className="btn btn-outline"
+                  onClick={() => {
+                    setTestFetchError(false);
+                    const selectedTestId = localStorage.getItem('pt_selected_test');
+                    const url = selectedTestId ? `/api/get-test-questions?testId=${selectedTestId}` : '/api/get-test-questions';
+                    fetch(url)
+                      .then(async (res) => {
+                        if (!res.ok) { setTestFetchError(true); return; }
+                        const payload = await res.json() as { testId: string; title: string; sections: Section[] };
+                        setTestId(payload.testId);
+                        setTestData({ title: payload.title, sections: payload.sections });
+                        setTestFetchError(false);
+                      })
+                      .catch(() => setTestFetchError(true));
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="loading-center"><div className="spinner" /></div>
           )}
@@ -801,18 +833,22 @@ function TestContent() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
+          padding: 'var(--space-md)',
         }}>
           <div style={{
             background: 'var(--bg-card)',
             border: '1px solid rgba(255, 42, 79, 0.2)',
             borderRadius: 16,
-            padding: '32px 40px',
+            padding: 'clamp(20px, 5vw, 40px)',
+            width: '100%',
             maxWidth: 480,
+            maxHeight: '90vh',
+            overflowY: 'auto',
             boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(155, 34, 38, 0.1)',
             textAlign: 'center',
           }}>
             <ShieldAlert size={48} color="#9b2226" style={{ marginBottom: 16 }} />
-            <h2 style={{ color: '#c0c0c0', marginBottom: 16, fontSize: '1.5rem', letterSpacing: '0.02em' }}>Proctoring Agreement</h2>
+            <h2 style={{ color: '#c0c0c0', marginBottom: 16, fontSize: 'clamp(1.1rem, 4vw, 1.5rem)', letterSpacing: '0.02em' }}>Proctoring Agreement</h2>
             <p style={{ color: 'var(--text-muted)', marginBottom: 24, fontSize: '0.9375rem', lineHeight: 1.6 }}>
               This exam uses an advanced monitoring system. Suspicious behavior will be continuously logged and flagged for administrative review. Please ensure you remain in fullscreen, stay visible in the camera, and minimize background noise.
             </p>
@@ -829,46 +865,51 @@ function TestContent() {
 
       {/* ── Enforcement Overlays ── */}
       {reEntryFullscreenLock && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(5, 5, 10, 0.9)', backdropFilter: 'blur(20px)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(5, 5, 10, 0.9)', backdropFilter: 'blur(20px)', padding: 'var(--space-md)' }}>
           <div style={{
             background: 'var(--bg-card)',
             border: '1px solid rgba(255, 42, 79, 0.3)',
             borderRadius: 16,
-            padding: '40px 48px',
+            padding: 'clamp(24px, 5vw, 48px)',
+            width: '100%',
             maxWidth: 480,
             boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(255, 42, 79, 0.1)',
             textAlign: 'center',
           }}>
             <Maximize size={48} color="#ff2a4f" style={{ marginBottom: 20, opacity: 0.9 }} />
-            <h2 style={{ color: '#f5f5f5', marginBottom: 16, fontSize: '1.5rem', letterSpacing: '0.02em' }}>Fullscreen Required</h2>
+            <h2 style={{ color: '#f5f5f5', marginBottom: 16, fontSize: 'clamp(1.1rem, 4vw, 1.5rem)', letterSpacing: '0.02em' }}>Fullscreen Required</h2>
             <p style={{ color: 'var(--text-muted)', marginBottom: 32, fontSize: '0.9375rem', lineHeight: 1.6 }}>
-              You have exited fullscreen mode or switched away from the exam window. To maintain the integrity of this exam, you must remain in fullscreen at all times.
+              {isMobileDevice
+                ? 'You switched away from the exam. Please return and continue your exam.'
+                : 'You have exited fullscreen mode or switched away from the exam window. To maintain the integrity of this exam, you must remain in fullscreen at all times.'}
             </p>
             <button
               className="btn btn-primary btn-lg"
               onClick={() => {
-                document.documentElement.requestFullscreen().catch(console.error);
+                if (!isMobileDevice) {
+                  document.documentElement.requestFullscreen().catch(console.error);
+                }
                 setReEntryFullscreenLock(false);
               }}
               style={{ width: '100%', background: '#ff2a4f', color: '#fff', border: 'none', fontWeight: 600, letterSpacing: '0.05em' }}
             >
-              Resume Fullscreen
+              {isMobileDevice ? 'Return to Exam' : 'Resume Fullscreen'}
             </button>
           </div>
         </div>
       )}
 
       {isShouldersMisaligned && !reEntryFullscreenLock && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(5, 5, 10, 0.9)', backdropFilter: 'blur(20px)' }}>
-          <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(5, 5, 10, 0.9)', backdropFilter: 'blur(20px)', padding: 'var(--space-md)', overflowY: 'auto' }}>
+          <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: 520 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
               <Monitor size={24} color="#e63946" />
-              <h2 style={{ color: '#e63946', margin: 0, fontSize: '1.25rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Camera Alignment Required</h2>
+              <h2 style={{ color: '#e63946', margin: 0, fontSize: 'clamp(0.9rem, 4vw, 1.25rem)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Camera Alignment Required</h2>
             </div>
             
             {/* Animated Laptop Lid Icon */}
             <div style={{
-              width: 80, height: 60, margin: '24px auto', display: 'flex', flexDirection: 'column', alignItems: 'center'
+              width: 80, height: 60, margin: '20px auto', display: 'flex', flexDirection: 'column', alignItems: 'center'
             }}>
               <div style={{
                 width: 60, height: 40, border: '2px solid rgba(255, 255, 255, 0.9)', borderRadius: '4px 4px 0 0',
@@ -881,11 +922,13 @@ function TestContent() {
               }} />
             </div>
 
-            <p style={{ color: 'var(--text-muted)', marginBottom: 32, maxWidth: 400, fontSize: '0.9375rem', lineHeight: 1.6 }}>
+            <p style={{ color: 'var(--text-muted)', marginBottom: 20, maxWidth: 400, fontSize: '0.9375rem', lineHeight: 1.6, padding: '0 var(--space-sm)' }}>
               Adjust your screen angle until your torso is visible within the alignment frame.
             </p>
-            <div style={{ position: 'relative', width: 480, height: 360, background: '#000', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
-              <WebcamFeed stream={stream} embedded={true} />
+
+            {/* Camera preview — responsive, no fixed pixel dimensions */}
+            <div className="shoulder-cam-container" style={{ position: 'relative', width: '100%', maxWidth: 480, background: '#000', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', aspectRatio: '4 / 3' }}>
+              <WebcamFeed stream={stream} embedded={true} sharedVideoRef={videoRef} />
               
               {/* Premium HUD Target Frame */}
               <div style={{ position: 'absolute', top: '15%', bottom: '35%', left: '20%', right: '20%', pointerEvents: 'none' }}>
@@ -896,9 +939,11 @@ function TestContent() {
               </div>
             </div>
             
-            <button className="btn btn-ghost" style={{ marginTop: 24, color: 'var(--text-muted)' }} onClick={() => {
-              document.documentElement.requestFullscreen().catch(console.error);
-            }}>Resume Fullscreen</button>
+            {!isMobileDevice && (
+              <button className="btn btn-ghost" style={{ marginTop: 20, color: 'var(--text-muted)' }} onClick={() => {
+                document.documentElement.requestFullscreen().catch(console.error);
+              }}>Resume Fullscreen</button>
+            )}
           </div>
         </div>
       )}

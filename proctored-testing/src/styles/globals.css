@@ -739,19 +739,22 @@ tr:last-child td { border-bottom: none; }
 
   /* Test page mobile overrides */
   .test-topbar {
-    padding: 10px var(--space-md);
-    gap: var(--space-sm);
+    padding: 8px var(--space-sm);
+    gap: 6px;
+    flex-wrap: nowrap;
+    min-height: 52px;
   }
   .test-topbar .brand-sub { display: none; }
+  .test-topbar .brand-name { font-size: 0.8125rem !important; }
 
   .section-tabs-bar {
-    padding: var(--space-sm) var(--space-md) 0;
+    padding: var(--space-sm) var(--space-sm) 0;
   }
 
   /* Stack: question on top, navigator below */
   .test-body {
     grid-template-columns: 1fr;
-    padding: var(--space-md);
+    padding: var(--space-sm);
     gap: var(--space-md);
   }
   .test-question-area { order: 1; }
@@ -777,10 +780,46 @@ tr:last-child td { border-bottom: none; }
     height: 60px !important;
   }
 
+  /* Landing page: full-width vertical stack */
   .landing-layout {
     flex-direction: column;
-    padding: var(--space-md);
+    padding: var(--space-lg) var(--space-md);
     gap: var(--space-lg);
+    justify-content: flex-start;
+    padding-top: 10vh;
+  }
+
+  /* Landing card: full width on mobile */
+  .landing-card-mobile {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Responsive overlay card */
+  .overlay-card-responsive {
+    padding: 20px !important;
+    margin: var(--space-md) !important;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  /* Shoulder alignment camera container */
+  .shoulder-cam-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 4 / 3;
+  }
+
+  /* Timer on mobile topbar */
+  .timer {
+    font-size: 1.25rem !important;
+  }
+
+  /* Submit button on mobile */
+  .btn-sm {
+    padding: 6px 10px;
+    font-size: 0.8125rem;
   }
 }
 
@@ -794,7 +833,7 @@ tr:last-child td { border-bottom: none; }
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  min-height: 100vh;
+  min-height: 100dvh; /* Use dvh to account for mobile browser chrome */
 }
 
 @keyframes fadeInSlideDown {

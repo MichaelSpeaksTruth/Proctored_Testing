@@ -193,170 +193,172 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="landing-layout">
-      <div style={{ textAlign: 'center' }}>
-        <div
-          style={{
-            width: 72, height: 72, borderRadius: '50%',
-            border: '2px solid var(--border-light)', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', margin: '0 auto var(--space-lg)',
-            background: 'var(--bg-card)', fontSize: '2rem', overflow: 'hidden',
-          }}
-        >
-          <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={72} height={72} style={{ objectFit: 'cover' }} />
+    <main style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+      <div className="landing-layout">
+        <div style={{ textAlign: 'center', flexShrink: 0 }}>
+          <div
+            style={{
+              width: 72, height: 72, borderRadius: '50%',
+              border: '2px solid var(--border-light)', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', margin: '0 auto var(--space-lg)',
+              background: 'var(--bg-card)', fontSize: '2rem', overflow: 'hidden',
+            }}
+          >
+            <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={72} height={72} style={{ objectFit: 'cover' }} />
+          </div>
+          <div style={{ fontSize: '0.6875rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-sm)' }}>
+            BIT Mesra
+          </div>
+          <h1 style={{ fontSize: '2.75rem', fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--white)', lineHeight: 1.1, marginBottom: 'var(--space-sm)' }}>
+            AeroSoc
+          </h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9375rem' }}>
+            Aerospace Society · Official Examination Portal
+          </p>
         </div>
-        <div style={{ fontSize: '0.6875rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-sm)' }}>
-          BIT Mesra
-        </div>
-        <h1 style={{ fontSize: '2.75rem', fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--white)', lineHeight: 1.1, marginBottom: 'var(--space-sm)' }}>
-          AeroSoc
-        </h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9375rem' }}>
-          Aerospace Society · Official Examination Portal
-        </p>
-      </div>
 
-      <div className="card" style={{ width: '100%', maxWidth: 420, textAlign: 'center' }}>
-        {mode === 'candidate' && (
-          <>
-            <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-sm)' }}>Candidate Sign In</h2>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 'var(--space-lg)' }}>
-              Use your registered Google account to access the examination portal. Only pre-approved candidates may sign in.
-            </p>
-            {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--space-lg)', textAlign: 'left' }}>{error}</div>}
-            
-            <button
-              className="btn btn-primary btn-lg"
-              onClick={() => handleGoogleSignIn('candidate')}
-              disabled={loading}
-              style={{ width: '100%', justifyContent: 'center', gap: 12 }}
-            >
-              {loading ? <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : 'Continue with Google'}
-            </button>
-
-            <div className="divider" style={{ margin: 'var(--space-xl) 0 var(--space-md)' }} />
-            <div className="flex-col gap-sm">
-              <button className="btn btn-ghost" onClick={() => { setError(null); setMode('personnel'); }}>
-                Club Personnel Login
+        <div className="card landing-card-mobile" style={{ width: '100%', maxWidth: 420, textAlign: 'center' }}>
+          {mode === 'candidate' && (
+            <>
+              <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-sm)' }}>Candidate Sign In</h2>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 'var(--space-lg)' }}>
+                Use your registered Google account to access the examination portal. Only pre-approved candidates may sign in.
+              </p>
+              {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--space-lg)', textAlign: 'left' }}>{error}</div>}
+              
+              <button
+                className="btn btn-primary btn-lg"
+                onClick={() => handleGoogleSignIn('candidate')}
+                disabled={loading}
+                style={{ width: '100%', justifyContent: 'center', gap: 12 }}
+              >
+                {loading ? <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : 'Continue with Google'}
               </button>
-              <button className="btn btn-ghost" onClick={() => { setError(null); setMode('apply'); }} style={{ color: 'var(--accent-blue)' }}>
-                Seek Permission: Club Personnel Only
-              </button>
-            </div>
-          </>
-        )}
 
-        {mode === 'personnel' && (
-          <>
-            <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-sm)' }}>Personnel Login</h2>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 'var(--space-xl)' }}>
-              Sign in to access your authorized dashboard.
-            </p>
-            {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--space-lg)', textAlign: 'left' }}>{error}</div>}
-            
-            <button
-              className="btn btn-primary btn-lg"
-              onClick={() => handleGoogleSignIn('personnel')}
-              disabled={loading}
-              style={{ width: '100%', justifyContent: 'center', gap: 12 }}
-            >
-              {loading ? <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : 'Continue with Google'}
-            </button>
-
-            <div className="divider" style={{ margin: 'var(--space-xl) 0 var(--space-md)' }} />
-            <button className="btn btn-ghost" onClick={() => { setError(null); setMode('candidate'); }}>
-              ← Back to Candidate Login
-            </button>
-          </>
-        )}
-
-        {mode === 'apply' && (
-          <>
-            <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-sm)' }}>Seek Permission</h2>
-            {applySuccess ? (
-              <div className="alert alert-success" style={{ textAlign: 'left' }}>
-                Application submitted successfully. Please wait for admin approval.
-                <div style={{ marginTop: 'var(--space-md)', textAlign: 'center' }}>
-                  <button className="btn btn-ghost" onClick={() => { setApplySuccess(false); setMode('candidate'); }}>Return to Login</button>
-                </div>
-              </div>
-            ) : (
-              <>
-                {!applyUser ? (
-                  <>
-                    <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 'var(--space-xl)' }}>
-                      Please verify your identity with Google first before applying.
-                    </p>
-                    {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--space-lg)', textAlign: 'left' }}>{error}</div>}
-                    <button
-                      className="btn btn-primary btn-lg"
-                      onClick={() => handleGoogleSignIn('apply')}
-                      disabled={loading}
-                      style={{ width: '100%', justifyContent: 'center' }}
-                    >
-                      {loading ? <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : 'Verify with Google'}
-                    </button>
-                  </>
-                ) : (
-                  <form onSubmit={handleApplySubmit} style={{ textAlign: 'left' }}>
-                    {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--space-md)' }}>{error}</div>}
-                    
-                    <div className="form-group">
-                      <label>Name</label>
-                      <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                    </div>
-                    <div className="form-group">
-                      <label>Position in Club</label>
-                      <input required value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} />
-                    </div>
-                    <div className="form-group">
-                      <label>Roll Number</label>
-                      <input required value={formData.rollNumber} onChange={e => setFormData({...formData, rollNumber: e.target.value})} />
-                    </div>
-                    <div className="form-group">
-                      <label>Email (from Google)</label>
-                      <input required value={formData.email} disabled />
-                    </div>
-                    <div className="form-group">
-                      <label>Confirm Email</label>
-                      <input 
-                        required 
-                        value={formData.confirmEmail} 
-                        onChange={e => setFormData({...formData, confirmEmail: e.target.value})} 
-                        onPaste={e => e.preventDefault()}
-                        onDrop={e => e.preventDefault()}
-                        autoComplete="off"
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Mobile Number</label>
-                      <input required value={formData.mobileNumber} onChange={e => setFormData({...formData, mobileNumber: e.target.value})} />
-                    </div>
-                    <div className="form-group">
-                      <label>Seek permission for</label>
-                      <select required value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
-                        <option value="Question Setter">Question Setter</option>
-                        <option value="Spectator's View">Spectator's View</option>
-                      </select>
-                    </div>
-
-                    <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 'var(--space-md)' }} disabled={loading}>
-                      {loading ? 'Submitting...' : 'Submit Application'}
-                    </button>
-                  </form>
-                )}
-                <div className="divider" style={{ margin: 'var(--space-xl) 0 var(--space-md)' }} />
-                <button className="btn btn-ghost" onClick={() => { setError(null); setMode('candidate'); setApplyUser(null); }} style={{ width: '100%' }}>
-                  ← Back to Candidate Login
+              <div className="divider" style={{ margin: 'var(--space-xl) 0 var(--space-md)' }} />
+              <div className="flex-col gap-sm">
+                <button className="btn btn-ghost" onClick={() => { setError(null); setMode('personnel'); }}>
+                  Club Personnel Login
                 </button>
-              </>
-            )}
-          </>
-        )}
-      </div>
+                <button className="btn btn-ghost" onClick={() => { setError(null); setMode('apply'); }} style={{ color: 'var(--accent-blue)' }}>
+                  Seek Permission: Club Personnel Only
+                </button>
+              </div>
+            </>
+          )}
 
-      <div style={{ marginTop: 'var(--space-2xl)', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-dim)', letterSpacing: '0.04em' }}>
-        AEROSPACE SOCIETY · BIT MESRA · RANCHI
+          {mode === 'personnel' && (
+            <>
+              <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-sm)' }}>Personnel Login</h2>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 'var(--space-xl)' }}>
+                Sign in to access your authorized dashboard.
+              </p>
+              {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--space-lg)', textAlign: 'left' }}>{error}</div>}
+              
+              <button
+                className="btn btn-primary btn-lg"
+                onClick={() => handleGoogleSignIn('personnel')}
+                disabled={loading}
+                style={{ width: '100%', justifyContent: 'center', gap: 12 }}
+              >
+                {loading ? <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : 'Continue with Google'}
+              </button>
+
+              <div className="divider" style={{ margin: 'var(--space-xl) 0 var(--space-md)' }} />
+              <button className="btn btn-ghost" onClick={() => { setError(null); setMode('candidate'); }}>
+                ← Back to Candidate Login
+              </button>
+            </>
+          )}
+
+          {mode === 'apply' && (
+            <>
+              <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-sm)' }}>Seek Permission</h2>
+              {applySuccess ? (
+                <div className="alert alert-success" style={{ textAlign: 'left' }}>
+                  Application submitted successfully. Please wait for admin approval.
+                  <div style={{ marginTop: 'var(--space-md)', textAlign: 'center' }}>
+                    <button className="btn btn-ghost" onClick={() => { setApplySuccess(false); setMode('candidate'); }}>Return to Login</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {!applyUser ? (
+                    <>
+                      <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 'var(--space-xl)' }}>
+                        Please verify your identity with Google first before applying.
+                      </p>
+                      {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--space-lg)', textAlign: 'left' }}>{error}</div>}
+                      <button
+                        className="btn btn-primary btn-lg"
+                        onClick={() => handleGoogleSignIn('apply')}
+                        disabled={loading}
+                        style={{ width: '100%', justifyContent: 'center' }}
+                      >
+                        {loading ? <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : 'Verify with Google'}
+                      </button>
+                    </>
+                  ) : (
+                    <form onSubmit={handleApplySubmit} style={{ textAlign: 'left' }}>
+                      {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--space-md)' }}>{error}</div>}
+                      
+                      <div className="form-group">
+                        <label>Name</label>
+                        <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                      </div>
+                      <div className="form-group">
+                        <label>Position in Club</label>
+                        <input required value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} />
+                      </div>
+                      <div className="form-group">
+                        <label>Roll Number</label>
+                        <input required value={formData.rollNumber} onChange={e => setFormData({...formData, rollNumber: e.target.value})} />
+                      </div>
+                      <div className="form-group">
+                        <label>Email (from Google)</label>
+                        <input required value={formData.email} disabled />
+                      </div>
+                      <div className="form-group">
+                        <label>Confirm Email</label>
+                        <input 
+                          required 
+                          value={formData.confirmEmail} 
+                          onChange={e => setFormData({...formData, confirmEmail: e.target.value})} 
+                          onPaste={e => e.preventDefault()}
+                          onDrop={e => e.preventDefault()}
+                          autoComplete="off"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Mobile Number</label>
+                        <input required value={formData.mobileNumber} onChange={e => setFormData({...formData, mobileNumber: e.target.value})} />
+                      </div>
+                      <div className="form-group">
+                        <label>Seek permission for</label>
+                        <select required value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
+                          <option value="Question Setter">Question Setter</option>
+                          <option value="Spectator's View">Spectator&#39;s View</option>
+                        </select>
+                      </div>
+
+                      <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 'var(--space-md)' }} disabled={loading}>
+                        {loading ? 'Submitting...' : 'Submit Application'}
+                      </button>
+                    </form>
+                  )}
+                  <div className="divider" style={{ margin: 'var(--space-xl) 0 var(--space-md)' }} />
+                  <button className="btn btn-ghost" onClick={() => { setError(null); setMode('candidate'); setApplyUser(null); }} style={{ width: '100%' }}>
+                    ← Back to Candidate Login
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+
+        <div style={{ width: '100%', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-dim)', letterSpacing: '0.04em', marginTop: 'var(--space-lg)' }}>
+          AEROSPACE SOCIETY · BIT MESRA · RANCHI
+        </div>
       </div>
     </main>
   );
