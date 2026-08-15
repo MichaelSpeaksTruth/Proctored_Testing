@@ -72,8 +72,8 @@ function StudentDashboardContent() {
       <div className="container-narrow" style={{ paddingTop: 'var(--space-2xl)', position: 'relative', zIndex: 1 }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 'var(--space-2xl)', animation: 'fadeInDown 0.6s ease-out' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 80, height: 80, borderRadius: '50%', background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(245, 158, 11, 0.05) 100%)', border: '1px solid rgba(251, 191, 36, 0.3)', marginBottom: 'var(--space-lg)', boxShadow: '0 8px 32px rgba(251, 191, 36, 0.1)' }}>
-            <Trophy size={40} color="#fbbf24" style={{ filter: 'drop-shadow(0 4px 8px rgba(251, 191, 36, 0.3))' }} />
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 80, height: 80, borderRadius: '8px', background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(245, 158, 11, 0.05) 100%)', border: '1px solid rgba(251, 191, 36, 0.3)', marginBottom: 'var(--space-lg)' }}>
+            <Trophy size={40} color="#fbbf24" style={{ filter: 'drop-shadow(0 2px 4px rgba(251, 191, 36, 0.3))' }} />
           </div>
           <h1 style={{ fontSize: '3rem', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: 'var(--space-xs)', background: 'linear-gradient(to right, #fff, #a1a1aa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             Candidate Portal
@@ -84,8 +84,8 @@ function StudentDashboardContent() {
         </div>
 
         {results.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: 'var(--space-2xl)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '24px', boxShadow: '0 12px 40px rgba(0,0,0,0.2)' }}>
-            <div style={{ width: 64, height: 64, margin: '0 auto var(--space-md)', borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card" style={{ textAlign: 'center', padding: 'var(--space-2xl)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}>
+            <div style={{ width: 64, height: 64, margin: '0 auto var(--space-md)', borderRadius: '8px', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
             </div>
             <h3 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-xs)' }}>No Results Declared</h3>
@@ -101,9 +101,8 @@ function StudentDashboardContent() {
                 style={{ 
                   background: 'var(--bg-card)', 
                   border: '1px solid var(--border)', 
-                  borderRadius: '24px', 
+                  borderRadius: '8px', 
                   padding: 'var(--space-xl)',
-                  boxShadow: '0 12px 40px rgba(0,0,0,0.2)',
                   animation: `fadeInUp 0.6s ease-out ${idx * 0.15}s both`,
                   transition: 'transform 0.3s ease, border-color 0.3s ease',
                 }}
@@ -120,8 +119,8 @@ function StudentDashboardContent() {
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      padding: '6px 16px',
-                      borderRadius: '999px',
+                      padding: '6px 12px',
+                      borderRadius: '4px',
                       fontSize: '0.8125rem',
                       fontWeight: 600,
                       letterSpacing: '0.04em',
@@ -142,7 +141,7 @@ function StudentDashboardContent() {
                     padding: 'var(--space-lg)', 
                     background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.05) 0%, rgba(245, 158, 11, 0.02) 100%)', 
                     border: '1px solid rgba(251, 191, 36, 0.2)', 
-                    borderRadius: '16px',
+                    borderRadius: '8px',
                     position: 'relative',
                     overflow: 'hidden'
                   }}>
