@@ -635,31 +635,24 @@ function TestContent() {
                  key={currentSection.id}
                  durationSeconds={(() => {
                    if (!testId || !uid) return currentSection.timeLimit;
-                   const storageKey = `pt_section_times_${testId}_${uid}`;
-                   try {
-                     const stored = localStorage.getItem(storageKey);
-                     if (stored) {
-                       const parsed = JSON.parse(stored);
-                       if (typeof parsed[currentSectionIdx] === 'number') {
-                         return Math.max(1, parsed[currentSectionIdx]);
-                       }
-                     }
-                   } catch (e) {
-                     console.error('Failed to parse section times', e);
-                   }
-                   return currentSection.timeLimit;
-                 })()}
-                 label=""
-                 onTick={(rem) => {
-                   if (!testId || !uid) return;
-                   const storageKey = `pt_section_times_${testId}_${uid}`;
+                   const storageKey = `pt_section_end_${testId}_${uid}`;
                    try {
                      const stored = localStorage.getItem(storageKey);
                      const parsed = stored ? JSON.parse(stored) : {};
-                     parsed[currentSectionIdx] = rem;
-                     localStorage.setItem(storageKey, JSON.stringify(parsed));
-                   } catch (e) {}
-                 }}
+                     if (parsed[currentSectionIdx]) {
+                       const endTime = parsed[currentSectionIdx];
+                       const now = Date.now();
+                       return Math.max(1, Math.ceil((endTime - now) / 1000));
+                     } else {
+                       parsed[currentSectionIdx] = Date.now() + currentSection.timeLimit * 1000;
+                       localStorage.setItem(storageKey, JSON.stringify(parsed));
+                       return currentSection.timeLimit;
+                     }
+                   } catch { /* */ }
+                   return currentSection.timeLimit;
+                 })()}
+                 label=""
+                 isStopped={submitted}
                  onExpire={() => {
                    if (currentSectionIdx < totalSections - 1) {
                      setCurrentSectionIdx((i) => i + 1);

@@ -7,9 +7,10 @@ interface Props {
   onExpire?: () => void;
   onTick?: (remaining: number) => void;
   label?: string;
+  isStopped?: boolean;
 }
 
-export default function CountdownTimer({ durationSeconds, onExpire, onTick, label }: Props) {
+export default function CountdownTimer({ durationSeconds, onExpire, onTick, label, isStopped }: Props) {
   const [remaining, setRemaining] = useState(durationSeconds);
   const expiredRef = useRef(false);
   const onExpireRef = useRef(onExpire);
@@ -21,13 +22,11 @@ export default function CountdownTimer({ durationSeconds, onExpire, onTick, labe
   }, [onExpire, onTick]);
 
   useEffect(() => {
+    if (isStopped) return; // Freeze timer if stopped
+
     expiredRef.current = false;
     setRemaining(durationSeconds);
 
-    // Android fix: setInterval(1000) drifts on Android Chrome because the
-    // browser throttles timers when under memory/CPU pressure.
-    // Use a wall-clock (Date.now()) approach instead: poll every 500ms but
-    // compute the remaining time from the actual elapsed wall time.
     const startTime = Date.now();
 
     const interval = setInterval(() => {
@@ -44,10 +43,10 @@ export default function CountdownTimer({ durationSeconds, onExpire, onTick, labe
         return;
       }
       onTickRef.current?.(next);
-    }, 500); // Poll at 500ms so display updates feel instant but uses wall-clock for accuracy
+    }, 500);
 
     return () => clearInterval(interval);
-  }, [durationSeconds]);
+  }, [durationSeconds, isStopped]);
 
   const hours = Math.floor(remaining / 3600);
   const minutes = Math.floor((remaining % 3600) / 60);
