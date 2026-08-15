@@ -117,16 +117,19 @@ function StudentDashboardContent() {
                   </div>
                   <span
                     style={{
-                      padding: '8px 16px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '6px 16px',
                       borderRadius: '999px',
-                      fontSize: '0.875rem',
+                      fontSize: '0.8125rem',
                       fontWeight: 600,
                       letterSpacing: '0.04em',
                       textTransform: 'uppercase',
+                      lineHeight: 1,
                       background: result.roundStatus === 'Qualified' ? 'rgba(16, 185, 129, 0.1)' : result.roundStatus === 'Eliminated' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255, 255, 255, 0.05)',
                       color: result.roundStatus === 'Qualified' ? '#34d399' : result.roundStatus === 'Eliminated' ? '#f87171' : '#a1a1aa',
                       border: `1px solid ${result.roundStatus === 'Qualified' ? 'rgba(16, 185, 129, 0.2)' : result.roundStatus === 'Eliminated' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.1)'}`,
-                      boxShadow: result.roundStatus === 'Qualified' ? '0 0 20px rgba(16, 185, 129, 0.1)' : result.roundStatus === 'Eliminated' ? '0 0 20px rgba(239, 68, 68, 0.1)' : 'none',
                     }}
                   >
                     {result.roundStatus || 'Results awaited'}
