@@ -62,7 +62,12 @@ export default function LoginPage() {
           const testIds = Object.keys(tests);
           if (testIds.length === 1) {
             localStorage.setItem('pt_selected_test', testIds[0]);
-            router.replace('/waiting-room');
+            const subSnap = await get(ref(rtdb, `submissions/${testIds[0]}/${user.uid}`));
+            if (subSnap.exists()) {
+              router.replace('/student-dashboard');
+            } else {
+              router.replace('/waiting-room');
+            }
           } else {
             router.replace('/select-test');
           }
@@ -114,7 +119,12 @@ export default function LoginPage() {
         const testIds = Object.keys(tests);
         if (testIds.length === 1) {
           localStorage.setItem('pt_selected_test', testIds[0]);
-          router.replace('/waiting-room');
+          const subSnap = await get(ref(rtdb, `submissions/${testIds[0]}/${user.uid}`));
+          if (subSnap.exists()) {
+            router.replace('/student-dashboard');
+          } else {
+            router.replace('/waiting-room');
+          }
         } else {
           router.replace('/select-test');
         }

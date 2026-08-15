@@ -18,11 +18,21 @@ function WaitingRoomContent() {
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      if (u) setUser({ displayName: u.displayName, email: u.email });
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        setUser({ displayName: u.displayName, email: u.email });
+        const selectedTestId = localStorage.getItem('pt_selected_test');
+        if (selectedTestId) {
+          const { get } = await import('firebase/database');
+          const subSnap = await get(ref(rtdb, `submissions/${selectedTestId}/${u.uid}`));
+          if (subSnap.exists()) {
+            router.replace('/student-dashboard');
+          }
+        }
+      }
     });
     return () => unsub();
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const selectedTestId = localStorage.getItem('pt_selected_test');
