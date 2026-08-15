@@ -852,3 +852,15 @@ tr:last-child td { border-bottom: none; }
   50% { transform: translateY(12px) rotate(3deg); }
   75% { transform: translateY(4px) rotate(-1deg); }
 }
+
+/* ===== WAITING ROOM OVERRIDES ===== */
+.waiting-status-col { text-align: center; }
+.waiting-logo { margin: 0 auto var(--space-md); }
+.waiting-status-text { justify-content: center; }
+
+@media (max-width: 768px) {
+  .waiting-status-col { text-align: left; }
+  .waiting-logo { margin: 0 0 var(--space-md) 0; }
+  .waiting-status-text { justify-content: flex-start; text-align: left; }
+}
+

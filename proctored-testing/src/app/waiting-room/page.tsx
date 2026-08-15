@@ -73,8 +73,8 @@ function WaitingRoomContent() {
         <div className="grid-2" style={{ gap: 'var(--space-xl)', alignItems: 'center' }}>
           
           {/* Left Column - Status */}
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ width: 72, height: 72, margin: '0 auto var(--space-md)', borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--border-light)' }}>
+          <div className="waiting-status-col">
+            <div style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--border-light)' }} className="waiting-logo">
               <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={72} height={72} style={{ objectFit: 'cover' }} />
             </div>
             <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)', letterSpacing: '-0.02em' }}>Waiting Room</h1>
@@ -110,19 +110,19 @@ function WaitingRoomContent() {
                   Test Status
                 </div>
                 <div
+                  className="waiting-status-text"
                   style={{
                     fontSize: '1.25rem',
                     fontWeight: 700,
                     color: testStatus === 'active' ? '#52b788' : 'var(--text-primary)',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
                     gap: 10,
                   }}
                 >
-                  {testStatus === 'pending' && <><Clock size={20} /> Waiting for Admin</>}
-                  {testStatus === 'active' && <><CheckCircle size={20} /> Test Active - Redirecting...</>}
-                  {testStatus === 'ended' && <><XCircle size={20} /> Test Ended</>}
+                  {testStatus === 'pending' && <><Clock size={20} style={{ flexShrink: 0 }} /> Waiting for Admin</>}
+                  {testStatus === 'active' && <><CheckCircle size={20} style={{ flexShrink: 0 }} /> Test Active - Redirecting...</>}
+                  {testStatus === 'ended' && <><XCircle size={20} style={{ flexShrink: 0 }} /> Test Ended</>}
                 </div>
 
                 {scheduledStart && testStatus === 'pending' && (
@@ -163,15 +163,15 @@ function WaitingRoomContent() {
             </ul>
 
             <div style={{ marginTop: 'var(--space-lg)', padding: 'var(--space-md)', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', textTransform: 'none', letterSpacing: 'normal' }}>
                 <input
                   type="checkbox"
                   checked={agreedToTerms}
                   onChange={(e) => setAgreedToTerms(e.target.checked)}
-                  style={{ marginTop: '4px', width: '16px', height: '16px', accentColor: 'var(--primary)' }}
+                  style={{ marginTop: '4px', width: '16px', height: '16px', accentColor: 'var(--accent-green)' }}
                 />
-                <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                  <strong>Terms & Conditions:</strong> I agree that since this is a proctored test, photo, video, and audio might be taken for internal processing to ensure a free and fair result. I agree to these terms to continue.
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: '1.4', fontWeight: 'normal' }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>Terms & Conditions:</strong> I agree that since this is a proctored test, photo, video, and audio might be taken for internal processing to ensure a free and fair result. I agree to these terms to continue.
                 </span>
               </label>
             </div>
