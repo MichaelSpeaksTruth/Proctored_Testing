@@ -366,7 +366,7 @@ export default function LoginPage() {
           )}
         </div>
 
-        <div style={{ width: '100%', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-dim)', letterSpacing: '0.04em', marginTop: 'var(--space-lg)' }}>
+        <div style={{ width: '100%', textAlign: 'center', fontSize: '0.75rem', color: 'white', letterSpacing: '0.04em', marginTop: 'var(--space-lg)' }}>
           AEROSPACE SOCIETY · BIT MESRA · RANCHI
         </div>
       </div>
