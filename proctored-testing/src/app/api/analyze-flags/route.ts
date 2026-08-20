@@ -51,7 +51,7 @@ Respond ONLY with a JSON object matching exactly this schema:
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: 'user', content: promptText }],
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-70b-versatile',
       response_format: { type: 'json_object' },
       temperature: 0.1,
       max_tokens: 256,
