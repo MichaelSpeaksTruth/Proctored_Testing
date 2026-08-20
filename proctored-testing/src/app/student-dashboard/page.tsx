@@ -79,7 +79,7 @@ function StudentDashboardContent() {
             Candidate Portal
           </h1>
           <p style={{ fontSize: '1.125rem', color: 'var(--text-muted)', letterSpacing: '0.02em' }}>
-            Welcome back, <strong style={{ color: 'var(--text-primary)' }}>{user?.displayName || user?.email}</strong>
+            <strong style={{ color: 'var(--text-primary)' }}>{user?.displayName || user?.email}</strong>
           </p>
         </div>
 
