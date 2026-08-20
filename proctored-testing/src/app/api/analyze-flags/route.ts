@@ -51,8 +51,7 @@ Respond ONLY with a JSON object matching exactly this schema:
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: 'user', content: promptText }],
-      model: 'openai/gpt-oss-20b',
-      response_format: { type: 'json_object' },
+      model: 'openai/gpt-oss-120b',
       temperature: 0.1,
       max_tokens: 256,
     });
@@ -60,7 +59,8 @@ Respond ONLY with a JSON object matching exactly this schema:
     const raw = completion.choices[0]?.message?.content || '{}';
     let result: any = {};
     try {
-      result = JSON.parse(raw);
+      const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+      result = JSON.parse(cleaned);
     } catch (e) {
       console.warn('Failed to parse output as json:', raw, e);
     }
