@@ -1,23 +1,16 @@
 /**
  * /api/get-test-questions — Edge-cached question delivery
  *
- * Reads the active test's questions from Firebase RTDB once, then Vercel's
- * Edge caches the response globally for 1 hour. All subsequent requests are
- * served from the CDN with 0 additional database reads.
- *
- * Cache strategy:
- *   s-maxage=3600          → Vercel Edge CDN holds the response for 1 hour
- *   stale-while-revalidate=86400 → Serves stale while revalidating in background
- *
- * The cache is busted automatically after 1 hour, or you can add a manual
- * revalidation tag via Vercel's dashboard if the test changes mid-session.
+ * Reads the active test's questions from Firebase RTDB live on every request.
+ * Caching has been intentionally disabled (no-store, revalidate=0) to ensure
+ * that any changes or added questions show up instantaneously for students.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 3600; // 1 hour ISR
+export const revalidate = 0; // Disable ISR completely to ensure instant updates
 
 export async function GET(req: NextRequest) {
   try {
@@ -77,9 +70,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(payload, {
       status: 200,
       headers: {
-        // Vercel Edge will cache this globally; stale-while-revalidate keeps
-        // the CDN warm even after s-maxage expires.
-        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+        // Fetch questions live directly from Firebase without caching
+        'Cache-Control': 'no-store',
       },
     });
   } catch (err) {
