@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 export const revalidate = 3600; // 1 hour ISR
 
 export async function GET(req: NextRequest) {
