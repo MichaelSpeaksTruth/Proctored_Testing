@@ -242,7 +242,7 @@ export default function LoginPage() {
                 disabled={loading}
                 style={{ width: '100%', justifyContent: 'center', gap: 12 }}
               >
-                {loading ? <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : 'Continue with Google'}
+                {loading ? <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : 'START TEST'}
               </button>
 
               <div className="divider" style={{ margin: 'var(--space-xl) 0 var(--space-md)' }} />
