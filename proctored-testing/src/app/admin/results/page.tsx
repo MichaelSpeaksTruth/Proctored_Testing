@@ -325,7 +325,7 @@ function ResultsContent() {
       const res = await fetch('/api/analyze-flags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid, flags: entry.flags }),
+        body: JSON.stringify({ uid, flags: entry.flags, score: entry.score, total: entry.total }),
       });
       const data = await res.json();
 

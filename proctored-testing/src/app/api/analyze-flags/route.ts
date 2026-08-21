@@ -6,7 +6,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export async function POST(req: Request) {
   try {
-    const { uid, flags } = await req.json();
+    const { uid, flags, score, total } = await req.json();
 
     if (!uid) {
       return NextResponse.json({ error: 'uid is required' }, { status: 400 });
@@ -25,8 +25,10 @@ export async function POST(req: Request) {
       durationSummary[f.event] = (durationSummary[f.event] || 0) + (f.durationInSeconds || 0);
     }
 
+    const scoreInfo = (score !== undefined && total !== undefined) ? `\nStudent Score: ${score} out of ${total}` : '';
+
     const promptText = `You are an AI proctoring analyst for an official university admission examination at BIT Mesra.
-Review the following proctoring event summary recorded during a student's exam session. The values represent the TOTAL DURATION in seconds that the student was engaged in the infraction.
+Review the following proctoring event summary recorded during a student's exam session. The values represent the TOTAL DURATION in seconds that the student was engaged in the infraction.${scoreInfo}
 
 Total Time in Violation (Seconds): ${JSON.stringify(durationSummary)}
 Total individual events logged: ${flags.length}
@@ -42,30 +44,39 @@ Event definitions:
 - MIC_MUTED: The microphone was muted by the student.
 
 **Scoring Rules:**
-* If there are numerous critical flags (e.g., DUCKING_DOWN, HEAD_PITCH_DOWN, MIC_MUTED, TAB_SWITCHED) or they last for a significant duration, you MUST categorize the severity as 'high'.
-* If there are only minor infractions for a few seconds, categorize as 'medium' or 'low'.
+* If there are numerous critical flags (e.g., DUCKING_DOWN, HEAD_PITCH_DOWN, MIC_MUTED, TAB_SWITCHED) OR if the student has a very high score while having multiple critical/high flags, you MUST categorize the severity as 'high'.
+* If there are only minor infractions for a few seconds and a moderate score, categorize as 'medium' or 'low'.
 * Tab switching or leaving fullscreen for more than a few seconds is highly suspicious.
 * ANY duration of PHONE_DETECTED or multiple faces is a critical cheating indicator.
 
 **Output format:** You must respond in strict JSON format matching EXACTLY this schema:
 {
   "severity": "low|medium|high",
-  "summary": "You MUST write a 2-3 sentence explanation of *why* you gave this risk rating, referencing specific durations and events. NEVER output generic phrases like 'Analysis complete'."
+  "summary": "You MUST write a 2-3 sentence explanation of *why* you gave this risk rating, logically connecting the severity of the logs with the test score and specific timestamps/durations. NEVER output generic phrases like 'Analysis complete'."
 }`;
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: 'user', content: promptText }],
-      model: 'llama-3.3-70b-versatile',
+      model: 'qwen/qwen3.6-27b',
       temperature: 0.1,
-      response_format: { type: "json_object" },
-      max_tokens: 1024,
+      max_tokens: 4096,
     });
 
-    const raw = completion.choices[0]?.message?.content || '{}';
+    let raw = completion.choices[0]?.message?.content || '{}';
+    // Remove <think> blocks commonly produced by reasoning models like Qwen
+    raw = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
     let result: any = {};
     try {
-      const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-      result = JSON.parse(cleaned);
+      // Find the first { and last } to extract JSON
+      const jsonStart = raw.indexOf('{');
+      const jsonEnd = raw.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        const cleaned = raw.substring(jsonStart, jsonEnd + 1);
+        result = JSON.parse(cleaned);
+      } else {
+        throw new Error('No JSON object found in response');
+      }
     } catch (e) {
       console.warn('Failed to parse output as json:', raw, e);
     }
