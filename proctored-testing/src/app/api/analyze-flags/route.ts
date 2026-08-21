@@ -39,21 +39,26 @@ Event definitions:
 - CAMERA_COVERED: The webcam lens was physically covered or the room was pitch black.
 - PHONE_DETECTED: A smartphone was visible in the camera frame.
 - HEAD_PITCH_DOWN / DUCKING_DOWN / SHOULDERS_OUT_OF_FRAME: Looking down or hiding from camera.
+- MIC_MUTED: The microphone was muted by the student.
 
-Based on the total duration and combination of these events, determine the overall cheating risk.
-Consider: 
-- 1-5 seconds of face missing or audio might be accidental (e.g., dropping a pen, clearing throat). Low risk.
-- Tab switching or leaving fullscreen for more than a few seconds is highly suspicious.
-- ANY duration of PHONE_DETECTED or multiple faces is a critical cheating indicator.
+**Scoring Rules:**
+* If there are numerous critical flags (e.g., DUCKING_DOWN, HEAD_PITCH_DOWN, MIC_MUTED, TAB_SWITCHED) or they last for a significant duration, you MUST categorize the severity as 'high'.
+* If there are only minor infractions for a few seconds, categorize as 'medium' or 'low'.
+* Tab switching or leaving fullscreen for more than a few seconds is highly suspicious.
+* ANY duration of PHONE_DETECTED or multiple faces is a critical cheating indicator.
 
-Respond ONLY with a JSON object matching exactly this schema:
-{ "severity": "low|medium|high", "summary": "A practical, concise 2-sentence analysis for the exam administrator, explicitly mentioning the total durations in seconds. (e.g., 'Student left fullscreen for 45 seconds total...')" }`;
+**Output format:** You must respond in strict JSON format matching EXACTLY this schema:
+{
+  "severity": "low|medium|high",
+  "summary": "You MUST write a 2-3 sentence explanation of *why* you gave this risk rating, referencing specific durations and events. NEVER output generic phrases like 'Analysis complete'."
+}`;
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: 'user', content: promptText }],
-      model: 'openai/gpt-oss-120b',
+      model: 'llama-3.3-70b-versatile',
       temperature: 0.1,
-      max_tokens: 256,
+      response_format: { type: "json_object" },
+      max_tokens: 1024,
     });
 
     const raw = completion.choices[0]?.message?.content || '{}';
