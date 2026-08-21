@@ -390,7 +390,7 @@ function ParticipantsContent() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between" style={{ marginTop: 'var(--space-lg)' }}>
               <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, participants.length)} of {participants.length}
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filteredParticipants.length)} of {filteredParticipants.length}
               </span>
               <div className="flex gap-sm">
                 <button className="btn btn-outline btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Prev</button>
