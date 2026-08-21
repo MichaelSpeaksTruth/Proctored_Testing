@@ -44,10 +44,11 @@ Event definitions:
 - MIC_MUTED: The microphone was muted by the student.
 
 **Scoring Rules:**
-* If there are numerous critical flags (e.g., DUCKING_DOWN, HEAD_PITCH_DOWN, MIC_MUTED, TAB_SWITCHED) OR if the student has a very high score while having multiple critical/high flags, you MUST categorize the severity as 'high'.
-* If there are only minor infractions for a few seconds and a moderate score, categorize as 'medium' or 'low'.
-* Tab switching or leaving fullscreen for more than a few seconds is highly suspicious.
-* ANY duration of PHONE_DETECTED or multiple faces is a critical cheating indicator.
+* 0-15 total flags is generally considered normal background noise (e.g., brief face missing, minor movements). Evaluate these strictly as 'low' severity unless there is a critical cheating indicator.
+* 16-40 total flags should be considered 'medium' severity, indicating suspicious behavior that warrants a manual look.
+* 41+ total flags is a strong indicator of sustained rule-breaking and should be categorized as 'high' severity.
+* ANY duration of PHONE_DETECTED or multiple faces is a critical cheating indicator and MUST result in a 'high' severity.
+* When providing the summary, explicitly mention the total number of flags and how it influenced the severity score. Be fair and forgiving for low flag counts.
 
 **Output format:** You must respond in strict JSON format matching EXACTLY this schema:
 {

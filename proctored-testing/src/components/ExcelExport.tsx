@@ -10,12 +10,13 @@ interface ExcelExportProps {
 
 export default function ExcelExport({ data, filename = 'leaderboard_results.xlsx' }: ExcelExportProps) {
   const exportToExcel = () => {
-    // fields: Rank, Name, Email, Score, AI Risk, Round Status
+    // fields: Rank, Name, Email, Score, Flags, AI Risk, Round Status
     const formattedData = data.map(entry => ({
       Rank: entry.rank,
       Name: entry.name,
       Email: entry.email,
       Score: `${entry.score} / ${entry.total}`,
+      Flags: entry.flagCount,
       'AI Risk': entry.aiSeverity || 'N/A',
       'Round Status': entry.roundStatus || 'Pending'
     }));
