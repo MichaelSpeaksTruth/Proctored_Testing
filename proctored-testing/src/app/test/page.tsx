@@ -40,6 +40,9 @@ function TestContent() {
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   // ── Offline-resilient answer state (synced to localStorage) ────
   const { answers, setAnswer, clearPersistedState, wasRestored } = useTestState(testId, uid);
+  const [sectionTimes, setSectionTimes] = useState<Record<number, number>>({});
+  const [timesLoaded, setTimesLoaded] = useState(false);
+  const lastTickRef = useRef<number>(Date.now());
   const [showRestoredBanner, setShowRestoredBanner] = useState(false);
   const [locked, setLocked] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -138,6 +141,25 @@ function TestContent() {
       });
   }, []);
 
+  // Initialize section times from localStorage
+  useEffect(() => {
+    if (testData && uid && testId) {
+      const storageKey = `pt_section_times_${testId}_${uid}`;
+      let stored: Record<number, number> = {};
+      try {
+        const val = localStorage.getItem(storageKey);
+        if (val) stored = JSON.parse(val);
+      } catch {}
+
+      const newTimes: Record<number, number> = {};
+      testData.sections.forEach((sec, idx) => {
+        newTimes[idx] = stored[idx] !== undefined ? stored[idx] : sec.timeLimit;
+      });
+      setSectionTimes(newTimes);
+      setTimesLoaded(true);
+    }
+  }, [testData, uid, testId]);
+
   // ── Show restoration banner when answers are hydrated from localStorage ──
   useEffect(() => {
     if (wasRestored) {
@@ -215,6 +237,39 @@ function TestContent() {
   }, [testId, uid]);
 
   // Persist lives to localStorage whenever they change
+  // ── Central section timer logic ──
+  useEffect(() => {
+    if (!examStarted || submitted || !timesLoaded || penaltyRemaining > 0 || !proctoringAgreementAccepted) {
+      lastTickRef.current = Date.now();
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const elapsedSecs = Math.floor((now - lastTickRef.current) / 1000);
+
+      if (elapsedSecs >= 1) {
+        lastTickRef.current = lastTickRef.current + elapsedSecs * 1000;
+
+        setSectionTimes(prev => {
+          const currentRemaining = prev[currentSectionIdx];
+          if (currentRemaining === undefined || currentRemaining <= 0) return prev;
+
+          const next = Math.max(0, currentRemaining - elapsedSecs);
+          const newState = { ...prev, [currentSectionIdx]: next };
+          
+          if (testId && uid) {
+            const storageKey = `pt_section_times_${testId}_${uid}`;
+            localStorage.setItem(storageKey, JSON.stringify(newState));
+          }
+          
+          return newState;
+        });
+      }
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [examStarted, submitted, timesLoaded, currentSectionIdx, testId, uid, penaltyRemaining, proctoringAgreementAccepted]);
   useEffect(() => {
     if (!testId || !uid) return;
     const livesKey = `pt_lives_${testId}_${uid}`;
@@ -436,6 +491,31 @@ function TestContent() {
     [submitted, uid, testId, answers, clearPersistedState, router]
   );
 
+
+
+  // ── Auto-switching / auto-submitting when section time expires ──
+  useEffect(() => {
+    if (!timesLoaded || submitted) return;
+
+    const currentRem = sectionTimes[currentSectionIdx];
+    if (currentRem === 0) {
+      const available = Object.keys(sectionTimes)
+        .map(Number)
+        .filter(idx => sectionTimes[idx] > 0);
+
+      if (available.length > 0) {
+        // Switch to a random available section
+        const randomIdx = available[Math.floor(Math.random() * available.length)];
+        setCurrentSectionIdx(randomIdx);
+        setCurrentQuestionIdx(0);
+        lastTickRef.current = Date.now();
+      } else {
+        // All sections are 0
+        handleSubmit(true);
+      }
+    }
+  }, [sectionTimes, currentSectionIdx, timesLoaded, submitted, handleSubmit]);
+
   // Cleanup media stream on unmount
   useEffect(() => {
     return () => {
@@ -651,37 +731,18 @@ function TestContent() {
           </div>
           {currentSection && (
              proctoringAgreementAccepted ? (
-               <CountdownTimer
-                 key={currentSection.id}
-                 durationSeconds={(() => {
-                   if (!testId || !uid) return currentSection.timeLimit;
-                   const storageKey = `pt_section_end_${testId}_${uid}`;
-                   try {
-                     const stored = localStorage.getItem(storageKey);
-                     const parsed = stored ? JSON.parse(stored) : {};
-                     if (parsed[currentSectionIdx]) {
-                       const endTime = parsed[currentSectionIdx];
-                       const now = Date.now();
-                       return Math.max(1, Math.ceil((endTime - now) / 1000));
-                     } else {
-                       parsed[currentSectionIdx] = Date.now() + currentSection.timeLimit * 1000;
-                       localStorage.setItem(storageKey, JSON.stringify(parsed));
-                       return currentSection.timeLimit;
-                     }
-                   } catch { /* */ }
-                   return currentSection.timeLimit;
-                 })()}
-                 label=""
-                 isStopped={submitted}
-                 onExpire={() => {
-                   if (currentSectionIdx < totalSections - 1) {
-                     setCurrentSectionIdx((i) => i + 1);
-                     setCurrentQuestionIdx(0);
-                   } else {
-                     handleSubmit(true);
-                   }
-                 }}
-               />
+               <div className="timer-wrapper">
+                 <div className={`timer ${sectionTimes[currentSectionIdx] < (currentSection.timeLimit * 0.1) ? 'danger' : sectionTimes[currentSectionIdx] < (currentSection.timeLimit * 0.25) ? 'warning' : ''}`}>
+                   {(() => {
+                     const rem = sectionTimes[currentSectionIdx] || 0;
+                     const h = Math.floor(rem / 3600);
+                     const m = Math.floor((rem % 3600) / 60);
+                     const s = rem % 60;
+                     const fmt = (n: number) => String(n).padStart(2, '0');
+                     return h > 0 ? `${fmt(h)}:${fmt(m)}:${fmt(s)}` : `${fmt(m)}:${fmt(s)}`;
+                   })()}
+                 </div>
+               </div>
              ) : (
                <div className="timer">--:--:--</div>
              )
@@ -705,22 +766,30 @@ function TestContent() {
             <button
               key={sec.id}
               id={`section-tab-${idx}`}
-              onClick={() => { setCurrentSectionIdx(idx); setCurrentQuestionIdx(0); }}
+              onClick={() => {
+                if (sectionTimes[idx] > 0) {
+                  setCurrentSectionIdx(idx);
+                  setCurrentQuestionIdx(0);
+                  lastTickRef.current = Date.now();
+                }
+              }}
+              disabled={sectionTimes[idx] === 0}
               style={{
                 padding: '8px 16px',
                 background: idx === currentSectionIdx ? 'var(--bg-card)' : 'transparent',
                 border: `1px solid ${idx === currentSectionIdx ? 'var(--border-light)' : 'var(--border)'}`,
                 borderRadius: 'var(--radius-md)',
-                color: idx === currentSectionIdx ? 'var(--text-primary)' : 'var(--text-muted)',
+                color: sectionTimes[idx] === 0 ? 'var(--text-muted)' : (idx === currentSectionIdx ? 'var(--text-primary)' : 'var(--text-muted)'),
+                opacity: sectionTimes[idx] === 0 ? 0.5 : 1,
                 fontFamily: 'var(--font-sans)',
                 fontSize: '0.875rem',
                 fontWeight: 500,
-                cursor: 'pointer',
+                cursor: sectionTimes[idx] === 0 ? 'not-allowed' : 'pointer',
                 whiteSpace: 'nowrap',
                 transition: 'all 150ms ease',
               }}
             >
-              {sec.name}
+              {sec.name} {sectionTimes[idx] === 0 && ' (Ended)'}
             </button>
           ))}
         </div>
@@ -757,11 +826,20 @@ function TestContent() {
                     Next →
                   </button>
                 ) : (
-                  currentSectionIdx < totalSections - 1 ? (
+                  Object.keys(sectionTimes).some(k => Number(k) !== currentSectionIdx && sectionTimes[Number(k)] > 0) ? (
                     <button
                       id="next-section"
                       className="btn btn-primary"
-                      onClick={() => { setCurrentSectionIdx((i) => i + 1); setCurrentQuestionIdx(0); }}
+                      onClick={() => { 
+                        const available = Object.keys(sectionTimes).map(Number).filter(k => k !== currentSectionIdx && sectionTimes[k] > 0);
+                        if (available.length > 0) {
+                          // Try next index, or wrap around, or random.
+                          const nextIdx = available.find(k => k > currentSectionIdx) ?? available[0];
+                          setCurrentSectionIdx(nextIdx);
+                          setCurrentQuestionIdx(0);
+                          lastTickRef.current = Date.now();
+                        }
+                      }}
                     >
                       Next Section →
                     </button>
