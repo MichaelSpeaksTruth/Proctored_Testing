@@ -39,6 +39,9 @@ function StudentDashboardContent() {
         
         if (testsVal) {
           for (const testId of Object.keys(testsVal)) {
+            // Skip ghost tests (deleted tests that only have participant data)
+            if (!testsVal[testId] || !testsVal[testId].title) continue;
+
             const resultSnap = await get(ref(rtdb, `results/${testId}/${u.uid}`));
             const resultVal = resultSnap.val();
             
@@ -46,7 +49,7 @@ function StudentDashboardContent() {
               allResults.push({
                 ...resultVal,
                 testId: testId,
-                testTitle: testsVal[testId].title || testId,
+                testTitle: testsVal[testId].title,
               });
             }
           }

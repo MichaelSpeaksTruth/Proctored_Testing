@@ -161,6 +161,22 @@ function SetupContent() {
   // ── DELETE TEST ─────────────────────────────────────────────────────────────
   const deleteTest = async (testId: string) => {
     setLoading(true);
+    
+    // Clean up test references from all participants
+    const pSnap = await get(ref(rtdb, 'participants'));
+    const pVal = pSnap.val();
+    if (pVal) {
+      const updates: Record<string, any> = {};
+      Object.keys(pVal).forEach(key => {
+        if (pVal[key].tests && pVal[key].tests[testId]) {
+          updates[`participants/${key}/tests/${testId}`] = null;
+        }
+      });
+      if (Object.keys(updates).length > 0) {
+        await update(ref(rtdb), updates);
+      }
+    }
+
     await set(ref(rtdb, `tests/${testId}`), null);
     if (selectedTestId === testId) setSelectedTestId(null);
     await fetchTests();

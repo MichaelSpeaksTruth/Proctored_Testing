@@ -49,10 +49,11 @@ function SelectTestContent() {
         
         const arr: EnrolledTest[] = [];
         for (const tid of testIds) {
-          if (testsVal && testsVal[tid]) {
+          // Ensure test has a title to filter out deleted "ghost" tests
+          if (testsVal && testsVal[tid] && testsVal[tid].title) {
             arr.push({
               id: tid,
-              title: testsVal[tid].title || `Test (${tid})`
+              title: testsVal[tid].title
             });
           }
         }
