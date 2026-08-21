@@ -157,8 +157,8 @@ function TestContent() {
         }
       });
 
-      // Check for admin reset via the new 'resets' node or fallback to proctoring flags
-      get(ref(rtdb, `resets/${testId}/${uid}`)).then(resetSnap => {
+      // Check for admin reset via the resetAt flag in proctoringFlags (which avoids Firebase rules permission denied)
+      get(ref(rtdb, `proctoringFlags/${uid}/${testId}/resetAt`)).then(resetSnap => {
         const resetTime = resetSnap.val();
         const startKey = `pt_exam_start_${testId}_${uid}`;
         const startTimeStr = localStorage.getItem(startKey);

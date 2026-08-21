@@ -372,9 +372,8 @@ function ResultsContent() {
     if (!confirm('Are you sure you want to delete this past test record? This will also remove their submission and proctoring flags.')) return;
     await remove(ref(rtdb, `results/${selectedTestId}/${uid}`));
     await remove(ref(rtdb, `submissions/${selectedTestId}/${uid}`));
-    await remove(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}`));
+    await set(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}`), { resetAt: Date.now() });
     await remove(ref(rtdb, `tests/${selectedTestId}/participants/${uid}`));
-    await set(ref(rtdb, `resets/${selectedTestId}/${uid}`), Date.now());
     setLeaderboard(prev => prev.filter(e => e.uid !== uid));
     setMsg('Test record, submission, proctoring logs, and terms agreement deleted. Student can now retake the test.');
   };
