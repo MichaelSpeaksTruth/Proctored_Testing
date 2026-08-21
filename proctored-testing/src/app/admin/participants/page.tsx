@@ -192,6 +192,25 @@ function ParticipantsContent() {
     ? participants.filter(p => p.tests && p.tests[selectedTestId])
     : [];
 
+  const handleDownloadParticipants = async () => {
+    if (!selectedTestId) return;
+    try {
+      const { utils, writeFile } = await import('xlsx');
+      const dataToExport = filteredParticipants.map(p => ({
+        name: p.name || '',
+        email: p.email
+      }));
+      const worksheet = utils.json_to_sheet(dataToExport);
+      const workbook = utils.book_new();
+      utils.book_append_sheet(workbook, worksheet, 'Participants');
+      const testTitle = tests.find(t => t.id === selectedTestId)?.title || selectedTestId;
+      writeFile(workbook, `participants_${testTitle.replace(/\s+/g, '_')}.xlsx`);
+    } catch (e) {
+      console.error('Failed to export participants', e);
+      setError('Failed to export participants file.');
+    }
+  };
+
   const totalPages = Math.ceil(filteredParticipants.length / PAGE_SIZE);
   const pageData = filteredParticipants.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
@@ -267,7 +286,16 @@ function ParticipantsContent() {
         <div className="card">
           <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-md)' }}>
             <h3>Registered Participants</h3>
-            <span className="badge badge-gray">{participants.length} total</span>
+            <div className="flex items-center gap-sm">
+              <button 
+                className="btn btn-outline btn-sm"
+                onClick={handleDownloadParticipants}
+                disabled={filteredParticipants.length === 0}
+              >
+                ⬇ Download XLSX
+              </button>
+              <span className="badge badge-gray">{filteredParticipants.length} total</span>
+            </div>
           </div>
           <table id="participants-table">
             <thead>
