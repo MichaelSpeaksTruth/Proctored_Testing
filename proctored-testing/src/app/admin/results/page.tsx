@@ -374,8 +374,9 @@ function ResultsContent() {
     await remove(ref(rtdb, `submissions/${selectedTestId}/${uid}`));
     await remove(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}`));
     await remove(ref(rtdb, `tests/${selectedTestId}/participants/${uid}`));
+    await set(ref(rtdb, `resets/${selectedTestId}/${uid}`), Date.now());
     setLeaderboard(prev => prev.filter(e => e.uid !== uid));
-    setMsg('Test record, submission, proctoring logs, and terms agreement deleted.');
+    setMsg('Test record, submission, proctoring logs, and terms agreement deleted. Student can now retake the test.');
   };
 
 

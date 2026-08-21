@@ -116,7 +116,14 @@ export default function LoginPage() {
         
         const val = pSnap.val();
         const tests = val.tests || {};
-        const testIds = Object.keys(tests);
+        let testIds = Object.keys(tests);
+
+        if (testIds.length > 1) {
+          const testsSnap = await get(ref(rtdb, 'tests'));
+          const testsVal = testsSnap.val() || {};
+          testIds = testIds.filter(tid => testsVal[tid]);
+        }
+
         if (testIds.length === 1) {
           localStorage.setItem('pt_selected_test', testIds[0]);
           const subSnap = await get(ref(rtdb, `submissions/${testIds[0]}/${user.uid}`));

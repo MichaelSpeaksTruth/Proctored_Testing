@@ -157,21 +157,41 @@ function TestContent() {
         }
       });
 
-      // If the admin deleted their record, their backend flags will be gone.
-      // If they have < 5 lives locally but 0 flags on the backend, it means their attempt was reset!
-      get(ref(rtdb, `proctoringFlags/${uid}/${testId}/flags`)).then(snap => {
-        const flagsData = snap.val();
-        if (!flagsData) {
-          const storedLives = localStorage.getItem(`pt_lives_${testId}_${uid}`);
-          if (storedLives && parseInt(storedLives, 10) < 5) {
+      // Check for admin reset via the new 'resets' node or fallback to proctoring flags
+      get(ref(rtdb, `resets/${testId}/${uid}`)).then(resetSnap => {
+        const resetTime = resetSnap.val();
+        const startKey = `pt_exam_start_${testId}_${uid}`;
+        const startTimeStr = localStorage.getItem(startKey);
+        const startTime = startTimeStr ? new Date(startTimeStr).getTime() : 0;
+        
+        let shouldReset = false;
+        if (resetTime && resetTime > startTime) {
+          shouldReset = true;
+        }
+
+        get(ref(rtdb, `proctoringFlags/${uid}/${testId}/flags`)).then(flagSnap => {
+          const flagsData = flagSnap.val();
+          if (!flagsData) {
+            const storedLives = localStorage.getItem(`pt_lives_${testId}_${uid}`);
+            if (storedLives && parseInt(storedLives, 10) < 5) {
+               shouldReset = true;
+            }
+          }
+
+          // In case the timer is completely stuck in the past, and they have no submission, 
+          // we can also auto-reset them if they request it, but admin reset is safer.
+
+          if (shouldReset) {
             console.log('Admin reset detected. Clearing local state.');
             setLives(5);
             localStorage.removeItem(`pt_lives_${testId}_${uid}`);
             localStorage.removeItem(`pt_exam_start_${testId}_${uid}`);
+            localStorage.removeItem(`pt_section_end_${testId}_${uid}`);
             localStorage.removeItem(`pt_section_times_${testId}_${uid}`);
-            // Note: answers are handled separately by useTestState, but the timers/lives are now reset.
+            clearPersistedState(); // Clear answers from useTestState
+            setStudentExamStartedAt(null);
           }
-        }
+        });
       });
     }
   }, [uid, testId, router]);

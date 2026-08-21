@@ -49,11 +49,21 @@ function SelectTestContent() {
         
         const arr: EnrolledTest[] = [];
         for (const tid of testIds) {
-          arr.push({
-            id: tid,
-            title: testsVal?.[tid]?.title || `Test (${tid})`
-          });
+          if (testsVal && testsVal[tid]) {
+            arr.push({
+              id: tid,
+              title: testsVal[tid].title || `Test (${tid})`
+            });
+          }
         }
+        
+        // If they only have 1 valid test, just redirect them directly!
+        if (arr.length === 1) {
+          localStorage.setItem('pt_selected_test', arr[0].id);
+          router.replace('/waiting-room');
+          return;
+        }
+
         setEnrolledTests(arr);
         
       } catch (err) {
