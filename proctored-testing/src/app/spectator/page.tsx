@@ -118,7 +118,7 @@ function SpectatorContent() {
   }, [leaderboard, isInterviewerMode, searchQuery]);
 
   return (
-    <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
+    <main className="main-content" style={{ minHeight: '100vh' }}>
       <div className="container" style={{ maxWidth: '1200px' }}>
         <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-xl)' }}>
           <h1 style={{ fontSize: '1.75rem', margin: 0 }}>Spectator Dashboard</h1>
