@@ -40,6 +40,15 @@ function SpectatorContent() {
     const fetchExistingResults = async () => {
       setLoading(true);
       try {
+        const testStateSnap = await get(ref(rtdb, `testState/${selectedTestId}`));
+        const testState = testStateSnap.val();
+        if (!testState || !testState.resultsDeclared) {
+          setResultsDeclared(false);
+          setLeaderboard([]);
+          setLoading(false);
+          return;
+        }
+
         const resultsSnap = await get(ref(rtdb, `results/${selectedTestId}`));
         const resultsVal = resultsSnap.val();
         if (resultsVal) {
