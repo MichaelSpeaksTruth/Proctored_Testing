@@ -35,8 +35,7 @@ function ParticipantsContent() {
   const encodeEmail = (e: string) => e.replace(/\./g, ',');
   const decodeEmail = (e: string) => e.replace(/,/g, '.');
 
-  const fetchTestsAndParticipants = async () => {
-    // Fetch tests
+  const fetchTests = async () => {
     try {
       const res = await fetch('/api/tests-list');
       const testsArr = await res.json();
@@ -44,22 +43,35 @@ function ParticipantsContent() {
     } catch (e) {
       console.error(e);
     }
-
-    // Fetch participants
-    const snap = await get(ref(rtdb, 'participants'));
-    const val = snap.val();
-    if (!val) {
-      setParticipants([]);
-      return;
-    }
-    const parsed = Object.keys(val).map(key => ({
-      email: decodeEmail(key),
-      ...(val[key] as { allowed: boolean; name?: string; tests?: Record<string, boolean> })
-    }));
-    setParticipants(parsed);
   };
 
-  useEffect(() => { fetchTestsAndParticipants(); }, []);
+  useEffect(() => { 
+    fetchTests(); 
+    
+    // Use onValue for participants to automatically handle any auth timing issues
+    // and keep the participants list in sync in real-time.
+    import('firebase/database').then(({ onValue }) => {
+      const unsub = onValue(ref(rtdb, 'participants'), (snap) => {
+        const val = snap.val();
+        if (!val) {
+          setParticipants([]);
+          setError(null);
+          return;
+        }
+        const parsed = Object.keys(val).map(key => ({
+          email: decodeEmail(key),
+          ...(val[key] as { allowed: boolean; name?: string; tests?: Record<string, boolean> })
+        }));
+        setParticipants(parsed);
+        setError(null);
+      }, (err) => {
+        console.error("Failed to fetch participants:", err);
+        setError("Failed to load participants: " + err.message);
+      });
+      
+      return () => unsub();
+    });
+  }, []);
 
   const addParticipant = async (name: string, email: string) => {
     if (!selectedTestId) return false;
@@ -104,7 +116,6 @@ function ParticipantsContent() {
        setMsg(`Added ${count} participant(s).`);
     }
     setEmailInput('');
-    await fetchTestsAndParticipants();
     setLoading(false);
   };
 
@@ -126,7 +137,6 @@ function ParticipantsContent() {
         if (await addParticipant(name, email)) count++;
       }
       setMsg(`Imported ${count} participant(s) from file.`);
-      await fetchTestsAndParticipants();
     } catch (e) {
       setError('Failed to parse file. Ensure it has an "email" column.');
     } finally {
@@ -151,7 +161,6 @@ function ParticipantsContent() {
     } else {
       await remove(ref(rtdb, `participants/${key}`));
     }
-    await fetchTestsAndParticipants();
   };
 
   const handleSaveEdit = async (oldEmail: string) => {
@@ -185,7 +194,6 @@ function ParticipantsContent() {
     
     setEditingEmail(null);
     setMsg('Participant updated successfully.');
-    await fetchTestsAndParticipants();
     setLoading(false);
   };
 
