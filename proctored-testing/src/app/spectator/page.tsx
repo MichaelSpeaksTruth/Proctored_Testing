@@ -57,10 +57,17 @@ function SpectatorContent() {
           const entries: LeaderboardEntry[] = await Promise.all(uids.map(async (uid) => {
             const data = resultsVal[uid];
             
-            // Get proctoring flags
-            const flagsSnap = await get(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}/flags`));
-            const flagsData = flagsSnap.val();
-            const flags = flagsData ? Object.values(flagsData) as any[] : [];
+            // Get proctoring flags safely
+            let flags: any[] = [];
+            try {
+              const flagsSnap = await get(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}/flags`));
+              const flagsData = flagsSnap.val();
+              if (flagsData) {
+                flags = Object.values(flagsData);
+              }
+            } catch (err) {
+              console.warn(`Could not read proctoring flags for ${uid}:`, err);
+            }
             
             return {
               uid,
