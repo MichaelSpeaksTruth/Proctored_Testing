@@ -151,7 +151,7 @@ function SpectatorContent() {
         {resultsDeclared && leaderboard.length > 0 && (
           <div className="card">
             <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
-              <div className="flex items-center gap-md">
+              <div className="flex items-center gap-md" style={{ flexWrap: 'wrap' }}>
                 <h2 style={{ fontSize: '1.375rem', margin: 0 }}>Leaderboard</h2>
                 <button 
                   className={`btn btn-sm ${isInterviewerMode ? 'btn-primary' : 'btn-outline'}`}
@@ -160,7 +160,7 @@ function SpectatorContent() {
                   {isInterviewerMode ? 'Interviewer Mode: ON' : 'Interviewer Mode: OFF'}
                 </button>
               </div>
-              <div className="flex items-center gap-md">
+              <div className="flex items-center gap-md" style={{ flexWrap: 'wrap', width: '100%' }}>
                 {isInterviewerMode && (
                   <input
                     type="text"
@@ -168,7 +168,7 @@ function SpectatorContent() {
                     placeholder="Search candidate name..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ width: '250px' }}
+                    style={{ flex: 1, minWidth: '200px' }}
                   />
                 )}
                 <ExcelExport data={filteredLeaderboard as any} filename={`leaderboard_${selectedTestId}.xlsx`} />

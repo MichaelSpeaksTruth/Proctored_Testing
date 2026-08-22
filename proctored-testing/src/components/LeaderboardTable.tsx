@@ -79,10 +79,10 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
               return (
                 <Fragment key={entry.uid}>
                   <tr>
-                    <td>
+                    <td data-label="Rank">
                       <span className={rs.className} style={{ fontWeight: rs.className ? 700 : 400 }}>{rs.symbol}</span>
                     </td>
-                    <td style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+                    <td data-label="Name" style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
                       {entry.name}
                       {entry.integrityFlag === 'DELAYED_SUBMISSION' && (
                         <div style={{ marginTop: 4 }}>
@@ -92,19 +92,19 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                         </div>
                       )}
                     </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', wordBreak: 'break-all' }}>{entry.email}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                    <td data-label="Email" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', wordBreak: 'break-all' }}>{entry.email}</td>
+                    <td data-label="Score" style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
                       {entry.score}/{entry.total}
                     </td>
-                    <td>
+                    <td data-label="Flags">
                       <span
                         className={`badge ${entry.flagCount > 5 ? 'badge-red' : entry.flagCount > 2 ? 'badge-amber' : 'badge-gray'}`}
                       >
                         {entry.flagCount} flags
                       </span>
                     </td>
-                    <td>{severityBadge(entry.aiSeverity)}</td>
-                    <td>
+                    <td data-label="AI Risk">{severityBadge(entry.aiSeverity)}</td>
+                    <td data-label="Round Status">
                       {onUpdateRoundStatus ? (
                         <select
                           id={`table-round-status-${entry.uid}`}
@@ -121,7 +121,7 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                         <span className="badge badge-gray">{entry.roundStatus || 'Pending'}</span>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Actions">
                       <div className="flex gap-sm" style={{ flexWrap: 'wrap' }}>
                         <button
                           className="btn btn-ghost btn-sm"
