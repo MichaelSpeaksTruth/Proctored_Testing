@@ -26,8 +26,8 @@ export interface LeaderboardEntry {
 
 interface Props {
   entries: LeaderboardEntry[];
-  onAnalyze: (uid: string) => void;
-  analyzing: string | null;
+  onAnalyze?: (uid: string) => void;
+  analyzing?: string | null;
   onDelete?: (uid: string) => void;
   onUpdateRoundStatus?: (uid: string, status: string) => void;
   onEditInfo?: (uid: string) => void;
@@ -138,7 +138,7 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                             Edit Info
                           </button>
                         )}
-                        {!entry.aiSeverity && (
+                        {onAnalyze && !entry.aiSeverity && (
                           <button
                             className="btn btn-outline btn-sm"
                             id={`analyze-${entry.uid}`}

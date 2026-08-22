@@ -119,9 +119,16 @@ export default function LoginPage() {
         let testIds = Object.keys(tests);
 
         if (testIds.length > 1) {
-          const testsSnap = await get(ref(rtdb, 'tests'));
-          const testsVal = testsSnap.val() || {};
-          testIds = testIds.filter(tid => testsVal[tid]);
+          try {
+            const res = await fetch('/api/tests-list');
+            const testsList = await res.json();
+            if (Array.isArray(testsList)) {
+              const activeTestIds = testsList.map(t => t.id);
+              testIds = testIds.filter(tid => activeTestIds.includes(tid));
+            }
+          } catch (e) {
+            console.error(e);
+          }
         }
 
         if (testIds.length === 1) {

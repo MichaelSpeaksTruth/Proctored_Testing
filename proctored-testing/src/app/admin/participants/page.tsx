@@ -37,12 +37,13 @@ function ParticipantsContent() {
 
   const fetchTestsAndParticipants = async () => {
     // Fetch tests
-    const testsSnap = await get(ref(rtdb, 'tests'));
-    const testsVal = testsSnap.val();
-    const testsArr = testsVal 
-      ? Object.keys(testsVal).map(key => ({ id: key, title: testsVal[key].title || key }))
-      : [];
-    setTests(testsArr);
+    try {
+      const res = await fetch('/api/tests-list');
+      const testsArr = await res.json();
+      if (Array.isArray(testsArr)) setTests(testsArr);
+    } catch (e) {
+      console.error(e);
+    }
 
     // Fetch participants
     const snap = await get(ref(rtdb, 'participants'));

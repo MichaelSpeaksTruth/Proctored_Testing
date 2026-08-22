@@ -1,39 +1,34 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { rtdb, auth } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
 import RoleGuard from '@/components/RoleGuard';
 import ExcelExport from '@/components/ExcelExport';
+import LeaderboardTable, { LeaderboardEntry } from '@/components/LeaderboardTable';
 
 interface TestOption { id: string; title: string; }
-
-// Use a simplified local version of LeaderboardEntry for spectator view to avoid coupling with admin components
-interface SpectatorLeaderboardEntry {
-  uid: string;
-  name: string;
-  email: string;
-  score: number;
-  total: number;
-  rank: number;
-  roundStatus?: string;
-  aiSeverity?: string;
-}
 
 function SpectatorContent() {
   const [tests, setTests] = useState<TestOption[]>([]);
   const [selectedTestId, setSelectedTestId] = useState('');
-  const [leaderboard, setLeaderboard] = useState<SpectatorLeaderboardEntry[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [resultsDeclared, setResultsDeclared] = useState(false);
+  
+  // Interviewer Mode states
+  const [isInterviewerMode, setIsInterviewerMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    get(ref(rtdb, 'tests')).then(snap => {
-      const val = snap.val();
-      if (val) {
-        setTests(Object.keys(val).map(key => ({ id: key, title: val[key].title || key })));
-      }
-    });
+    fetch('/api/tests-list')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setTests(data);
+        }
+      })
+      .catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -49,11 +44,16 @@ function SpectatorContent() {
         const resultsVal = resultsSnap.val();
         if (resultsVal) {
           setResultsDeclared(true);
-          const entries: SpectatorLeaderboardEntry[] = [];
-          
-          for (const uid of Object.keys(resultsVal)) {
+          const uids = Object.keys(resultsVal);
+          const entries: LeaderboardEntry[] = await Promise.all(uids.map(async (uid) => {
             const data = resultsVal[uid];
-            entries.push({
+            
+            // Get proctoring flags
+            const flagsSnap = await get(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}/flags`));
+            const flagsData = flagsSnap.val();
+            const flags = flagsData ? Object.values(flagsData) as any[] : [];
+            
+            return {
               uid,
               name: data.name || 'Unknown Name',
               email: data.email || 'Unknown Email',
@@ -61,9 +61,19 @@ function SpectatorContent() {
               total: data.total,
               rank: data.rank,
               roundStatus: data.roundStatus || 'Pending',
+              flagCount: flags.length,
+              flags,
               aiSeverity: data.aiSeverity,
-            });
-          }
+              aiSummary: data.aiSummary,
+              interviewScheduled: data.interviewScheduled,
+              panelNo: data.panelNo,
+              venue: data.venue,
+              dateTime: data.dateTime,
+              integrityFlag: data.integrityFlag,
+              delaySeconds: data.delaySeconds,
+              flagNote: data.flagNote,
+            };
+          }));
           entries.sort((a, b) => a.rank - b.rank);
           setLeaderboard(entries);
         } else {
@@ -78,6 +88,18 @@ function SpectatorContent() {
     };
     fetchExistingResults();
   }, [selectedTestId]);
+
+  const filteredLeaderboard = useMemo(() => {
+    let result = leaderboard;
+    if (isInterviewerMode) {
+      result = result.filter(e => e.roundStatus === 'Qualified' || e.roundStatus === 'Waitlisted');
+    }
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(e => e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q));
+    }
+    return result;
+  }, [leaderboard, isInterviewerMode, searchQuery]);
 
   return (
     <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
@@ -112,50 +134,40 @@ function SpectatorContent() {
 
         {resultsDeclared && leaderboard.length > 0 && (
           <div className="card">
-            <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)' }}>
-              <h2 style={{ fontSize: '1.375rem' }}>Leaderboard</h2>
-              <ExcelExport data={leaderboard as any} filename={`leaderboard_${selectedTestId}.xlsx`} />
+            <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
+              <div className="flex items-center gap-md">
+                <h2 style={{ fontSize: '1.375rem', margin: 0 }}>Leaderboard</h2>
+                <button 
+                  className={`btn btn-sm ${isInterviewerMode ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setIsInterviewerMode(!isInterviewerMode)}
+                >
+                  {isInterviewerMode ? 'Interviewer Mode: ON' : 'Interviewer Mode: OFF'}
+                </button>
+              </div>
+              <div className="flex items-center gap-md">
+                {isInterviewerMode && (
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="Search candidate name..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ width: '250px' }}
+                  />
+                )}
+                <ExcelExport data={filteredLeaderboard as any} filename={`leaderboard_${selectedTestId}.xlsx`} />
+              </div>
             </div>
+            
+            {isInterviewerMode && (
+              <div className="alert alert-info" style={{ marginBottom: 'var(--space-md)' }}>
+                <strong>Interviewer Mode Active:</strong> Showing only Qualified and Waitlisted candidates. Click "Details" to view the AI review and proctoring flags.
+              </div>
+            )}
 
-            <div className="table-responsive">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Rank</th>
-                    <th>Candidate</th>
-                    <th>Score</th>
-                    <th>AI Risk</th>
-                    <th>Round Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaderboard.map(entry => (
-                    <tr key={entry.uid}>
-                      <td><div className="badge badge-gray">#{entry.rank}</div></td>
-                      <td>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{entry.name}</div>
-                        <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{entry.email}</div>
-                      </td>
-                      <td style={{ fontWeight: 700 }}>{entry.score} <span style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', fontWeight: 400 }}>/ {entry.total}</span></td>
-                      <td>
-                        {entry.aiSeverity ? (
-                          <span className={`badge ${entry.aiSeverity === 'High' ? 'badge-red' : entry.aiSeverity === 'Medium' ? 'badge-yellow' : 'badge-green'}`}>
-                            {entry.aiSeverity}
-                          </span>
-                        ) : (
-                          <span className="badge badge-gray">N/A</span>
-                        )}
-                      </td>
-                      <td>
-                        <span className={`badge ${entry.roundStatus === 'Passed' ? 'badge-green' : entry.roundStatus === 'Failed' ? 'badge-red' : 'badge-gray'}`}>
-                          {entry.roundStatus}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <LeaderboardTable
+              entries={filteredLeaderboard}
+            />
           </div>
         )}
       </div>

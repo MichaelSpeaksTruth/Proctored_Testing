@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { rtdb } from '@/lib/firebase';
 import { ref, get, set, update, remove } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
@@ -26,14 +26,26 @@ function ResultsContent() {
   const [roundStatusUpdates, setRoundStatusUpdates] = useState<Record<string, string>>({});
   const [editingDetailsFor, setEditingDetailsFor] = useState<string | null>(null);
   const [detailsForm, setDetailsForm] = useState({ interviewScheduled: false, panelNo: '', venue: '', dateTime: '' });
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredLeaderboard = useMemo(() => {
+    if (!searchQuery.trim()) return leaderboard;
+    const q = searchQuery.toLowerCase();
+    return leaderboard.filter(e => 
+      e.name.toLowerCase().includes(q) || 
+      e.email.toLowerCase().includes(q)
+    );
+  }, [leaderboard, searchQuery]);
 
   useEffect(() => {
-    get(ref(rtdb, 'tests')).then(snap => {
-      const val = snap.val();
-      if (val) {
-        setTests(Object.keys(val).map(key => ({ id: key, title: val[key].title || key })));
-      }
-    });
+    fetch('/api/tests-list')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setTests(data);
+        }
+      })
+      .catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -57,8 +69,8 @@ function ResultsContent() {
             }
           });
 
-          const entries: LeaderboardEntry[] = [];
-          for (const uid of Object.keys(resultsVal)) {
+          const uids = Object.keys(resultsVal);
+          const entries: LeaderboardEntry[] = await Promise.all(uids.map(async (uid) => {
             const data = resultsVal[uid];
             // Get proctoring flags
             const flagsSnap = await get(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}/flags`));
@@ -72,7 +84,7 @@ function ResultsContent() {
               fallbackName = isEmailUid ? 'Unknown Name' : (data.email?.split('@')[0] || 'Unknown Name');
             }
 
-            entries.push({
+            return {
               uid,
               name: fallbackName,
               email: fallbackEmail,
@@ -91,8 +103,8 @@ function ResultsContent() {
               integrityFlag: data.integrityFlag,
               delaySeconds: data.delaySeconds,
               flagNote: data.flagNote,
-            });
-          }
+            };
+          }));
           entries.sort((a, b) => b.score - a.score);
           setLeaderboard(entries);
         } else {
@@ -256,11 +268,10 @@ function ResultsContent() {
 
       // Sort by score descending, assign ranks
       scored.sort((a, b) => b.score - a.score);
-      const entries: LeaderboardEntry[] = [];
 
-      // Fetch proctoring flags for each
-      for (let i = 0; i < scored.length; i++) {
-        const { uid, email, name, score } = scored[i];
+      // Fetch proctoring flags for each and update results
+      const entries: LeaderboardEntry[] = await Promise.all(scored.map(async (candidate, i) => {
+        const { uid, email, name, score } = candidate;
         const rank = i + 1;
 
         const existingResultSnap = await get(ref(rtdb, `results/${selectedTestId}/${uid}`));
@@ -283,7 +294,7 @@ function ResultsContent() {
           ? Object.values(flagsData) as { event: string; severity: string; timestamp?: string; startTime?: string }[]
           : [];
 
-        entries.push({
+        return {
           uid,
           name,
           email,
@@ -299,8 +310,8 @@ function ResultsContent() {
           panelNo: existingVal.panelNo,
           venue: existingVal.venue,
           dateTime: existingVal.dateTime,
-        });
-      }
+        };
+      }));
 
       // Set global testState flag to unlock Spectator view
       await update(ref(rtdb, `testState/${selectedTestId}`), {
@@ -454,11 +465,21 @@ function ResultsContent() {
         {/* Leaderboard */}
         {leaderboard.length > 0 && (
           <div className="card">
-            <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)' }}>
-              <h2 style={{ fontSize: '1.375rem' }}>Leaderboard</h2>
-              <div className="flex items-center gap-sm">
-                <span className="badge badge-gray">{leaderboard.length} candidates</span>
-                <ExcelExport data={leaderboard as any} filename={`leaderboard_${selectedTestId}.xlsx`} />
+            <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
+              <h2 style={{ fontSize: '1.375rem', margin: 0 }}>Leaderboard</h2>
+              <div className="flex items-center gap-md">
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Search candidate name or email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ width: '250px' }}
+                />
+                <div className="flex items-center gap-sm">
+                  <span className="badge badge-gray">{filteredLeaderboard.length} candidates</span>
+                  <ExcelExport data={filteredLeaderboard as any} filename={`leaderboard_${selectedTestId}.xlsx`} />
+                </div>
               </div>
             </div>
 
@@ -467,7 +488,7 @@ function ResultsContent() {
             </div>
 
             <LeaderboardTable
-              entries={leaderboard}
+              entries={filteredLeaderboard}
               onAnalyze={analyzeStudent}
               analyzing={analyzing}
               onDelete={deleteResult}

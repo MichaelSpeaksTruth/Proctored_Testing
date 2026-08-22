@@ -17,13 +17,14 @@ function ControlContent() {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    get(ref(rtdb, 'tests')).then(snap => {
-      const val = snap.val();
-      if (val) {
-        const testsArr = Object.keys(val).map(key => ({ id: key, title: val[key].title || key }));
-        setTests(testsArr);
-      }
-    });
+    fetch('/api/tests-list')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setTests(data);
+        }
+      })
+      .catch(console.error);
 
     const stateRef = ref(rtdb, 'testState');
     const unsub = onValue(stateRef, snap => {

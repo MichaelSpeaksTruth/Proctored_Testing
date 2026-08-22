@@ -44,17 +44,16 @@ function SelectTestContent() {
           return;
         }
         
-        const testsSnap = await get(ref(rtdb, 'tests'));
-        const testsVal = testsSnap.val();
+        const res = await fetch('/api/tests-list');
+        const testsList = await res.json();
         
         const arr: EnrolledTest[] = [];
-        for (const tid of testIds) {
-          // Ensure test has a title to filter out deleted "ghost" tests
-          if (testsVal && testsVal[tid] && testsVal[tid].title) {
-            arr.push({
-              id: tid,
-              title: testsVal[tid].title
-            });
+        if (Array.isArray(testsList)) {
+          for (const tid of testIds) {
+            const test = testsList.find(t => t.id === tid);
+            if (test) {
+              arr.push({ id: tid, title: test.title });
+            }
           }
         }
         

@@ -33,15 +33,13 @@ function StudentDashboardContent() {
 
       // Fetch all test results for this student
       try {
-        const testsSnap = await get(ref(rtdb, 'tests'));
-        const testsVal = testsSnap.val();
+        const res = await fetch('/api/tests-list');
+        const testsList = await res.json();
         const allResults: Result[] = [];
         
-        if (testsVal) {
-          for (const testId of Object.keys(testsVal)) {
-            // Skip ghost tests (deleted tests that only have participant data)
-            if (!testsVal[testId] || !testsVal[testId].title) continue;
-
+        if (Array.isArray(testsList)) {
+          for (const test of testsList) {
+            const testId = test.id;
             const resultSnap = await get(ref(rtdb, `results/${testId}/${u.uid}`));
             const resultVal = resultSnap.val();
             
@@ -49,7 +47,7 @@ function StudentDashboardContent() {
               allResults.push({
                 ...resultVal,
                 testId: testId,
-                testTitle: testsVal[testId].title,
+                testTitle: test.title,
               });
             }
           }
