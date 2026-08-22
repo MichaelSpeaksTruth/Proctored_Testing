@@ -58,7 +58,7 @@ Event definitions:
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: 'user', content: promptText }],
-      model: 'qwen/qwen3.6-27b',
+      model: 'openai/gpt-oss-120b',
       temperature: 0.1,
       max_tokens: 4096,
     });
@@ -86,8 +86,20 @@ Event definitions:
       severity: result.severity || 'low',
       summary: result.summary || 'Analysis complete.',
     });
-  } catch (err) {
-    console.error('Groq analysis error:', err);
+  } catch (err: any) {
+    console.error('Groq analysis error:', err.message || err);
+    
+    if (err.status === 429 || (err.error && err.error.error && err.error.error.code === 'rate_limit_exceeded')) {
+      const msg = err.error?.error?.message || 'Rate limit reached.';
+      const waitMatch = msg.match(/try again in ([0-9a-z.]+)/i);
+      const waitTime = waitMatch ? waitMatch[1] : 'a few minutes';
+      
+      return NextResponse.json(
+        { error: `API Rate limit reached. Please try again in ${waitTime}.`, severity: null, summary: null },
+        { status: 429 }
+      );
+    }
+
     return NextResponse.json(
       { error: 'Analysis failed. Please try again.', severity: null, summary: null },
       { status: 500 }

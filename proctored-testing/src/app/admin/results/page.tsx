@@ -329,6 +329,12 @@ function ResultsContent() {
       });
       const data = await res.json();
 
+      if (data.error) {
+        setError(data.error);
+        setMsg(null);
+        return;
+      }
+
       if (selectedTestId && data.severity) {
         await update(ref(rtdb, `results/${selectedTestId}/${uid}`), {
           aiSeverity: data.severity,
@@ -343,8 +349,10 @@ function ResultsContent() {
             : e
         )
       );
-    } catch (e) {
+    } catch (e: any) {
       console.error('Groq analysis failed:', e);
+      setError(e.message || 'Analysis failed to run.');
+      setMsg(null);
     } finally {
       setAnalyzing(null);
     }
