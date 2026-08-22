@@ -86,35 +86,41 @@ function SelectTestContent() {
     <main style={{ minHeight: '100vh', padding: 'var(--space-xl)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       <div className="card" style={{ maxWidth: 600, width: '100%' }}>
         <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-sm)' }}>Select Examination</h1>
-        <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--space-xl)' }}>
-          You are enrolled in multiple examinations. Please select the one you wish to attend right now.
-        </p>
-        
         {enrolledTests.length === 0 ? (
-          <div style={{ padding: 'var(--space-lg)', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)' }}>
-            <p style={{ color: 'var(--text-muted)' }}>You are not currently enrolled in any tests. Please contact administration.</p>
-          </div>
+          <>
+            <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--space-xl)' }}>
+              No Examinations Available
+            </p>
+            <div style={{ padding: 'var(--space-lg)', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)' }}>
+              <p style={{ color: 'var(--text-muted)' }}>You are not currently enrolled in any tests. Please contact administration.</p>
+            </div>
+          </>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-            {enrolledTests.map(t => (
-              <button 
-                key={t.id} 
-                onClick={() => selectTest(t.id)}
-                className="btn btn-outline"
-                style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'flex-start', 
-                  padding: 'var(--space-md)', 
-                  height: 'auto',
-                  textAlign: 'left'
-                }}
-              >
-                <strong style={{ fontSize: '1.125rem', color: 'var(--text-primary)', marginBottom: 4 }}>{t.title}</strong>
-                <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>ID: {t.id}</span>
-              </button>
-            ))}
-          </div>
+          <>
+            <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--space-xl)' }}>
+              You are enrolled in multiple examinations. Please select the one you wish to attend right now.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+              {enrolledTests.map(t => (
+                <button 
+                  key={t.id} 
+                  onClick={() => selectTest(t.id)}
+                  className="btn btn-outline"
+                  style={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'flex-start', 
+                    padding: 'var(--space-md)', 
+                    height: 'auto',
+                    textAlign: 'left'
+                  }}
+                >
+                  <strong style={{ fontSize: '1.125rem', color: 'var(--text-primary)', marginBottom: 4 }}>{t.title}</strong>
+                  <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>ID: {t.id}</span>
+                </button>
+              ))}
+            </div>
+          </>
         )}
         
         <div className="divider" style={{ marginTop: 'var(--space-xl)' }} />

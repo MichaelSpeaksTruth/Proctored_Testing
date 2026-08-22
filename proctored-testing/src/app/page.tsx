@@ -38,6 +38,11 @@ export default function LoginPage() {
           return;
         }
         
+        if (mode === 'apply') {
+          setChecking(false);
+          return;
+        }
+        
         const encodeEmail = (e: string) => e.replace(/\./g, ',');
         const key = encodeEmail(user.email!.toLowerCase());
 
@@ -59,7 +64,21 @@ export default function LoginPage() {
         if (pSnap.exists() && pSnap.val()?.allowed === true) {
           const val = pSnap.val();
           const tests = val.tests || {};
-          const testIds = Object.keys(tests);
+          let testIds = Object.keys(tests);
+          
+          if (testIds.length > 0) {
+            try {
+              const res = await fetch('/api/tests-list');
+              const testsList = await res.json();
+              if (Array.isArray(testsList)) {
+                const activeTestIds = testsList.map((t: any) => t.id);
+                testIds = testIds.filter(tid => activeTestIds.includes(tid));
+              }
+            } catch (e) {
+              console.error(e);
+            }
+          }
+
           if (testIds.length === 1) {
             localStorage.setItem('pt_selected_test', testIds[0]);
             const subSnap = await get(ref(rtdb, `submissions/${testIds[0]}/${user.uid}`));
@@ -81,7 +100,7 @@ export default function LoginPage() {
       }
     });
     return () => unsub();
-  }, [router]);
+  }, [router, mode]);
 
   const handleGoogleSignIn = async (signInMode: 'candidate' | 'personnel' | 'apply') => {
     setLoading(true);
@@ -118,12 +137,12 @@ export default function LoginPage() {
         const tests = val.tests || {};
         let testIds = Object.keys(tests);
 
-        if (testIds.length > 1) {
+        if (testIds.length > 0) {
           try {
             const res = await fetch('/api/tests-list');
             const testsList = await res.json();
             if (Array.isArray(testsList)) {
-              const activeTestIds = testsList.map(t => t.id);
+              const activeTestIds = testsList.map((t: any) => t.id);
               testIds = testIds.filter(tid => activeTestIds.includes(tid));
             }
           } catch (e) {

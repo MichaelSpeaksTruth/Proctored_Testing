@@ -389,6 +389,24 @@ function ResultsContent() {
   const deleteResult = async (uid: string) => {
     if (!selectedTestId) return;
     if (!confirm('Are you sure you want to delete this past test record? This will also remove their submission and proctoring flags.')) return;
+    
+    // Get their email to update global participants
+    const entry = leaderboard.find(e => e.uid === uid);
+    if (entry && entry.email) {
+      const encodeEmail = (e: string) => e.replace(/\./g, ',');
+      const key = encodeEmail(entry.email.toLowerCase());
+      const pSnap = await get(ref(rtdb, `participants/${key}`));
+      const pVal = pSnap.val();
+      if (pVal && pVal.tests) {
+        delete pVal.tests[selectedTestId];
+        if (Object.keys(pVal.tests).length === 0) {
+          await remove(ref(rtdb, `participants/${key}`));
+        } else {
+          await set(ref(rtdb, `participants/${key}`), pVal);
+        }
+      }
+    }
+
     await remove(ref(rtdb, `results/${selectedTestId}/${uid}`));
     await remove(ref(rtdb, `submissions/${selectedTestId}/${uid}`));
     await set(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}`), { resetAt: Date.now() });
