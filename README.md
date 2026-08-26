@@ -18,84 +18,93 @@ The platform is built specifically for AeroSoc BIT Mesra's Recruitment Online As
 
 **AI Analytics:** Groq API ingests the duration-based logs to generate a final, human-readable proctoring summary for the administrative dashboard.
 
+### Architecture Flowchart
+
+```mermaid
+graph TD
+    subgraph Browser Client Edge
+        A[MediaPipe FaceMesh & Vision]
+        B[Stopwatch State Engine]
+        A -->|Hybrid Pitch Math, Proximity Bounds, Custom Phone Rect| B
+        B -->|Hysteresis Filters, Event Deduplication| C[Single Duration Payload]
+    end
+    
+    subgraph Backend & Cloud Infra
+        C --> D[Firebase Realtime Database]
+        D -->|Telemetry & Event Logs| E[Groq API LLM Risk Analyzer]
+        E -->|Structured JSON Risk Rating| F[Admin Dashboard]
+    end
+```
+
 ## 3. High-Concurrency Resilience and Scalability
 
 The platform is engineered specifically to handle the Thundering Herd scenario, where 500 or more users click "Start Test" at the exact same millisecond. Traditional architectures fail under this stress due to database connection limits and strict API rate limiting. This platform guarantees stability for 500+ concurrent users processing 100+ MCQs through a four-pillar distributed architecture.
 
 ### 3.1 Overcoming Firebase Realtime Database Limitations
 
-**The Limitation:** Firebase Realtime Database imposes strict bandwidth limits (10GB per month on the free tier) and connection limits (100 concurrent connections on Spark). If 500 users maintain a persistent WebSocket connection to sync their MCQ answers in real time, the database will throttle, disconnect users, and exhaust the quota within hours.
-
 **The Workaround:** 
 1. **Zero-Connection Exam State:** The system strictly prohibits the client application from maintaining an open WebSocket connection to Firebase during the examination.
-2. **Offline-Resilient Persistence:** A custom `useTestState` hook tightly couples the React application state to the browser's `localStorage`. Every time a student selects one of the 100+ MCQs, the answer is synchronously updated on their local machine. This results in exactly zero database writes during the exam phase. If a student loses internet connection, closes the tab, or refreshes the page, their exact progress remains safe on their local SSD and instantly rehydrates upon load.
+2. **Offline-Resilient Persistence:** A custom `useTestState` hook tightly couples the React application state to the browser's `localStorage`. Every time a student selects one of the 100+ MCQs, the answer is synchronously updated on their local machine. This results in exactly zero database writes during the exam phase.
 
 ### 3.2 Overcoming Vercel and Database Read Bottlenecks
 
-**The Limitation:** Fetching a 100+ MCQ JSON payload directly from the database for 500 simultaneous users will trigger massive read spikes, resulting in latency and potential API timeouts.
-
-**The Workaround:**
-**Edge-Cached Question Delivery:** Questions are relayed through a serverless route (`/api/get-test-questions`) rather than direct client-to-database calls. This route is configured with aggressive `Cache-Control` headers (`s-maxage=3600, stale-while-revalidate=86400`). When the first user requests the test, Vercel fetches the payload from Firebase and caches it globally across its Edge Network. The remaining 499 users receive the cached JSON instantly from the Edge node closest to them. The database experiences zero additional reads, neutralizing the traffic spike completely. To purge stale content instantly, administrators can trigger a webhook that executes Vercel's On-Demand Revalidation to clear the Edge cache.
+**Edge-Cached Question Delivery:** Questions are relayed through a serverless route (`/api/get-test-questions`) rather than direct client-to-database calls. This route is configured with aggressive `Cache-Control` headers. When the first user requests the test, Vercel fetches the payload from Firebase and caches it globally across its Edge Network. The database experiences zero additional reads, neutralizing the traffic spike completely.
 
 ### 3.3 Overcoming Submission Bottlenecks
 
-**The Limitation:** When the global timer expires, 500 clients submit massive JSON payloads (100+ answers each) simultaneously. Writing to a single master document or incrementing a global counter causes severe document contention and write failures. Furthermore, clients cannot be trusted to write directly to the database without exposing security rules.
+**Secure Serverless Relay with Isolated Writes:** The final JSON payload is dispatched to a secure Vercel API route (`/api/grade-test`). Each function validates the Firebase Auth ID token server-side and then executes a write to a mathematically isolated path (`submissions/{testId}/{uid}`) using the Firebase Admin SDK. Because the write paths are entirely isolated, there is zero database contention. 
 
-**The Workaround:**
-**Secure Serverless Relay with Isolated Writes:** The final JSON payload is dispatched to a secure Vercel API route (`/api/grade-test`). Vercel automatically scales serverless functions, spinning up 500 independent execution environments instantly. Each function validates the Firebase Auth ID token server-side to prevent spoofing, and then executes a write to a mathematically isolated path (`submissions/{testId}/{uid}`) using the Firebase Admin SDK. Because the write paths are entirely isolated, there is zero database contention. 
+### 3.4 Scalability of Concurrent Proctoring Logs
 
-### 3.4 Defeating the Local Clock Exploit
+When closing infractions, the system uses the RTDB `push()` method (`push(ref(rtdb, flagPath()), flag)`). Firebase push IDs are mathematically guaranteed to be unique and chronologically sortable based on time, meaning thousands of candidates can write concurrently to the same `/flags` path without locking the database or overwriting each other.
 
-**The Vulnerability:** Because the test state is managed offline to save bandwidth, a disconnected user could theoretically alter their local system clock to prevent the timer from expiring, granting them infinite time to solve the 100+ MCQs.
+Furthermore, massive MediaPipe FaceMesh WASM binary and model assets are not bundled locally but fetched dynamically via the global `jsdelivr.net` CDN at runtime to keep initial payload sizes small.
 
-**The Workaround:** The Serverless API enforces strict server-side timestamp validation. When the payload is received, the server compares the current time against the securely logged test activation timestamp. If the calculated duration exceeds the allowed limit plus a rigid network buffer, the submission is accepted but permanently flagged with a `DELAYED_SUBMISSION` integrity flag and automatically marked as Disqualified pending administrative review.
+## 4. Computer Vision & Frame Pipeline Optimization
 
-## 4. Security and Integrity Mechanisms
+- **Memory Leak and WebGL Context Loss Prevention:** The pipeline throttles AI inference to approximately 12 FPS by strictly enforcing a time delta (`now - lastFrameTime >= 83` ms) inside the `requestAnimationFrame` loop. It utilizes a `processing` boolean flag lock to prevent overlapping async inference calls. If MediaPipe throws an error, the `try-catch` block catches and suppresses it, keeping the React lifecycle alive.
+- **Low-Tier Hardware Optimization:** The system checks if the device is a mobile platform or has low CPU cores (`navigator.hardwareConcurrency <= 4`). If the hardware is deemed low-end, the system skips loading the heavy TensorFlow `COCO-SSD` model entirely. Instead, it relies solely on a custom, highly optimized, non-ML rectangle detector (`detectRectangle`) that uses Sobel edge detection and pixel projection to find phone-like bounding boxes every 600ms.
+
+## 5. Telemetry & State Synchronization
+
+- **Tab Closure Protection:** A `flushInfractions` function is bound to the `beforeunload` event. It calculates the duration of active infractions from `startTime` to `Date.now()`, filters out brief anomalies, and synchronously executes Firebase `push()` commands to ensure logs make it to the RTDB before the tab finishes closing.
+- **Debounce and Hysteresis Thresholds:** Infractions are tracked using a dual-counter hysteresis filter. It takes **14 consecutive violating frames** to open an infraction and **20 consecutive clean frames** to clear it. Clean frames decay the violation counter by 2, heavily debouncing micro-stutters and requiring sustained correct posture to clear violations.
+
+## 6. Security and Integrity Mechanisms
 
 The system enforces a strict defense-in-depth security perimeter:
 
-- **Hardware Verification Gate:** The local machine learning pipeline verifies that a face is present, the camera is uncovered, and the microphone is picking up ambient audio before granting access.
-- **Client-Side DOM Restrictions:** Rigorous DOM restrictions disable text selection, drag-to-copy, and context menus. Keydown listeners block keyboard shortcuts for copying or printing, and CSS print media queries obscure all content to defeat print-to-PDF screenshot attacks. 
-- **Tab Tracking:** The Page Visibility API monitors for tab switching or browser minimization, logging infractions immediately.
+- **Firebase Rules RBAC:** The `.validate` rule on the database strictly ensures that `Question Setters` can only edit and submit keys for records where `newData.child('authorEmail').val() == auth.token.email`.
+- **Client-Side DOM Restrictions:** Rigorous DOM restrictions disable text selection, drag-to-copy, and context menus. Keydown listeners block keyboard shortcuts (Ctrl/Cmd + C, A, S, P, U), and `window.print` is actively overridden to defeat PDF exports.
+- **Penalty HUD & DevTools Mitigation:** While advanced users might try to use DevTools to override visual CSS blurs or React state, getting to DevTools typically requires exiting fullscreen. Doing so triggers a `LEFT_FULLSCREEN` infraction, instantly logging a critical violation, deducting a "Life", and putting the user in a 5-second mandatory blurred Penalty Box. 
+- **Time Tampering Defenses:** If an examinee tampers with the local clock heavily to give themselves infinite time, the server-side timestamp validation during submission catches the drift, permanently flagging it with a `DELAYED_SUBMISSION` integrity flag. Additionally, admins can force a client state wipe via a `resetAt` database flag.
 
-**The DevTools Reality Check:** While the browser lockdowns effectively deter casual violations, they rely on JavaScript and CSS, which can be bypassed via browser developer tools. The platform acknowledges this limitation; therefore, the true security perimeter is fundamentally anchored in the Edge ML proctoring pipeline and the server-side timestamp validation. The DOM locks serve merely as a friction layer, not the ultimate source of truth.
+## 7. AI Risk Analysis
 
-## 5. Deployment and Usage
+- **Token Limits:** Before sending the prompt to the Groq LLM, the backend iterates over the raw array of `DurationFlag` objects and structurally aggregates them into a `durationSummary` hash map of total durations by event type. This condensed summary completely bypasses LLM token limits regardless of how many individual logs fired.
+- **Composite Violations Penalty:** The LLM prompt explicitly instructs that 0-15 total flags are benign background noise ('low'), 16-40 is 'medium', and 41+ is 'high'. However, a hardcoded override dictates that **ANY duration** of `PHONE_DETECTED` or `MULTIPLE_FACES` represents a critical cheating event and mandates an immediate 'high' severity risk rating.
+- **Fallback & Rate Limits:** If the LLM returns malformed JSON or reasoning traces (e.g., `<think>`), a regex cleans the payload and extracts the JSON block. If parsing still fails, it gracefully falls back to `{ severity: 'low', summary: 'Analysis complete.' }`. Rate limits (429) correctly parse the wait time and pipe the error back to the client.
 
-**Deployed Application:** https://proctored-testing.vercel.app
-
-**Candidate Workflow:** Candidates authenticate exclusively via pre-approved Google accounts. After granting hardware permissions and passing local environmental checks, the interface enforces a fullscreen constraint. Answers are cached locally in real-time to survive network drops. Upon completion or timer expiration, the answers are securely relayed to the server.
-
-**Administrator Workflow:** Authorized administrators access a secure dashboard to monitor active test takers, review telemetry data, and analyze human-readable proctoring reports generated by the Groq AI integration. This allows for informed, evidence-based decisions regarding candidate integrity.
-
-## 6. Role-Based Access Control and Security Architecture
+## 8. Role-Based Access Control and Security Architecture
 
 The platform features a multi-tiered Role-Based Access Control system for delegating exam responsibilities securely.
 
-**Personnel Request Flow:** Users authenticate via Google Auth to apply for roles such as Question Setter or Spectator. The Firebase Realtime Database rules strictly validate the email payload, preventing unauthorized users from spoofing applications. Administrators manage these requests through a dedicated approval dashboard.
+**Personnel Request Flow:** Users authenticate via Google Auth to apply for roles such as Question Setter or Spectator. The Firebase Realtime Database rules strictly validate the email payload. 
 
-**Question Setter Module:** Approved Question Setters are granted restricted access to create exam sections and upload questions. Each question is automatically stamped with a mathematically unique 9-character alphanumeric tag and bound to the author's email. Database rules strictly prevent cross-author tampering. To facilitate corrections, Question Setters can edit their authored questions post-creation; the application orchestrates surgical mutations via precise Firebase array index paths, bypassing deep validation rule collisions with co-authors. Post-examination, Question Setters are locked into providing answers exclusively for their authored questions.
+**Question Setter Module:** Approved Question Setters create exam sections and upload questions stamped with a mathematically unique 9-character alphanumeric tag and bound to their email. Database rules strictly prevent cross-author tampering.
 
-**Strict Results Declaration and Merge Engine:** The administrative "Declare Results" function implements an unyielding validation check. If any Question Setter fails to upload a valid, non-empty solution for their authored question, the system actively blocks result computation to preserve grading integrity. To streamline administration, the Results dashboard automatically ingests the decentralized solutions submitted by the Question Setters and pre-fills the administrative merge console, eliminating blind-overwrite risks during final grading initialization. 
+**Strict Results Declaration and Merge Engine:** The administrative "Declare Results" function implements an unyielding validation check blocking result computation if any Question Setter fails to upload a valid solution for their authored question.
 
-**Spectator Access:** The Spectator role grants read-only access to the candidate leaderboard. Firebase Database rules enforce a strict locking mechanism where the leaderboard data is completely inaccessible until the Administrator explicitly declares the results. Both Administrators and Spectators can export finalized results in Excel format for offline analysis.
-
-**Proctoring Resilience:** The client-side telemetry module implements debounce buffering on visibility changes to neutralize rapid tab-switching exploits designed to evade duration thresholds. The engine captures anomalous browser closures via synchronized pre-unload flushing and employs global rejection handlers to instantly flag hardware disconnects or camera stream failures. 
-
-**Mobile Responsiveness:** All administrative dashboards, application forms, and data tables are engineered with responsive constraints and overflow-x containers to maintain structural integrity and legibility on mobile viewports.
-
-## 7. Operational Stability and Synchronization
-
-**Global Error Telemetry:** The application implements a highly robust global React Error Boundary that aggressively intercepts uncaught promises, cross-origin communication blocks, and hydration failures. Instead of silently failing or entering infinite redirect loops, the boundary halts execution and displays raw, diagnostic readouts to the user, ensuring full transparency during critical failures.
-
-**State Synchronization Protocol:** Test statuses are decoupled across a global runtime object and individual localized test drafts. When an Administrator issues a "Force Stop" command, the engine explicitly synchronizes the termination flag down to the specific test object. This instantaneous state propagation forces decentralized modules (e.g., the Question Setter dashboard) to immediately switch contexts from "Exam Construction" to "Solution Upload" mode.
-
-## 8. Precision Proctoring and Edge Case Management
+## 9. Precision Proctoring and Edge Case Management
 
 **Non-Disruptive Face Tracking:** Traditional proctoring tools actively disrupt examinations for minor infractions, causing extreme candidate anxiety. This platform re-engineers face tracking algorithms (`HEAD_PITCH_DOWN`, `DUCKING_DOWN`, `NO_FACE`) to operate as a silent telemetry engine. When a student looks at their lap or drops out of frame, the system deducts a life from the persistent gamified HUD and instantly logs a critical severity flag to the Firebase backend for administrative review. It deliberately suppresses all client-side popup notifications and screen locks, allowing the test to continue completely uninterrupted.
 
 **Targeted Alignment HUD:** Conversely, gross postural misalignments (`SHOULDERS_OUT_OF_FRAME`) trigger an exclusive, non-punitive "Camera Alignment Required" overlay. This HUD blurs the exam and projects a live webcam feed with a geometric target frame, forcing the student to physically adjust their hardware. Once the skeletal landmarks satisfy the mathematical boundaries, the overlay instantly dissolves with zero penalty applied.
 
-**State Persistence Under Duress:** To combat accidental browser reloads or malicious attempts to clear penalty states via hard refreshes, the core engine persists the gamified telemetry (Lives/Hearts) directly into `localStorage`. Upon re-initialization, the application seamlessly rehydrates the exact penalty state alongside the localized timer, neutralizing basic evasion tactics. 
+## 10. Deployment and Usage
 
-**Authentication Fault Tolerance:** The explicit sign-in pipeline leverages aggressive try-catch enclosures to handle database permission rejections dynamically. Because standard candidates lack write authorization to the isolated `/participants` node, standard update calls reject with `permission_denied`. The client intercepts this rejection natively, skipping the write and forcing the routing engine to seamlessly advance the candidate into the Waiting Room, eliminating execution hangs.
+**Deployed Application:** https://proctored-testing.vercel.app
+
+**Candidate Workflow:** Candidates authenticate exclusively via pre-approved Google accounts. After granting hardware permissions and passing local environmental checks, the interface enforces a fullscreen constraint. Answers are cached locally in real-time to survive network drops. Upon completion or timer expiration, the answers are securely relayed to the server.
+
+**Administrator Workflow:** Authorized administrators access a secure dashboard to monitor active test takers, review telemetry data, and analyze human-readable proctoring reports generated by the Groq AI integration.
