@@ -369,7 +369,12 @@ export default function ProctoringMonitor({
       }
     };
 
-    const isLowEndHardware = typeof navigator !== 'undefined' && navigator.hardwareConcurrency <= 4;
+    // Skip heavy secondary ML models on mobile OR low-RAM/low-core devices (<= 4GB RAM or <= 4 CPU cores)
+    // to prevent browser tab crashes (OOM) and guarantee smooth 60fps UI performance.
+    const isLowEndHardware =
+      typeof navigator !== 'undefined' &&
+      (navigator.hardwareConcurrency <= 4 ||
+        Boolean((navigator as any).deviceMemory && (navigator as any).deviceMemory <= 4));
     if (!isMobileRef.current && !isLowEndHardware) {
       initCoco();
     }
