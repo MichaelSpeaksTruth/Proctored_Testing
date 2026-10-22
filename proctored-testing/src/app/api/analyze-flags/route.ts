@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
-import { DurationFlag } from '@/lib/proctoring';
+import { DurationFlag, calculateIntegrityScore, isHardViolation } from '@/lib/proctoring';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -15,61 +15,77 @@ export async function POST(req: Request) {
     if (!flags || flags.length === 0) {
       return NextResponse.json({
         severity: 'low',
-        summary: 'No suspicious activity detected. The candidate completed the exam with no proctoring violations.',
+        integrityScore: 100,
+        summary: 'Excellent academic integrity. The candidate completed the exam with zero proctoring infractions.',
       });
     }
 
-    // Summarize flag durations for brevity in the prompt
-    const durationSummary: Record<string, number> = {};
-    for (const f of flags as DurationFlag[]) {
-      durationSummary[f.event] = (durationSummary[f.event] || 0) + (f.durationInSeconds || 0);
+    const flagList = flags as DurationFlag[];
+    const integrityScore = calculateIntegrityScore(flagList);
+
+    // Group flags into Hard Violations vs Soft Telemetry
+    const hardSummary: Record<string, { count: number; totalSeconds: number }> = {};
+    const softSummary: Record<string, { count: number; totalSeconds: number }> = {};
+
+    let totalHardEvents = 0;
+    let totalSoftEvents = 0;
+
+    for (const f of flagList) {
+      const dur = f.durationInSeconds || 0;
+      if (isHardViolation(f.event)) {
+        totalHardEvents++;
+        if (!hardSummary[f.event]) hardSummary[f.event] = { count: 0, totalSeconds: 0 };
+        hardSummary[f.event].count++;
+        hardSummary[f.event].totalSeconds += dur;
+      } else {
+        totalSoftEvents++;
+        if (!softSummary[f.event]) softSummary[f.event] = { count: 0, totalSeconds: 0 };
+        softSummary[f.event].count++;
+        softSummary[f.event].totalSeconds += dur;
+      }
     }
 
-    const scoreInfo = (score !== undefined && total !== undefined) ? `\nStudent Score: ${score} out of ${total}` : '';
+    const scoreInfo = (score !== undefined && total !== undefined) ? `\nStudent Exam Score: ${score} out of ${total}` : '';
 
-    const promptText = `You are an AI proctoring analyst for an official university admission examination at BIT Mesra.
-Review the following proctoring event summary recorded during a student's exam session. The values represent the TOTAL DURATION in seconds that the student was engaged in the infraction.${scoreInfo}
+    const promptText = `You are a fair, objective AI proctoring integrity auditor for an official university engineering examination at BIT Mesra.
+Your task is to analyze candidate session telemetry and provide a reliable, trustworthy integrity assessment.
 
-Total Time in Violation (Seconds): ${JSON.stringify(durationSummary)}
-Total individual events logged: ${flags.length}
+Candidate Statistics:
+- Calculated Integrity Score: ${integrityScore}/100
+- Total Flags: ${flagList.length} (Hard Violations: ${totalHardEvents}, Soft Telemetry: ${totalSoftEvents})${scoreInfo}
 
-Event definitions:
-- INVALID_FACE_COUNT / MULTIPLE_FACES / NO_FACE: Student's face was missing, or multiple faces were in the frame.
-- TAB_SWITCHED: Student switched browser tabs or minimized the window.
-- LEFT_FULLSCREEN: Student exited mandatory fullscreen mode.
-- LOUD_AUDIO: Significant audio spike detected (possible talking).
-- CAMERA_COVERED: The webcam lens was physically covered or the room was pitch black.
-- PHONE_DETECTED: A smartphone was visible in the camera frame.
-- HEAD_PITCH_DOWN / DUCKING_DOWN / SHOULDERS_OUT_OF_FRAME: Looking down or hiding from camera.
-- MIC_MUTED: The microphone was muted by the student.
+Hard Intentional Violations (Tab switches, fullscreen exits, unauthorized devices, multiple faces):
+${JSON.stringify(hardSummary, null, 2)}
 
-**Scoring Rules:**
-* 0-15 total flags is generally considered normal background noise (e.g., brief face missing, minor movements). Evaluate these strictly as 'low' severity unless there is a critical cheating indicator.
-* 16-40 total flags should be considered 'medium' severity, indicating suspicious behavior that warrants a manual look.
-* 41+ total flags is a strong indicator of sustained rule-breaking and should be categorized as 'high' severity.
-* ANY duration of PHONE_DETECTED or multiple faces is a critical cheating indicator and MUST result in a 'high' severity.
-* When providing the summary, explicitly mention the total number of flags and how it influenced the severity score. Be fair and forgiving for low flag counts.
+Soft Physiological/Behavioral Telemetry (Looking down, gaze deviation, room noise, brief face obstruction):
+${JSON.stringify(softSummary, null, 2)}
 
-**Output format:** You must respond in strict JSON format matching EXACTLY this schema:
+Integrity Guidelines:
+1. Low Risk (Clean/Normal): Occasional glances away, natural head tilt while reading or solving problems on desk, brief audio spikes, or 0-1 momentary window blurs. Integrity score typically >= 80.
+2. Medium Risk (Review Suggested): Repeated tab switching, prolonged gaze away from screen (>45s cumulative), or frequent face dropouts. Integrity score typically 60-79.
+3. High Risk (Action Required): Sustained presence of multiple faces, confirmed unauthorized mobile phone usage, repeated or prolonged window/tab exits (>20s), or integrity score < 60.
+
+Write a professional, balanced 2-sentence summary explaining the rationale. Distinguish clearly between innocent natural movement and actual suspicious activity.
+
+Output format: You must respond in strict JSON format:
 {
   "severity": "low|medium|high",
-  "summary": "You MUST write a 2-3 sentence explanation of *why* you gave this risk rating, logically connecting the severity of the logs with the test score and specific timestamps/durations. NEVER output generic phrases like 'Analysis complete'."
+  "summary": "Professional 2-3 sentence analysis of findings.",
+  "integrityScore": ${integrityScore}
 }`;
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: 'user', content: promptText }],
       model: 'openai/gpt-oss-120b',
       temperature: 0.1,
-      max_tokens: 4096,
+      max_tokens: 1024,
     });
 
     let raw = completion.choices[0]?.message?.content || '{}';
-    // Remove <think> blocks commonly produced by reasoning models like Qwen
     raw = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 
     let result: any = {};
     try {
-      // Find the first { and last } to extract JSON
       const jsonStart = raw.indexOf('{');
       const jsonEnd = raw.lastIndexOf('}');
       if (jsonStart !== -1 && jsonEnd !== -1) {
@@ -82,9 +98,18 @@ Event definitions:
       console.warn('Failed to parse output as json:', raw, e);
     }
 
+    // Default severity fallback aligned with the objective integrity score
+    let computedSeverity: 'low' | 'medium' | 'high' = 'low';
+    if (integrityScore < 60 || totalHardEvents >= 3) {
+      computedSeverity = 'high';
+    } else if (integrityScore < 80 || totalHardEvents >= 1) {
+      computedSeverity = 'medium';
+    }
+
     return NextResponse.json({
-      severity: result.severity || 'low',
-      summary: result.summary || 'Analysis complete.',
+      severity: result.severity || computedSeverity,
+      summary: result.summary || `Integrity Score: ${integrityScore}/100 with ${totalHardEvents} critical events recorded.`,
+      integrityScore: result.integrityScore ?? integrityScore,
     });
   } catch (err: any) {
     console.error('Groq analysis error:', err.message || err);

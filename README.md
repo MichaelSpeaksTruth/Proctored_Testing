@@ -12,27 +12,27 @@ The platform is built specifically for AeroSoc BIT Mesra's Recruitment Online As
 
 **Authentication and State:** Firebase Realtime Database and Admin SDK. (Note: Firestore is not used in order to avoid document write limits).
 
-**Edge Proctoring Engine:** MediaPipe (FaceMesh for face presence, Vision Tasks for cell phone detection). All processing executes strictly on the client-side browser to guarantee zero audio or video storage.
+**Edge Proctoring Engine:** MediaPipe (FaceMesh for face presence, TF COCO-SSD for verified device detection). All processing executes client-side to minimize infrastructure costs.
 
-**Data Flow:** Local stopwatch logging computes the exact duration of an infraction (e.g., out of fullscreen, phone detected) and sends a single debounced write to Firebase Realtime Database upon completion.
+**Data Flow:** Local stopwatch logging computes the exact duration of an infraction (e.g., out of fullscreen, verified device detected) and sends debounced writes to Firebase Realtime Database with lightweight evidence frames.
 
-**AI Analytics:** Groq API ingests the duration-based logs to generate a final, human-readable proctoring summary for the administrative dashboard.
+**Integrity & AI Analytics:** An objective mathematical Integrity Index (0–100%) combined with Groq API LLM risk evaluation produces human-readable, auditable proctoring summaries with snapshot proof for administrators.
 
 ### Architecture Flowchart
 
 ```mermaid
 graph TD
     subgraph Browser Client Edge
-        A[MediaPipe FaceMesh & Vision]
-        B[Stopwatch State Engine]
-        A -->|Hybrid Pitch Math, Proximity Bounds, Custom Phone Rect| B
-        B -->|Hysteresis Filters, Event Deduplication| C[Single Duration Payload]
+        A[MediaPipe FaceMesh & TF COCO-SSD]
+        B[Stopwatch State Engine & Snapshot Capturer]
+        A -->|Pitch & Gaze Tracking, Verified Class Bounding Boxes| B
+        B -->|Hysteresis Filters, Evidence Snapshots| C[Duration Payload & Proof Frame]
     end
     
     subgraph Backend & Cloud Infra
         C --> D[Firebase Realtime Database]
-        D -->|Telemetry & Event Logs| E[Groq API LLM Risk Analyzer]
-        E -->|Structured JSON Risk Rating| F[Admin Dashboard]
+        D -->|Telemetry & Event Logs| E[Groq API LLM Risk Analyzer & Integrity Score]
+        E -->|Structured JSON & Visual Proof| F[Admin Dashboard & Leaderboard]
     end
 ```
 
@@ -63,12 +63,14 @@ Furthermore, massive MediaPipe FaceMesh WASM binary and model assets are not bun
 ## 4. Computer Vision & Frame Pipeline Optimization
 
 - **Memory Leak and WebGL Context Loss Prevention:** The pipeline throttles AI inference to approximately 12 FPS by strictly enforcing a time delta (`now - lastFrameTime >= 83` ms) inside the `requestAnimationFrame` loop. It utilizes a `processing` boolean flag lock to prevent overlapping async inference calls. If MediaPipe throws an error, the `try-catch` block catches and suppresses it, keeping the React lifecycle alive.
-- **Low-Tier Hardware Optimization:** The system checks if the device is a mobile platform or has low CPU cores (`navigator.hardwareConcurrency <= 4`). If the hardware is deemed low-end, the system skips loading the heavy TensorFlow `COCO-SSD` model entirely. Instead, it relies solely on a custom, highly optimized, non-ML rectangle detector (`detectRectangle`) that uses Sobel edge detection and pixel projection to find phone-like bounding boxes every 600ms.
+- **Verified Device Detection without False Positives:** Phone detection relies strictly on verified deep learning models (COCO-SSD with MobileNet v2) using high confidence thresholds ($\ge 0.52$). Heuristic edge/rectangle detectors that falsely trigger on window frames, posters, and books have been eliminated.
+- **Low-Tier Hardware Optimization:** On mobile platforms or hardware with low concurrency ($\le 4$ cores), heavy background models are skipped or lightweight backends (WASM/CPU) are gracefully initialized to prevent device freezing and battery drain.
 
 ## 5. Telemetry & State Synchronization
 
 - **Tab Closure Protection:** A `flushInfractions` function is bound to the `beforeunload` event. It calculates the duration of active infractions from `startTime` to `Date.now()`, filters out brief anomalies, and synchronously executes Firebase `push()` commands to ensure logs make it to the RTDB before the tab finishes closing.
-- **Debounce and Hysteresis Thresholds:** Infractions are tracked using a dual-counter hysteresis filter. It takes **14 consecutive violating frames** to open an infraction and **20 consecutive clean frames** to clear it. Clean frames decay the violation counter by 2, heavily debouncing micro-stutters and requiring sustained correct posture to clear violations.
+- **Dual-Counter Hysteresis Filters:** Infractions are tracked using a hysteresis filter requiring **16 consecutive violating frames** to open an infraction and **18 consecutive clean frames** to clear it. Clean frames decay the violation counter, preventing micro-stutters from flooding the database.
+- **Visual Evidence Snapshot:** For critical violations (`MULTIPLE_FACES`, `PHONE_DETECTED`, `CAMERA_COVERED`), an ultra-lightweight client-side thumbnail ($320 \times 240$ JPEG, $\sim 8\text{ KB}$) is generated and attached to the flag. Evaluators can review this visual proof in the admin console.
 
 ## 6. Security and Integrity Mechanisms
 
@@ -76,14 +78,17 @@ The system enforces a strict defense-in-depth security perimeter:
 
 - **Firebase Rules RBAC:** The `.validate` rule on the database strictly ensures that `Question Setters` can only edit and submit keys for records where `newData.child('authorEmail').val() == auth.token.email`.
 - **Client-Side DOM Restrictions:** Rigorous DOM restrictions disable text selection, drag-to-copy, and context menus. Keydown listeners block keyboard shortcuts (Ctrl/Cmd + C, A, S, P, U), and `window.print` is actively overridden to defeat PDF exports.
-- **Penalty HUD & DevTools Mitigation:** While advanced users might try to use DevTools to override visual CSS blurs or React state, getting to DevTools typically requires exiting fullscreen. Doing so triggers a `LEFT_FULLSCREEN` infraction, instantly logging a critical violation, deducting a "Life", and putting the user in a 5-second mandatory blurred Penalty Box. 
-- **Time Tampering Defenses:** If an examinee tampers with the local clock heavily to give themselves infinite time, the server-side timestamp validation during submission catches the drift, permanently flagging it with a `DELAYED_SUBMISSION` integrity flag. Additionally, admins can force a client state wipe via a `resetAt` database flag.
+- **Penalty HUD & DevTools Mitigation:** Getting to DevTools typically requires exiting fullscreen or unfocusing the window. Doing so triggers a `LEFT_FULLSCREEN` or `TAB_SWITCHED` infraction, logging a hard violation, deducting a Life, and putting the user in a 5-second mandatory blurred Penalty Box.
+- **Time Tampering Defenses:** If an examinee tampers with the local clock to gain extra time, server-side timestamp validation during submission catches the drift, permanently stamping the submission with a `DELAYED_SUBMISSION` flag.
 
-## 7. AI Risk Analysis
+## 7. AI Risk Analysis & Objective Integrity Scoring
 
-- **Token Limits:** Before sending the prompt to the Groq LLM, the backend iterates over the raw array of `DurationFlag` objects and structurally aggregates them into a `durationSummary` hash map of total durations by event type. This condensed summary completely bypasses LLM token limits regardless of how many individual logs fired.
-- **Composite Violations Penalty:** The LLM prompt explicitly instructs that 0-15 total flags are benign background noise ('low'), 16-40 is 'medium', and 41+ is 'high'. However, a hardcoded override dictates that **ANY duration** of `PHONE_DETECTED` or `MULTIPLE_FACES` represents a critical cheating event and mandates an immediate 'high' severity risk rating.
-- **Fallback & Rate Limits:** If the LLM returns malformed JSON or reasoning traces (e.g., `<think>`), a regex cleans the payload and extracts the JSON block. If parsing still fails, it gracefully falls back to `{ severity: 'low', summary: 'Analysis complete.' }`. Rate limits (429) correctly parse the wait time and pipe the error back to the client.
+- **Mathematical Integrity Index:** The platform computes an objective score from 0% to 100% based on categorized infractions:
+  - **Hard Violations** (Tab Switch, Fullscreen Exit, Multiple Faces, Unauthorized Device, Camera Obstructed): High point deductions.
+  - **Soft Telemetry** (Gaze deviations, Natural head pitch while reading, Room noise): Gradual duration-based weighting ($1\text{ pt}$ per $20\text{ seconds}$ of cumulative deviation, max $25\text{ pts}$).
+  - **Trust Ratings:** $\ge 85\%$ (High Trust), $65\%\text{--}84\%$ (Review Suggested), $< 65\%$ (Flagged).
+- **Categorized Groq LLM Ingestion:** The Groq API receives separate summaries of hard violations vs soft physiological movements along with the calculated Integrity Score. This ensures fair, balanced proctoring summaries rather than blanket disqualifications.
+- **Fallback & Rate Limits:** Rate limit errors (429) cleanly bubble to the admin UI with retry countdowns. If JSON parsing fails, the system safely falls back to standard calculated integrity metrics.
 
 ## 8. Role-Based Access Control and Security Architecture
 
@@ -91,20 +96,19 @@ The platform features a multi-tiered Role-Based Access Control system for delega
 
 **Personnel Request Flow:** Users authenticate via Google Auth to apply for roles such as Question Setter or Spectator. The Firebase Realtime Database rules strictly validate the email payload. 
 
-**Question Setter Module:** Approved Question Setters create exam sections and upload questions stamped with a mathematically unique 9-character alphanumeric tag and bound to their email. Database rules strictly prevent cross-author tampering.
+**Question Setter Module:** Approved Question Setters create exam sections and upload questions stamped with a unique 9-character alphanumeric tag and bound to their email. Database rules strictly prevent cross-author tampering.
 
 **Strict Results Declaration and Merge Engine:** The administrative "Declare Results" function implements an unyielding validation check blocking result computation if any Question Setter fails to upload a valid solution for their authored question.
 
-## 9. Precision Proctoring and Edge Case Management
+## 9. Precision Proctoring & Candidate Protection
 
-**Non-Disruptive Face Tracking:** Traditional proctoring tools actively disrupt examinations for minor infractions, causing extreme candidate anxiety. This platform re-engineers face tracking algorithms (`HEAD_PITCH_DOWN`, `DUCKING_DOWN`, `NO_FACE`) to operate as a silent telemetry engine. When a student looks at their lap or drops out of frame, the system deducts a life from the persistent gamified HUD and instantly logs a critical severity flag to the Firebase backend for administrative review. It deliberately suppresses all client-side popup notifications and screen locks, allowing the test to continue completely uninterrupted.
-
-**Targeted Alignment HUD:** Conversely, gross postural misalignments (`SHOULDERS_OUT_OF_FRAME`) trigger an exclusive, non-punitive "Camera Alignment Required" overlay. This HUD blurs the exam and projects a live webcam feed with a geometric target frame, forcing the student to physically adjust their hardware. Once the skeletal landmarks satisfy the mathematical boundaries, the overlay instantly dissolves with zero penalty applied.
+- **Separation of Hard Violations vs Soft Telemetry:** Natural actions like glancing down at rough paper, blinking, or screen corner reading (`HEAD_PITCH_DOWN`, `GAZE_AWAY`) are logged silently for review but **do not deduct student lives** or disrupt their exam.
+- **Realistic Head Pitch Angles:** Forward screen viewing is recognized as normal posture. Lap-looking detection is calibrated to steep downward angles ($\text{headPitch} < -28^\circ$ AND $\text{pitchDeg} > 12^\circ$), preventing normal reading from triggering false alerts.
+- **Adaptive Ambient Audio:** Background noise baseline updates dynamically to accommodate room fans and air conditioning, requiring human vocal frequencies ($300\text{--}3000\text{ Hz}$) before triggering audio warnings.
+- **Evidence-Backed Admin Review:** When reviewing the leaderboard, administrators can click "View Proof" on any flagged incident to inspect the captured webcam snapshot. This eliminates guesswork and protects honest candidates.
 
 ## 10. Deployment and Usage
 
-**Deployed Application:** https://proctored-testing.vercel.app
-
-**Candidate Workflow:** Candidates authenticate exclusively via pre-approved Google accounts. After granting hardware permissions and passing local environmental checks, the interface enforces a fullscreen constraint. Answers are cached locally in real-time to survive network drops. Upon completion or timer expiration, the answers are securely relayed to the server.
-
-**Administrator Workflow:** Authorized administrators access a secure dashboard to monitor active test takers, review telemetry data, and analyze human-readable proctoring reports generated by the Groq AI integration.
+- **Deployed Application:** https://proctored-testing.vercel.app
+- **Candidate Workflow:** Candidates authenticate with approved Google accounts, pass hardware calibration checks, and take the exam in fullscreen.
+- **Administrator Workflow:** Administrators monitor active submissions, declare results with automated solution merging, inspect visual snapshot proof, and review AI integrity reports.

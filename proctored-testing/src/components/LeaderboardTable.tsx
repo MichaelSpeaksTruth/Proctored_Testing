@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, Fragment } from 'react';
+import { calculateIntegrityScore, DurationFlag } from '@/lib/proctoring';
 
 export interface LeaderboardEntry {
   uid: string;
@@ -13,7 +14,16 @@ export interface LeaderboardEntry {
   flagCount: number;
   aiSeverity?: string;
   aiSummary?: string;
-  flags?: { event: string; severity: string; timestamp?: string; startTime?: string; }[];
+  flags?: { 
+    event: string; 
+    severity: string; 
+    timestamp?: string; 
+    startTime?: string; 
+    endTime?: string;
+    durationInSeconds?: number;
+    evidenceSnapshot?: string;
+  }[];
+  integrityScore?: number;
   interviewScheduled?: boolean;
   panelNo?: string;
   venue?: string;
@@ -38,6 +48,7 @@ const PAGE_SIZE = 20;
 export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDelete, onUpdateRoundStatus, onEditInfo }: Props) {
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [previewSnapshot, setPreviewSnapshot] = useState<{ src: string; title: string } | null>(null);
 
   const totalPages = Math.ceil(entries.length / PAGE_SIZE);
   const pageEntries = entries.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -47,6 +58,67 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
     if (s === 'low') return <span className="badge badge-green">Low Risk</span>;
     if (s === 'medium') return <span className="badge badge-amber">Medium Risk</span>;
     return <span className="badge badge-red">High Risk</span>;
+  };
+
+  const getScoreBadge = (score: number) => {
+    if (score >= 85) {
+      return (
+        <span 
+          style={{ 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            gap: 4, 
+            padding: '2px 8px', 
+            borderRadius: 12, 
+            fontSize: '0.75rem', 
+            fontWeight: 600,
+            background: 'rgba(34, 197, 94, 0.15)', 
+            color: '#4ade80',
+            border: '1px solid rgba(34, 197, 94, 0.3)'
+          }}
+        >
+          {score}% Trust
+        </span>
+      );
+    }
+    if (score >= 65) {
+      return (
+        <span 
+          style={{ 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            gap: 4, 
+            padding: '2px 8px', 
+            borderRadius: 12, 
+            fontSize: '0.75rem', 
+            fontWeight: 600,
+            background: 'rgba(245, 158, 11, 0.15)', 
+            color: '#fbbf24',
+            border: '1px solid rgba(245, 158, 11, 0.3)'
+          }}
+        >
+          {score}% Moderate
+        </span>
+      );
+    }
+    return (
+      <span 
+        style={{ 
+          display: 'inline-flex', 
+          alignItems: 'center', 
+          gap: 4, 
+          padding: '2px 8px', 
+          borderRadius: 12, 
+          fontSize: '0.75rem', 
+          fontWeight: 600,
+          background: 'rgba(239, 68, 68, 0.15)', 
+          color: '#f87171',
+          border: '1px solid rgba(239, 68, 68, 0.3)'
+        }}
+      >
+        {score}% Flagged
+      </span>
+    );
   };
 
   const rankStyle = (rank: number) => {
@@ -66,6 +138,7 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
               <th>Name</th>
               <th>Email</th>
               <th>Score</th>
+              <th>Integrity</th>
               <th>Flags</th>
               <th>AI Risk</th>
               <th>Round Status</th>
@@ -76,6 +149,8 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
             {pageEntries.map((entry) => {
               const rs = rankStyle(entry.rank);
               const isExpanded = expanded === entry.uid;
+              const computedScore = entry.integrityScore ?? calculateIntegrityScore((entry.flags || []) as DurationFlag[]);
+
               return (
                 <Fragment key={entry.uid}>
                   <tr>
@@ -95,6 +170,9 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                     <td data-label="Email" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', wordBreak: 'break-all' }}>{entry.email}</td>
                     <td data-label="Score" style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
                       {entry.score}/{entry.total}
+                    </td>
+                    <td data-label="Integrity">
+                      {getScoreBadge(computedScore)}
                     </td>
                     <td data-label="Flags">
                       <span
@@ -163,41 +241,88 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                   {isExpanded && (
                     <tr key={`${entry.uid}-expand`}>
                       <td
-                        colSpan={8}
+                        colSpan={9}
                         style={{ background: 'var(--bg-secondary)', padding: 'var(--space-lg)' }}
                       >
+                        <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                            Integrity Index: {computedScore}/100
+                          </span>
+                          <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                            Total Violations Logged: {entry.flags?.length || 0}
+                          </span>
+                        </div>
+
                         {entry.aiSummary && (
                           <div className="alert alert-info" style={{ marginBottom: 'var(--space-md)', whiteSpace: 'normal', wordBreak: 'break-word' }}>
-                            <strong>AI Analysis:</strong> {entry.aiSummary}
+                            <strong>AI Proctoring Verdict:</strong> {entry.aiSummary}
                           </div>
                         )}
+                        
                         {entry.flags && entry.flags.length > 0 ? (
                           <div>
-                            <h4 style={{ marginBottom: 12, fontSize: '0.875rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>Proctoring Log</h4>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
-                              {entry.flags.slice(-20).map((f, i) => (
+                            <h4 style={{ marginBottom: 12, fontSize: '0.875rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
+                              Telemetry & Flag Log (With Snapshot Proof)
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: 10 }}>
+                              {entry.flags.map((f, i) => (
                                 <div
                                   key={i}
                                   style={{
-                                    padding: '8px 12px',
+                                    padding: '10px 12px',
                                     background: 'var(--bg-card)',
                                     border: '1px solid var(--border)',
                                     borderRadius: 'var(--radius-sm)',
                                     fontSize: '0.8125rem',
-                                    fontFamily: 'var(--font-mono)',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 6
                                   }}
                                 >
-                                  <span
-                                    style={{
-                                      color: f.severity === 'critical' ? 'var(--accent-red-light)' : f.severity === 'high' ? '#f4a261' : 'var(--text-muted)',
-                                    }}
-                                  >
-                                    [{f.severity.toUpperCase()}]
-                                  </span>{' '}
-                                  {f.event}{' '}
-                                  <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
-                                    {new Date(f.startTime || f.timestamp || '').toLocaleTimeString()}
-                                  </span>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span
+                                      style={{
+                                        fontWeight: 700,
+                                        fontFamily: 'var(--font-mono)',
+                                        color: f.severity === 'critical' ? 'var(--accent-red-light)' : f.severity === 'high' ? '#f4a261' : 'var(--text-muted)',
+                                      }}
+                                    >
+                                      [{f.severity.toUpperCase()}] {f.event}
+                                    </span>
+                                    {f.durationInSeconds !== undefined && (
+                                      <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.75rem' }}>
+                                        {f.durationInSeconds}s
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+                                    <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+                                      {new Date(f.startTime || f.timestamp || '').toLocaleTimeString()}
+                                    </span>
+
+                                    {/* Visual Evidence Snapshot Button */}
+                                    {f.evidenceSnapshot && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreviewSnapshot({ src: f.evidenceSnapshot!, title: `${f.event} (${f.durationInSeconds || 0}s)` })}
+                                        style={{
+                                          background: 'rgba(59, 130, 246, 0.15)',
+                                          border: '1px solid rgba(59, 130, 246, 0.35)',
+                                          color: '#60a5fa',
+                                          borderRadius: 4,
+                                          padding: '2px 8px',
+                                          cursor: 'pointer',
+                                          fontSize: '0.72rem',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: 4
+                                        }}
+                                      >
+                                        📷 View Proof
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -214,6 +339,60 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
           </tbody>
         </table>
       </div>
+
+      {/* Snapshot Preview Modal */}
+      {previewSnapshot && (
+        <div 
+          onClick={() => setPreviewSnapshot(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.82)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-card, #111827)',
+              border: '1px solid var(--border, #374151)',
+              borderRadius: 8,
+              padding: 16,
+              maxWidth: 480,
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                Evidence Frame: {previewSnapshot.title}
+              </span>
+              <button 
+                className="btn btn-ghost btn-sm"
+                onClick={() => setPreviewSnapshot(null)}
+                style={{ padding: '2px 8px' }}
+              >
+                ✕ Close
+              </button>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img 
+              src={previewSnapshot.src} 
+              alt="Violation evidence" 
+              style={{ width: '100%', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)' }}
+            />
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, textAlign: 'center' }}>
+              Webcam snapshot captured automatically at violation onset.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (

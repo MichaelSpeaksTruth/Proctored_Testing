@@ -393,17 +393,21 @@ function TestContent() {
       if (event === 'LEFT_FULLSCREEN' && !isMobileDevice) {
         setReEntryFullscreenLock(true);
       }
-    } else if (event === 'MULTIPLE_FACES' || event === 'NO_FACE' || event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN') {
+    } else if (event === 'PHONE_DETECTED' || event === 'MULTIPLE_FACES') {
+      // Hard external cheating indicators deduct life
       deductLife = true;
-      // We will suppress the UI for these below, but they still deduct a life
+      isCritical = true;
+      setCriticalViolationMsg(event === 'PHONE_DETECTED' ? 'Mobile device detected in camera' : 'Multiple people detected in frame');
     }
+    // Soft telemetry (NO_FACE, HEAD_PITCH_DOWN, GAZE_AWAY, LOUD_AUDIO) is logged
+    // silently to Firebase for administrative review, but does NOT drain student lives.
 
     if (deductLife) {
       setLives(l => Math.max(0, l - 1));
     }
 
-    // Completely suppress UI feedback for these events (no toast, no penalty box)
-    if (event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'NO_FACE' || event === 'MULTIPLE_FACES') {
+    // Completely suppress UI feedback for passive/soft telemetry
+    if (event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'NO_FACE' || event === 'GAZE_AWAY') {
       return;
     }
 

@@ -6,8 +6,9 @@ import { rtdb } from '@/lib/firebase';
 import { ProctoringEvent, Severity, DurationFlag } from '@/lib/proctoring';
 
 // ── Hysteresis ────────────────────────────────────────────────────────────────
-const FRAMES_TO_START = 14;
-const FRAMES_TO_CLEAR = 20;
+// Requiring sustained violating frames prevents momentary twitches or frame drops
+const FRAMES_TO_START = 16;
+const FRAMES_TO_CLEAR = 18;
 
 // MediaPipe FaceMesh landmark indices (out of 468)
 const IDX_NOSE_TIP  = 4;
@@ -17,201 +18,31 @@ const IDX_NOSE_BRIDGE = 168;
 const IDX_LEFT_EAR  = 234;
 const IDX_RIGHT_EAR = 454;
 
-// COCO-SSD classes that indicate a device is present
+// COCO-SSD verified classes for external devices
 const PHONE_CLASSES: Record<string, number> = {
-  'cell phone': 0.28,
-  'remote':     0.32,
-  'laptop':     0.38,
-  'book':       0.42,
+  'cell phone': 0.52,
 };
 
-// =============================================================================
-// Custom Rectangle / Phone Detector
-// Uses Sobel edge detection + projection analysis - no ML model required.
-// Detects ANY large rectangular object with phone-like dimensions even when
-// COCO-SSD fails to classify it (e.g. phone seen from the back).
-// =============================================================================
-interface RectResult {
-  detected: boolean;
-  score: number;
-  bbox?: { x: number; y: number; w: number; h: number };
-  reason?: string;
+/**
+ * Captures a small, compressed JPEG thumbnail directly from the webcam element.
+ * Typical size is ~6-10 KB, safe for Firebase Realtime Database and instant for admin review.
+ */
+function captureSnapshot(videoEl: HTMLVideoElement | null): string | undefined {
+  if (!videoEl || videoEl.readyState < 2 || videoEl.videoWidth === 0) return undefined;
+  try {
+    const canvas = document.createElement('canvas');
+    const targetW = 320;
+    const targetH = Math.round((videoEl.videoHeight / videoEl.videoWidth) * targetW) || 240;
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return undefined;
+    ctx.drawImage(videoEl, 0, 0, targetW, targetH);
+    return canvas.toDataURL('image/jpeg', 0.5);
+  } catch {
+    return undefined;
+  }
 }
-
-function detectRectangle(
-  videoEl: HTMLVideoElement,
-  workCanvas: HTMLCanvasElement
-): RectResult {
-  const W = 160, H = 120;
-  workCanvas.width  = W;
-  workCanvas.height = H;
-  const ctx = workCanvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx || videoEl.readyState < 2 || videoEl.videoWidth === 0)
-    return { detected: false, score: 0 };
-
-  ctx.drawImage(videoEl, 0, 0, W, H);
-  const { data } = ctx.getImageData(0, 0, W, H);
-
-  // 1. Grayscale
-  const gray = new Uint8Array(W * H);
-  for (let i = 0; i < W * H; i++) {
-    gray[i] = (data[i * 4] * 77 + data[i * 4 + 1] * 150 + data[i * 4 + 2] * 29) >> 8;
-  }
-
-  // 2. Sobel Edge Detection
-  const edges = new Uint8Array(W * H);
-  for (let y = 1; y < H - 1; y++) {
-    for (let x = 1; x < W - 1; x++) {
-      const i = y * W + x;
-      const gx =
-        -gray[i - W - 1] - 2 * gray[i - 1] - gray[i + W - 1] +
-         gray[i - W + 1] + 2 * gray[i + 1] + gray[i + W + 1];
-      const gy =
-        -gray[i - W - 1] - 2 * gray[i - W] - gray[i - W + 1] +
-         gray[i + W - 1] + 2 * gray[i + W] + gray[i + W + 1];
-      edges[i] = Math.sqrt(gx * gx + gy * gy) > 40 ? 1 : 0;
-    }
-  }
-
-  // 3. Projection with smoothing for tilted edges
-  const rowE = new Int32Array(H);
-  const colE = new Int32Array(W);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      if (edges[y * W + x]) {
-        rowE[y]++; colE[x]++;
-      }
-    }
-  }
-
-  const smoothRow = new Int32Array(H);
-  const smoothCol = new Int32Array(W);
-  for (let y = 2; y < H - 2; y++) smoothRow[y] = rowE[y-2] + rowE[y-1] + rowE[y] + rowE[y+1] + rowE[y+2];
-  for (let x = 2; x < W - 2; x++) smoothCol[x] = colE[x-2] + colE[x-1] + colE[x] + colE[x+1] + colE[x+2];
-
-  // 4. Find all candidate line positions (threshold: ~15% of width/height over 5 pixels)
-  const hLines: number[] = [];
-  const vLines: number[] = [];
-  for (let y = 4; y < H - 4; y++)
-    if (smoothRow[y] >= W * 0.15 && (hLines.length === 0 || y - hLines[hLines.length - 1] > 4))
-      hLines.push(y);
-  for (let x = 4; x < W - 4; x++)
-    if (smoothCol[x] >= H * 0.15 && (vLines.length === 0 || x - vLines[vLines.length - 1] > 4))
-      vLines.push(x);
-
-  if (hLines.length < 2 || vLines.length < 2) return { detected: false, score: 0 };
-
-  // 5. Exhaustive search over all bounding boxes formed by these lines
-  let bestScore = 0;
-  let bestRect = null;
-
-  for (let i = 0; i < hLines.length - 1; i++) {
-    for (let j = i + 1; j < hLines.length; j++) {
-      for (let k = 0; k < vLines.length - 1; k++) {
-        for (let l = k + 1; l < vLines.length; l++) {
-          const top = hLines[i], bottom = hLines[j];
-          const left = vLines[k], right = vLines[l];
-          const rectH = bottom - top;
-          const rectW = right - left;
-          
-          if (rectW < 12 || rectH < 12) continue;
-          
-          const areaFraction = (rectH / H) * (rectW / W);
-          const aspect = rectW / rectH;
-          
-          // Relaxed phone aspect ratio (portrait: 0.3-0.85, landscape: 1.15-3.0)
-          const isPhoneAspect = (aspect >= 0.30 && aspect <= 0.85) || (aspect >= 1.15 && aspect <= 3.0);
-          if (!isPhoneAspect || areaFraction < 0.05) continue;
-          
-          let sumL = 0, sumSq = 0, n = 0;
-          for (let sy = top + 2; sy < bottom - 2; sy += 3) {
-            for (let sx = left + 2; sx < right - 2; sx += 3) {
-              const lum = gray[sy * W + sx];
-              sumL += lum; sumSq += lum * lum; n++;
-            }
-          }
-          if (n === 0) continue;
-          
-          const meanL = sumL / n;
-          const variance = (sumSq / n) - (meanL * meanL);
-          
-          // Phone backs are uniform (variance < 1500) and dark (mean < 130)
-          const uniformityScore = Math.max(0, 1 - variance / 2500);
-          const darknessScore = Math.max(0, 1 - meanL / 160);
-          
-          const baseScore = uniformityScore * 0.7 + darknessScore * 0.3;
-          if (baseScore > bestScore) {
-             bestScore = baseScore;
-             bestRect = { top, bottom, left, right, baseScore, areaFraction, aspect, variance, meanL };
-          }
-        }
-      }
-    }
-  }
-
-  if (!bestRect) return { detected: false, score: 0 };
-
-  // 6. Verify border edge density
-  let borderEdges = 0;
-  for (let x = bestRect.left; x <= bestRect.right; x++) {
-    if (edges[bestRect.top * W + x]) borderEdges++;
-    if (edges[bestRect.bottom * W + x]) borderEdges++;
-  }
-  for (let y = bestRect.top; y <= bestRect.bottom; y++) {
-    if (edges[y * W + bestRect.left]) borderEdges++;
-    if (edges[y * W + bestRect.right]) borderEdges++;
-  }
-  const expectedBorder = (bestRect.right - bestRect.left) * 2 + (bestRect.bottom - bestRect.top) * 2;
-  const borderDensity = borderEdges / expectedBorder;
-
-  // 7. Detect Camera Lens (Circles on the rectangle)
-  let maxLensScore = 0;
-  const rh = bestRect.bottom - bestRect.top;
-  const scanTop = bestRect.top + 2;
-  const scanBottom = bestRect.bottom - 5;
-  const scanLeft = bestRect.left + 2;
-  const scanRight = bestRect.right - 5;
-
-  for (let cy = scanTop; cy <= scanBottom; cy++) {
-    // Only search the top 35% and bottom 35% (corners) for camera lenses
-    if (cy > bestRect.top + rh * 0.35 && cy < bestRect.bottom - rh * 0.35) continue;
-    
-    for (let cx = scanLeft; cx <= scanRight; cx++) {
-      let centerSum = 0;
-      let edgeHits = 0;
-      // Evaluate a 3x3 inner patch for circular features
-      for (let dy = 0; dy <= 2; dy++) {
-        for (let dx = 0; dx <= 2; dx++) {
-          centerSum += gray[(cy + dy) * W + (cx + dx)];
-          if (edges[(cy + dy) * W + (cx + dx)]) edgeHits++;
-        }
-      }
-      const centerMean = centerSum / 9;
-      // Camera lenses stand out with high local contrast compared to the phone body
-      const contrast = Math.abs(centerMean - bestRect.meanL);
-      if (contrast > 12 && edgeHits >= 3) {
-        const score = (contrast / 40) * (edgeHits / 6);
-        if (score > maxLensScore) maxLensScore = score;
-      }
-    }
-  }
-
-  const lensBoost = Math.min(1.0, maxLensScore) * 0.35;
-
-  // Final score requires both internal uniformity and external edges, boosted by camera presence
-  const finalScore = (bestRect.baseScore * 0.5) + (Math.min(1, borderDensity / 0.3) * 0.5) + lensBoost;
-  
-  // With the smart lens detector, we can drop the density requirement slightly
-  const detected = finalScore >= 0.52 && borderDensity > 0.08 && bestRect.areaFraction >= 0.06;
-
-  return {
-    detected,
-    score: finalScore,
-    bbox: { x: bestRect.left / W, y: bestRect.top / H, w: (bestRect.right - bestRect.left) / W, h: (bestRect.bottom - bestRect.top) / H },
-    reason: `S=${finalScore.toFixed(2)} (cam=${lensBoost.toFixed(2)}, base=${bestRect.baseScore.toFixed(2)}, bdr=${borderDensity.toFixed(2)})`,
-  };
-}
-// =============================================================================
 
 export interface MonitorStatus {
   faceDetected: boolean;
@@ -231,9 +62,9 @@ interface Props {
   isSubmitting?: boolean;
   overlayCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
   onAlignmentUpdate?: (aligned: boolean) => void;
-  /** Parent's MediaStream — audio track is reused to avoid opening a second getUserMedia session (Android fix) */
+  /** Parent's MediaStream — audio track is reused to avoid opening a second getUserMedia session */
   stream?: MediaStream | null;
-  /** When true, skips heavy ML models (COCO-SSD) to prevent OOM on low-RAM Android devices */
+  /** When true, skips heavy ML models (COCO-SSD) to prevent OOM on low-RAM devices */
   isMobile?: boolean;
 }
 
@@ -255,19 +86,18 @@ export default function ProctoringMonitor({
   isMobile = false,
 }: Props) {
 
-  const activeInfractions = useRef<Map<ProctoringEvent, { startTime: number; severity: Severity }>>(
-    new Map()
-  );
+  const activeInfractions = useRef<Map<ProctoringEvent, { 
+    startTime: number; 
+    severity: Severity; 
+    evidenceSnapshot?: string; 
+  }>>(new Map());
   
   const lastAlignment = useRef(false);
-  // Keep a ref of isSubmitting to avoid re-binding event listeners
   const isSubmittingRef = useRef(isSubmitting);
   useEffect(() => {
     isSubmittingRef.current = isSubmitting;
   }, [isSubmitting]);
 
-  // Keep stable refs for isMobile and stream to avoid re-running the heavy
-  // monitoring useEffect when they change (they're set once on mount anyway).
   const isMobileRef = useRef(isMobile);
   const streamRef = useRef<MediaStream | null>(stream ?? null);
   useEffect(() => { isMobileRef.current = isMobile; }, [isMobile]);
@@ -300,15 +130,24 @@ export default function ProctoringMonitor({
       : `proctoringFlags/${uid}/flags`;
   }, [uid, testId, calibrationMode]);
 
-
-
   const openInfraction = useCallback(
     (event: ProctoringEvent, severity: Severity) => {
       if (activeInfractions.current.has(event)) return;
-      activeInfractions.current.set(event, { startTime: Date.now(), severity });
+
+      // Capture lightweight snapshot evidence for critical/hard infractions
+      let snapshot: string | undefined = undefined;
+      if (event === 'MULTIPLE_FACES' || event === 'PHONE_DETECTED' || event === 'CAMERA_COVERED') {
+        snapshot = captureSnapshot(videoRef.current);
+      }
+
+      activeInfractions.current.set(event, { 
+        startTime: Date.now(), 
+        severity, 
+        evidenceSnapshot: snapshot 
+      });
       onViolationStart?.(event, severity);
     },
-    [onViolationStart]
+    [onViolationStart, videoRef]
   );
 
   const closeInfraction = useCallback(
@@ -320,21 +159,29 @@ export default function ProctoringMonitor({
       activeInfractions.current.delete(event);
       onViolationClear?.(event);
       
-      const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN';
-      if (isSlowEvent && durationInSeconds < 5) return;
-      if (!isSlowEvent && durationInSeconds < 1) return;
+      const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'GAZE_AWAY';
+      // Minimum duration filters to ignore momentary glances or twitches
+      if (isSlowEvent && durationInSeconds < 4) return;
+      if (!isSlowEvent && durationInSeconds < 2) return;
       
+      // Capture snapshot if face was missing for sustained duration (> 4s)
+      let snapshot = record.evidenceSnapshot;
+      if (!snapshot && (event === 'NO_FACE' || isSlowEvent) && durationInSeconds >= 5) {
+        snapshot = captureSnapshot(videoRef.current);
+      }
+
       const flag: DurationFlag = {
         event,
         severity: record.severity,
         startTime: new Date(record.startTime).toISOString(),
         endTime: new Date(endMs).toISOString(),
         durationInSeconds,
+        ...(snapshot ? { evidenceSnapshot: snapshot } : {}),
       };
       onViolation?.(flag);
       if (!calibrationMode) push(ref(rtdb, flagPath()), flag);
     },
-    [calibrationMode, flagPath, onViolation]
+    [calibrationMode, flagPath, onViolation, videoRef]
   );
 
   const report = useCallback(
@@ -364,13 +211,13 @@ export default function ProctoringMonitor({
     let faceMeshInst: { close: () => void; send: (options: { image: HTMLVideoElement }) => Promise<void> } | null = null;
     let rafId: number | null = null;
     let cocoTimer: ReturnType<typeof setInterval> | null = null;
-    let rectTimer: ReturnType<typeof setInterval> | null = null;
     let mounted = true;
 
-    let ambientBaseline = 0.06;
+    // ── Dynamic Audio Baseline ──
+    let ambientBaseline = 0.05;
     let calibFrames = 0;
     let calibSum = 0;
-    const CALIB_FRAMES = 60;
+    const CALIB_FRAMES = 120; // ~2-3 seconds initial calibration
 
     // ── 1. Tab & Window monitoring ────────────────────────────────────────────
     let visibilityTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -380,8 +227,6 @@ export default function ProctoringMonitor({
         if (visibilityTimeout) { clearTimeout(visibilityTimeout); visibilityTimeout = null; }
         openInfraction('TAB_SWITCHED', 'critical');
       } else {
-        // Android: use a longer buffer because visibilitychange fires on keyboard
-        // open/close, notification shade pull-down, and system dialogs.
         const buffer = isMobileRef.current ? 3000 : 1500;
         visibilityTimeout = setTimeout(() => {
           closeInfraction('TAB_SWITCHED');
@@ -404,14 +249,17 @@ export default function ProctoringMonitor({
       const endMs = Date.now();
       activeInfractions.current.forEach((val, event) => {
         const dur = Math.round((endMs - val.startTime) / 1000);
-        const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN';
-        const isValid = (isSlowEvent && dur >= 5) || (!isSlowEvent && dur >= 1);
+        const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'GAZE_AWAY';
+        const isValid = (isSlowEvent && dur >= 4) || (!isSlowEvent && dur >= 2);
         if (isValid && !calibrationMode) {
+          const snapshot = val.evidenceSnapshot || (dur >= 4 ? captureSnapshot(videoRef.current) : undefined);
           push(ref(rtdb, flagPath()), {
-            event, severity: val.severity,
+            event, 
+            severity: val.severity,
             startTime: new Date(val.startTime).toISOString(),
             endTime: new Date(endMs).toISOString(),
             durationInSeconds: dur,
+            ...(snapshot ? { evidenceSnapshot: snapshot } : {}),
           });
         }
       });
@@ -427,43 +275,8 @@ export default function ProctoringMonitor({
     };
     window.addEventListener('unhandledrejection', onUnhandledRejection);
 
-    // ── 2a. Custom Rectangle Detector (runs every 600ms - fast, no model load) ──
-    const workCanvas = document.createElement('canvas');
-
-    rectTimer = setInterval(() => {
-      if (!mounted || !videoRef.current || videoRef.current.readyState < 2) return;
-      const result = detectRectangle(videoRef.current, workCanvas);
-
-      // Draw result on overlay canvas
-      if (overlayCanvasRef?.current && videoRef.current.videoWidth > 0) {
-        const cv = overlayCanvasRef.current;
-        const gx = cv.getContext('2d');
-        if (gx && result.bbox) {
-          const { x, y, w, h } = result.bbox;
-          const cx = x * cv.width, cy = y * cv.height;
-          const cw = w * cv.width, ch = h * cv.height;
-          gx.strokeStyle = result.detected ? '#ff2200' : `rgba(255,180,0,${result.score.toFixed(2)})`;
-          gx.lineWidth   = result.detected ? 3 : 1.5;
-          gx.setLineDash(result.detected ? [] : [6, 4]);
-          gx.strokeRect(cx, cy, cw, ch);
-          gx.setLineDash([]);
-          if (result.detected) {
-            gx.fillStyle = 'rgba(255,34,0,0.85)';
-            gx.font = 'bold 13px monospace';
-            gx.fillText(`RECT OBJECT ${(result.score * 100).toFixed(0)}%`, cx + 2, cy > 18 ? cy - 4 : cy + ch + 14);
-          } else if (result.score > 0.25) {
-            gx.fillStyle = 'rgba(255,180,0,0.7)';
-            gx.font = '11px monospace';
-            gx.fillText(`rect? ${(result.score * 100).toFixed(0)}%`, cx + 2, cy > 14 ? cy - 4 : cy + ch + 12);
-          }
-        }
-      }
-
-      report('PHONE_DETECTED', result.detected, 'critical');
-    }, 600);
-
-    // ── 2b. COCO-SSD Object Detection (secondary, slower) ─────────────────────
-    const DETECT_W = 416, DETECT_H = 416;
+    // ── 2. Verified AI Object Detection (COCO-SSD) ───────────────────────────
+    const DETECT_W = 384, DETECT_H = 384;
     const detectCanvas = document.createElement('canvas');
     detectCanvas.width = DETECT_W;
     detectCanvas.height = DETECT_H;
@@ -473,8 +286,6 @@ export default function ProctoringMonitor({
       if (!mounted) return;
       try {
         const tf = await import('@tensorflow/tfjs');
-        // Try backends in order: WebGL (fastest) → WASM (any Android) → CPU (fallback)
-        // Some mid-range Android GPUs crash or run out of VRAM with WebGL.
         const backends = ['webgl', 'wasm', 'cpu'] as const;
         let backendReady = false;
         for (const backend of backends) {
@@ -492,7 +303,6 @@ export default function ProctoringMonitor({
         const cocoSsd = await import('@tensorflow-models/coco-ssd');
         const model = await cocoSsd.load({ base: 'mobilenet_v2' });
 
-        // Warm-up inference
         if (mounted && videoRef.current && videoRef.current.readyState === 4) {
           try { await model.detect(videoRef.current); } catch { /* ok */ }
         }
@@ -503,68 +313,62 @@ export default function ProctoringMonitor({
           try {
             detecting = true;
             if (detectCtx && videoRef.current.videoWidth > 0) {
-              // canvas.filter is unsupported in Android WebView / Samsung Internet < 14
-              if ('filter' in detectCtx) detectCtx.filter = 'contrast(1.15) brightness(1.05)';
               detectCtx.drawImage(videoRef.current, 0, 0, DETECT_W, DETECT_H);
-              if ('filter' in detectCtx) detectCtx.filter = 'none';
             }
             let preds: import('@tensorflow-models/coco-ssd').DetectedObject[] = [];
-            let predsNative: import('@tensorflow-models/coco-ssd').DetectedObject[] = [];
             
             tf.engine().startScope();
             try {
               preds = await model.detect(detectCanvas);
-              predsNative = await model.detect(videoRef.current);
             } finally {
               tf.engine().endScope();
             }
-            const all = [...preds, ...predsNative];
 
-            // Draw COCO boxes (don't clear - FaceMesh draws first)
-            if (overlayCanvasRef?.current && videoRef.current.videoWidth > 0) {
-              const cv = overlayCanvasRef.current;
-              const gx = cv.getContext('2d');
-              if (gx) {
-                const sx = cv.width / videoRef.current.videoWidth;
-                const sy = cv.height / videoRef.current.videoHeight;
-                predsNative.forEach((p) => {
-                  if (p.score < 0.22) return;
-                  const isCheat = p.class in PHONE_CLASSES;
-                  const [bx, by, bw, bh] = p.bbox;
-                  gx.strokeStyle = isCheat ? '#ff2200' : '#22ff88';
-                  gx.lineWidth   = isCheat ? 2.5 : 1;
-                  gx.strokeRect(bx * sx, by * sy, bw * sx, bh * sy);
-                  gx.fillStyle = isCheat ? 'rgba(255,34,0,0.85)' : 'rgba(34,255,136,0.7)';
-                  gx.font = `bold ${isCheat ? 12 : 10}px monospace`;
-                  gx.fillText(
-                    `${p.class} ${(p.score * 100).toFixed(0)}%`,
-                    bx * sx + 2,
-                    by * sy > 14 ? by * sy - 4 : by * sy + bh * sy + 12
-                  );
-                });
-              }
-            }
-
-            const cocoDetected = all.some((p) => {
+            const phoneDetected = preds.some((p) => {
               const thr = PHONE_CLASSES[p.class];
               return thr !== undefined && p.score >= thr;
             });
 
-            // Only override the rect detector's result if COCO is confident
-            if (cocoDetected) openInfraction('PHONE_DETECTED', 'critical');
+            // Report through hysteresis debouncer to prevent single-frame anomalies
+            report('PHONE_DETECTED', phoneDetected, 'critical');
+
+            // Draw bounding boxes on overlay canvas for active visual verification
+            if (overlayCanvasRef?.current && videoRef.current.videoWidth > 0) {
+              const cv = overlayCanvasRef.current;
+              const gx = cv.getContext('2d');
+              if (gx) {
+                const sx = cv.width / DETECT_W;
+                const sy = cv.height / DETECT_H;
+                preds.forEach((p) => {
+                  if (p.score < 0.45) return;
+                  const isCheat = p.class in PHONE_CLASSES;
+                  const [bx, by, bw, bh] = p.bbox;
+                  gx.strokeStyle = isCheat ? '#ff2200' : 'rgba(34,255,136,0.6)';
+                  gx.lineWidth   = isCheat ? 2.5 : 1;
+                  gx.strokeRect(bx * sx, by * sy, bw * sx, bh * sy);
+                  if (isCheat) {
+                    gx.fillStyle = 'rgba(255,34,0,0.85)';
+                    gx.font = 'bold 12px monospace';
+                    gx.fillText(
+                      `${p.class.toUpperCase()} ${(p.score * 100).toFixed(0)}%`,
+                      bx * sx + 2,
+                      by * sy > 14 ? by * sy - 4 : by * sy + bh * sy + 12
+                    );
+                  }
+                });
+              }
+            }
           } catch {
             /* suppress */
           } finally {
             detecting = false;
           }
-        }, 1400);
+        }, 1200);
       } catch (e) {
         console.warn('[Proctor] COCO-SSD load failed:', e);
       }
     };
-    // Skip COCO-SSD on mobile OR low-end hardware (≤4 cores): the student IS on their phone so phone-detection
-    // is meaningless on mobile, and loading two ML models simultaneously causes OOM crashes
-    // on devices with ≤4GB RAM or dual/quad-core CPUs.
+
     const isLowEndHardware = typeof navigator !== 'undefined' && navigator.hardwareConcurrency <= 4;
     if (!isMobileRef.current && !isLowEndHardware) {
       initCoco();
@@ -575,7 +379,6 @@ export default function ProctoringMonitor({
       if (!mounted) return;
       try {
         const { FaceMesh } = await import('@mediapipe/face_mesh');
-        const { Camera } = await import('@mediapipe/camera_utils');
 
         const faceMesh = new FaceMesh({
           locateFile: (file: string) =>
@@ -583,10 +386,10 @@ export default function ProctoringMonitor({
         });
 
         faceMesh.setOptions({
-          maxNumFaces: 4,
+          maxNumFaces: 3,
           refineLandmarks: true,
-          minDetectionConfidence: 0.65,
-          minTrackingConfidence: 0.65,
+          minDetectionConfidence: 0.60,
+          minTrackingConfidence: 0.60,
         });
 
         faceMesh.onResults((results: { multiFaceLandmarks: LM[][] }) => {
@@ -628,11 +431,12 @@ export default function ProctoringMonitor({
             const pitchRatio = faceH > 0.01 ? (noseTip.y - forehead.y) / faceH : 0.5;
             const yawDeg     = (yawRatio - 0.5) * 90;
             const pitchDeg   = (pitchRatio - 0.5) * 90;
-            const gazeAway   = Math.abs(yawDeg) > 28 || pitchDeg > 20 || pitchDeg < -18;
 
+            // Natural gaze leeway: allow reading across entire screen & reading options
+            const gazeAway   = Math.abs(yawDeg) > 35 || pitchDeg > 28 || pitchDeg < -24;
             report('GAZE_AWAY', gazeAway, 'medium');
 
-            // ── Head Pitch (Looking at lap) ──
+            // ── Head Pitch (Looking down into lap / phone on lap) ──
             const calculateHeadPitch = (landmarks: LM[]) => {
               const f = landmarks[IDX_FOREHEAD];
               const c = landmarks[IDX_CHIN];
@@ -641,35 +445,28 @@ export default function ProctoringMonitor({
             };
             const headPitchDegrees = calculateHeadPitch(lm);
             
-            // 2D Proportion Ratio
-            const noseTipPt = lm[IDX_NOSE_TIP];
-            const chinPt = lm[IDX_CHIN];
-            const noseBridgePt = lm[IDX_NOSE_BRIDGE];
-            const dUpper = Math.abs(noseTipPt.y - noseBridgePt.y);
-            const dLower = Math.abs(chinPt.y - noseTipPt.y);
-            const faceRatio = dUpper > 0.001 ? dLower / dUpper : 1.0;
-            
-            // Boundary Check
+            // Forehead and chin landmarks
             const foreheadPt = lm[IDX_FOREHEAD];
-            const isOutOfFrame = foreheadPt.y < 0.02 && chinPt.y > 0.2;
+            const chinPt = lm[IDX_CHIN];
             
-            // "Head versus chin relation" (Ducking by extreme pitch)
-            const headMass = Math.abs(foreheadPt.y - noseTipPt.y);
-            const lowerMass = Math.abs(chinPt.y - noseTipPt.y);
+            // Head vs chin mass ratio
+            const headMass = Math.abs(foreheadPt.y - noseTip.y);
+            const lowerMass = Math.abs(chinPt.y - noseTip.y);
             const headVsChinRatio = lowerMass > 0.001 ? headMass / lowerMass : 1.0;
             
-            // Flag if the chin physically drops out of frame OR if the head proportion balloons
-            const isDucking = (chinPt.y > 0.95 && foreheadPt.y < 0.95) || (headVsChinRatio > 1.35);
+            // Ducking: chin drops out of frame completely or extreme crouch
+            const isDucking = (chinPt.y > 0.98 && foreheadPt.y < 0.90) || (headVsChinRatio > 1.85);
 
-            // Dynamic Shoulder Alignment Proxy: If chin drops below 0.85 of frame, shoulders are too low/out
-            const isShouldersOut = chinPt.y > 0.85;
+            // Shoulder proxy alignment
+            const isShouldersOut = chinPt.y > 0.88;
 
-            const PITCH_DOWN_THRESHOLD = -15; // Tightened threshold for looking down at lap
-            const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD || pitchDeg > 0.5 || faceRatio < 0.75 || isOutOfFrame;
+            // Realistic pitch down: When looking at lap/knees, pitch angle is steep (< -28°) and pitchDeg is pronounced
+            const PITCH_DOWN_THRESHOLD = -28;
+            const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD && pitchDeg > 12;
             
-            report('HEAD_PITCH_DOWN', isPitchDown, 'critical');
-            report('DUCKING_DOWN', isDucking, 'critical');
-            report('SHOULDERS_OUT_OF_FRAME', isShouldersOut, 'high');
+            report('HEAD_PITCH_DOWN', isPitchDown, 'medium');
+            report('DUCKING_DOWN', isDucking, 'high');
+            report('SHOULDERS_OUT_OF_FRAME', isShouldersOut, 'medium');
 
             if (overlayCanvasRef?.current) {
               const cv = overlayCanvasRef.current;
@@ -711,14 +508,14 @@ export default function ProctoringMonitor({
                 
                 if (isDucking) {
                   gx.fillStyle = '#ff0000';
-                  gx.fillText(`FACE HIDDEN (DUCK RATIO: ${headVsChinRatio.toFixed(2)})`, 6, H - 40);
+                  gx.fillText(`FACE CROUCHED`, 6, H - 40);
                 }
                 
                 // ── Calibration Geometric Centering ──
                 if (calibrationMode) {
-                  const isCenteredX = noseTip.x > 0.35 && noseTip.x < 0.65;
-                  const isCenteredY = noseTip.y > 0.35 && noseTip.y < 0.65;
-                  const isProximityGood = (chin.y - forehead.y) > 0.25;
+                  const isCenteredX = noseTip.x > 0.32 && noseTip.x < 0.68;
+                  const isCenteredY = noseTip.y > 0.28 && noseTip.y < 0.72;
+                  const isProximityGood = (chin.y - forehead.y) > 0.22;
                   
                   const isAligned = isCenteredX && isCenteredY && isProximityGood;
                   
@@ -778,9 +575,6 @@ export default function ProctoringMonitor({
       const hCtx = hiddenCv.getContext('2d', { willReadFrequently: true });
 
       try {
-        // Android fix (Bug A5): Reuse the parent component's already-open stream
-        // instead of calling getUserMedia again. Some OEMs (Huawei, Xiaomi) throw
-        // NotReadableError when two concurrent getUserMedia sessions are open.
         if (streamRef.current && streamRef.current.getAudioTracks().length > 0) {
           audioStream = new MediaStream(streamRef.current.getAudioTracks());
         } else {
@@ -788,8 +582,6 @@ export default function ProctoringMonitor({
         }
 
         audioCtx = new AudioContext();
-        // Android fix (Bug A2): AudioContext starts 'suspended' on Android Chrome
-        // due to the Web Audio autoplay policy. Resume it explicitly.
         if (audioCtx.state === 'suspended') {
           await audioCtx.resume();
         }
@@ -800,7 +592,6 @@ export default function ProctoringMonitor({
 
         const timeBuf = new Float32Array(analyser.frequencyBinCount);
         const freqBuf = new Uint8Array(analyser.frequencyBinCount);
-        let quietFrames = 0;
 
         const tick = () => {
           if (!mounted) return;
@@ -809,24 +600,30 @@ export default function ProctoringMonitor({
           for (let i = 0; i < timeBuf.length; i++) sumSq += timeBuf[i] * timeBuf[i];
           const rms = Math.sqrt(sumSq / timeBuf.length);
           
-          // Software check: verify the stream has an active audio track instead of relying on a strict RMS threshold
-          // which can cause issues with device noise gates (e.g. on iPhones requiring shouting).
           const isMuted = !audioStream || audioStream.getAudioTracks().length === 0 || audioStream.getAudioTracks()[0].readyState !== 'live';
           report('MIC_MUTED', isMuted, 'critical');
           pushStatus({ micWorking: !isMuted });
 
           if (calibFrames < CALIB_FRAMES) {
             calibSum += rms; calibFrames++;
-            if (calibFrames === CALIB_FRAMES)
-              ambientBaseline = Math.max(0.045, Math.min(0.14, (calibSum / CALIB_FRAMES) * 3.2));
+            if (calibFrames === CALIB_FRAMES) {
+              ambientBaseline = Math.max(0.03, Math.min(0.12, (calibSum / CALIB_FRAMES) * 1.5));
+            }
           } else {
+            // Adaptive smoothing to dynamic ambient room sound (fan, AC)
+            ambientBaseline = ambientBaseline * 0.998 + rms * 0.002;
+
             analyser.getByteFrequencyData(freqBuf);
             const binHz = (audioCtx!.sampleRate / 2) / freqBuf.length;
+            // Human voice fundamental frequencies: ~300Hz to 3000Hz
             const lo = Math.floor(300  / binHz);
-            const hi = Math.min(Math.floor(3500 / binHz), freqBuf.length - 1);
+            const hi = Math.min(Math.floor(3000 / binHz), freqBuf.length - 1);
             let sp = 0;
             for (let i = lo; i <= hi; i++) sp += freqBuf[i];
-            const isLoud = rms > ambientBaseline || sp / (hi - lo + 1) > 72;
+            const avgSpeechBand = sp / (hi - lo + 1);
+
+            // Require both significant volume above ambient AND speech frequency energy
+            const isLoud = rms > Math.max(0.08, ambientBaseline * 2.8) && avgSpeechBand > 78;
             report('LOUD_AUDIO', isLoud, 'medium');
           }
 
@@ -837,7 +634,7 @@ export default function ProctoringMonitor({
             let lum = 0;
             for (let i = 0; i < px.length; i += 4)
               lum += px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114;
-            const covered = (lum / (64 * 64)) < 12;
+            const covered = (lum / (64 * 64)) < 10;
             report('CAMERA_COVERED', covered, 'critical');
             pushStatus({ cameraCovered: covered });
           }
@@ -862,13 +659,17 @@ export default function ProctoringMonitor({
       const endMs = Date.now();
       activeInfractions.current.forEach((val, event) => {
         const dur = Math.round((endMs - val.startTime) / 1000);
-        const isValid = (event === 'HEAD_PITCH_DOWN' && dur >= 5) || (event !== 'HEAD_PITCH_DOWN' && dur >= 1);
+        const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'GAZE_AWAY';
+        const isValid = (isSlowEvent && dur >= 4) || (!isSlowEvent && dur >= 2);
         if (isValid && !calibrationMode) {
+          const snapshot = val.evidenceSnapshot || (dur >= 4 ? captureSnapshot(videoRef.current) : undefined);
           push(ref(rtdb, flagPath()), {
-            event, severity: val.severity,
+            event, 
+            severity: val.severity,
             startTime: new Date(val.startTime).toISOString(),
             endTime: new Date(endMs).toISOString(),
             durationInSeconds: dur,
+            ...(snapshot ? { evidenceSnapshot: snapshot } : {}),
           });
         }
       });
@@ -876,7 +677,6 @@ export default function ProctoringMonitor({
 
       if (rafId !== null) cancelAnimationFrame(rafId);
       if (cocoTimer !== null) clearInterval(cocoTimer);
-      if (rectTimer !== null) clearInterval(rectTimer);
       if (fmRaf !== null) cancelAnimationFrame(fmRaf);
       if (faceMeshInst) faceMeshInst.close();
       if (audioCtx) audioCtx.close();

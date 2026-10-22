@@ -103,6 +103,7 @@ function ResultsContent() {
               integrityFlag: data.integrityFlag,
               delaySeconds: data.delaySeconds,
               flagNote: data.flagNote,
+              integrityScore: data.integrityScore,
             };
           }));
           entries.sort((a, b) => b.score - a.score);
@@ -310,6 +311,7 @@ function ResultsContent() {
           panelNo: existingVal.panelNo,
           venue: existingVal.venue,
           dateTime: existingVal.dateTime,
+          integrityScore: existingVal.integrityScore,
         };
       }));
 
@@ -350,13 +352,14 @@ function ResultsContent() {
         await update(ref(rtdb, `results/${selectedTestId}/${uid}`), {
           aiSeverity: data.severity,
           aiSummary: data.summary,
+          integrityScore: data.integrityScore,
         });
       }
 
       setLeaderboard(prev =>
         prev.map(e =>
           e.uid === uid
-            ? { ...e, aiSeverity: data.severity, aiSummary: data.summary }
+            ? { ...e, aiSeverity: data.severity, aiSummary: data.summary, integrityScore: data.integrityScore }
             : e
         )
       );
