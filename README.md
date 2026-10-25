@@ -110,7 +110,7 @@ The platform features a multi-tiered Role-Based Access Control (RBAC) system for
 - **Comprehensive Telemetry:** An automated audit logger (`auditLogger.ts`) records all state-changing administrative actions to Firebase Realtime Database (`audit_logs`).
 - **Logged Events:** Question additions, question edits, question deletions, section creations, section updates, section deletions, test creations/deletions, solution submissions, personnel approvals/rejections/revocations, participant enrollments (single & CSV bulk import), and participant removals.
 - **Rich Metadata:** Every event logs the actor's email, name, role badge, timestamp (relative & ISO), target examination, section, question tag, participant identifiers, and preview snippet.
-- **Global Log Management:** Supreme administrators (**Admin Sr.**) hold full log governance, including single log deletion and filtered bulk purge operations via `/admin/logs`, protected by RTDB security rules.
+- **Global Log Management:** Supreme administrators (**Admin Sr.**) hold full log governance with individual entry review and deletion authority via `/admin/logs`, protected by RTDB security rules.
 - **Dual-Surface Visibility:** The interactive Events View component (`EventsAuditView.tsx`) is accessible to **Admin L1** in their dedicated dashboard (`/admin-l1`) and to **Admin Sr.** inside the dedicated Global Audit Logs page (`/admin/logs`) and Personnel Management console.
 
 ### 8.3 Personnel Request & Verification Flow

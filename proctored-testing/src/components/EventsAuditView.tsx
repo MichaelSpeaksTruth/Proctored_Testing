@@ -72,27 +72,6 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
     }
   };
 
-  const handleClearFiltered = async () => {
-    const count = filteredEvents.length;
-    if (!confirm(`Are you sure you want to permanently delete ${count} audit log entries?`)) return;
-    setLoading(true);
-    try {
-      const updates: Record<string, null> = {};
-      filteredEvents.forEach(e => {
-        updates[`audit_logs/${e.id}`] = null;
-      });
-      await update(ref(rtdb), updates);
-      setActionMsg(`Successfully deleted ${count} audit log entries.`);
-      setTimeout(() => setActionMsg(null), 3000);
-      await fetchEvents();
-    } catch (err) {
-      console.error('Failed to bulk delete audit logs:', err);
-      alert('Error deleting logs');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const filteredEvents = useMemo(() => {
     return events.filter(evt => {
       // Role filter
@@ -283,16 +262,6 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
             </p>
           </div>
           <div className="flex items-center gap-sm" style={{ flexWrap: 'wrap' }}>
-            {isSrAdmin && filteredEvents.length > 0 && (
-              <button
-                className="btn btn-outline btn-sm"
-                style={{ color: 'var(--accent-red-light)', borderColor: 'rgba(155, 34, 38, 0.5)' }}
-                onClick={handleClearFiltered}
-                disabled={loading}
-              >
-                Delete {filteredEvents.length === events.length ? 'All Logs' : `Filtered Logs (${filteredEvents.length})`}
-              </button>
-            )}
             <button
               className="btn btn-outline btn-sm"
               onClick={fetchEvents}
