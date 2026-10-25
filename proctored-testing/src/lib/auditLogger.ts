@@ -19,7 +19,12 @@ export interface AuditEvent {
     | 'SUBMIT_SOLUTIONS'
     | 'APPROVE_PERSONNEL'
     | 'REJECT_PERSONNEL'
-    | 'REVOKE_PERSONNEL';
+    | 'REVOKE_PERSONNEL'
+    | 'ADD_PARTICIPANT'
+    | 'BULK_ADD_PARTICIPANTS'
+    | 'DELETE_PARTICIPANT'
+    | 'FLAG_PARTICIPANT'
+    | 'UNFLAG_PARTICIPANT';
   actionLabel: string;
   targetTitle: string;
   details?: {
@@ -32,6 +37,11 @@ export interface AuditEvent {
     targetEmail?: string;
     targetRole?: string;
     targetName?: string;
+    participantEmail?: string;
+    participantName?: string;
+    flagReason?: string;
+    flagCategory?: string;
+    count?: number;
     [key: string]: any;
   };
 }

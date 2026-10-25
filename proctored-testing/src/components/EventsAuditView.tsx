@@ -22,6 +22,16 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
+  // Flag Participant Modal state
+  const [flagModalOpen, setFlagModalOpen] = useState(false);
+  const [flagEmail, setFlagEmail] = useState('');
+  const [flagName, setFlagName] = useState('');
+  const [flagAction, setFlagAction] = useState<'flag' | 'unflag'>('flag');
+  const [flagCategory, setFlagCategory] = useState('Integrity Flag');
+  const [flagReason, setFlagReason] = useState('');
+  const [flagSubmitting, setFlagSubmitting] = useState(false);
+  const [flagError, setFlagError] = useState<string | null>(null);
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, u => {
       setIsSrAdmin(isAdmin(u?.email));
@@ -93,6 +103,72 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
     }
   };
 
+  const openFlagModal = (opts?: {
+    email?: string;
+    name?: string;
+    action?: 'flag' | 'unflag';
+    category?: string;
+    reason?: string;
+  }) => {
+    setFlagEmail(opts?.email || '');
+    setFlagName(opts?.name || '');
+    setFlagAction(opts?.action || 'flag');
+    setFlagCategory(opts?.category || 'Integrity Flag');
+    setFlagReason(opts?.reason || '');
+    setFlagError(null);
+    setFlagModalOpen(true);
+  };
+
+  const handleFlagSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!flagEmail.trim()) {
+      setFlagError('Participant email is required.');
+      return;
+    }
+    setFlagSubmitting(true);
+    setFlagError(null);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        setFlagError('Authentication required. Please sign in again.');
+        setFlagSubmitting(false);
+        return;
+      }
+      const res = await fetch('/api/flag-participant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idToken,
+          email: flagEmail.trim().toLowerCase(),
+          name: flagName.trim(),
+          action: flagAction,
+          category: flagCategory,
+          reason: flagReason,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setFlagError(data.error || 'Failed to update participant flag.');
+        setFlagSubmitting(false);
+        return;
+      }
+
+      setActionMsg(
+        flagAction === 'unflag'
+          ? `Successfully removed flag for ${flagEmail}.`
+          : `Successfully flagged participant ${flagEmail} (${flagCategory}).`
+      );
+      setTimeout(() => setActionMsg(null), 4000);
+      setFlagModalOpen(false);
+      await fetchEvents();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Network error occurred.';
+      setFlagError(message);
+    } finally {
+      setFlagSubmitting(false);
+    }
+  };
+
   const filteredEvents = useMemo(() => {
     return events.filter(evt => {
       // Role filter
@@ -109,6 +185,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
         if (actionCategory === 'TESTS' && !evt.action.includes('TEST')) return false;
         if (actionCategory === 'PERSONNEL' && !evt.action.includes('PERSONNEL')) return false;
         if (actionCategory === 'SOLUTIONS' && !evt.action.includes('SOLUTIONS')) return false;
+        if (actionCategory === 'PARTICIPANTS' && !evt.action.includes('PARTICIPANT')) return false;
       }
 
       // Search
@@ -122,6 +199,9 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
         const snippetMatch = evt.details?.questionSnippet?.toLowerCase().includes(q);
         const testMatch = evt.details?.testTitle?.toLowerCase().includes(q);
         const secMatch = evt.details?.sectionName?.toLowerCase().includes(q);
+        const partEmailMatch = evt.details?.participantEmail?.toLowerCase().includes(q);
+        const partNameMatch = evt.details?.participantName?.toLowerCase().includes(q);
+        const flagReasonMatch = evt.details?.flagReason?.toLowerCase().includes(q);
 
         if (
           !actorNameMatch &&
@@ -131,7 +211,10 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
           !tagMatch &&
           !snippetMatch &&
           !testMatch &&
-          !secMatch
+          !secMatch &&
+          !partEmailMatch &&
+          !partNameMatch &&
+          !flagReasonMatch
         ) {
           return false;
         }
@@ -146,17 +229,28 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
     const adminSrCount = events.filter(e => e.actorRole.includes('Admin Sr.')).length;
     const questionSetterCount = events.filter(e => e.actorRole === 'Question Setter').length;
     const questionActions = events.filter(e => e.action.includes('QUESTION')).length;
-    return { total, adminSrCount, questionSetterCount, questionActions };
+    const participantActions = events.filter(e => e.action.includes('PARTICIPANT')).length;
+    return { total, adminSrCount, questionSetterCount, questionActions, participantActions };
   }, [events]);
 
   const getActionBadgeClass = (action: string) => {
-    if (action.startsWith('ADD') || action.startsWith('CREATE') || action.startsWith('APPROVE')) {
+    if (
+      action.startsWith('ADD') ||
+      action.startsWith('CREATE') ||
+      action.startsWith('APPROVE') ||
+      action.startsWith('BULK')
+    ) {
       return 'badge badge-green';
     }
     if (action.startsWith('EDIT') || action.startsWith('UPDATE') || action.startsWith('SUBMIT')) {
       return 'badge badge-amber';
     }
-    if (action.startsWith('DELETE') || action.startsWith('REJECT') || action.startsWith('REVOKE')) {
+    if (
+      action.startsWith('DELETE') ||
+      action.startsWith('REJECT') ||
+      action.startsWith('REVOKE') ||
+      action.startsWith('FLAG')
+    ) {
       return 'badge badge-red';
     }
     return 'badge badge-gray';
@@ -260,10 +354,17 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
               Activity Audit &amp; Events View
             </h2>
             <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4 }}>
-              Detailed chronological log of question setters, supreme administrators (Admin Sr.), and personnel actions.
+              Detailed chronological log of question setters, supreme administrators (Admin Sr.), candidates, and personnel actions.
             </p>
           </div>
           <div className="flex items-center gap-sm" style={{ flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => openFlagModal()}
+              style={{ borderColor: 'rgba(255, 107, 107, 0.4)', color: '#ff6b6b' }}
+            >
+              Flag Participant
+            </button>
             {isSrAdmin && filteredEvents.length > 0 && (
               <button
                 className="btn btn-outline btn-sm"
@@ -288,7 +389,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
             gap: 'var(--space-sm)',
             marginTop: 'var(--space-sm)',
           }}
@@ -340,6 +441,19 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
               border: '1px solid var(--border)',
             }}
           >
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Participant Events</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#64b5f6' }}>
+              {stats.participantActions}
+            </div>
+          </div>
+          <div
+            style={{
+              padding: 'var(--space-sm) var(--space-md)',
+              background: 'var(--bg-primary)',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border)',
+            }}
+          >
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Admin Sr. Logs</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#ff6b6b' }}>
               {stats.adminSrCount}
@@ -363,7 +477,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
             <input
               type="text"
               className="input"
-              placeholder="Search by actor name, email, question tag, test, action..."
+              placeholder="Search by actor name, email, participant, question tag, test, action..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               style={{ width: '100%' }}
@@ -409,6 +523,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
               { id: 'SECTIONS', label: 'Sections' },
               { id: 'TESTS', label: 'Tests' },
               { id: 'PERSONNEL', label: 'Personnel' },
+              { id: 'PARTICIPANTS', label: 'Participants' },
             ].map(cat => (
               <button
                 key={cat.id}
@@ -446,6 +561,13 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
           {filteredEvents.map(evt => {
             const time = formatTimestamp(evt.timestamp);
             const isExpanded = expandedEventId === evt.id;
+            const hasParticipant =
+              Boolean(evt.details?.participantEmail) || evt.action.includes('PARTICIPANT');
+            const participantEmail =
+              evt.details?.participantEmail ||
+              (evt.action.includes('PARTICIPANT') && evt.targetTitle?.includes('@')
+                ? evt.targetTitle.trim()
+                : '');
 
             return (
               <div
@@ -525,7 +647,42 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
                       {time.formatted}
                     </div>
 
-                    <div className="flex items-center gap-xs" style={{ marginTop: 2 }}>
+                    <div className="flex items-center gap-xs" style={{ marginTop: 2, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      {/* In-log flag control */}
+                      {evt.action === 'FLAG_PARTICIPANT' ? (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontSize: '0.75rem', padding: '2px 8px', color: 'var(--accent-amber-light)' }}
+                          onClick={() =>
+                            openFlagModal({
+                              email: evt.details?.participantEmail || participantEmail,
+                              name: evt.details?.participantName,
+                              action: 'unflag',
+                              category: evt.details?.flagCategory,
+                              reason: evt.details?.flagReason,
+                            })
+                          }
+                          title="Remove flag from this candidate"
+                        >
+                          Remove Flag
+                        </button>
+                      ) : hasParticipant && participantEmail ? (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontSize: '0.75rem', padding: '2px 8px', color: '#ff6b6b' }}
+                          onClick={() =>
+                            openFlagModal({
+                              email: participantEmail,
+                              name: evt.details?.participantName,
+                              action: 'flag',
+                            })
+                          }
+                          title="Flag this candidate"
+                        >
+                          Flag Candidate
+                        </button>
+                      ) : null}
+
                       {evt.details && Object.keys(evt.details).length > 0 && (
                         <button
                           className="btn btn-ghost btn-sm"
@@ -535,6 +692,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
                           {isExpanded ? 'Hide Details' : 'View Details'}
                         </button>
                       )}
+
                       {isSrAdmin && (
                         <button
                           className="btn btn-ghost btn-sm"
@@ -561,6 +719,51 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
                       fontSize: '0.8125rem',
                     }}
                   >
+                    {evt.details.participantEmail && (
+                      <div style={{ marginBottom: 6 }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Candidate: </span>
+                        <strong>{evt.details.participantName ? `${evt.details.participantName} ` : ''}</strong>
+                        <code style={{ color: 'var(--accent-green-light)' }}>
+                          &lt;{evt.details.participantEmail}&gt;
+                        </code>
+                      </div>
+                    )}
+                    {evt.details.flagCategory && (
+                      <div style={{ marginBottom: 4 }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Flag Category: </span>
+                        <span className="badge badge-red" style={{ fontSize: '0.75rem' }}>
+                          {evt.details.flagCategory}
+                        </span>
+                      </div>
+                    )}
+                    {evt.details.flagReason && (
+                      <div style={{ marginBottom: 6 }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Flag Reason: </span>
+                        <blockquote
+                          style={{
+                            margin: '4px 0 0 0',
+                            padding: '6px 12px',
+                            background: 'var(--bg-secondary)',
+                            borderLeft: '2px solid #ff6b6b',
+                            color: 'var(--text-secondary)',
+                          }}
+                        >
+                          {evt.details.flagReason}
+                        </blockquote>
+                      </div>
+                    )}
+                    {evt.details.flaggedBy && (
+                      <div style={{ marginBottom: 4 }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Flagged By: </span>
+                        <span>{evt.details.flaggedBy}</span>
+                      </div>
+                    )}
+                    {evt.details.unflaggedBy && (
+                      <div style={{ marginBottom: 4 }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Unflagged By: </span>
+                        <span>{evt.details.unflaggedBy}</span>
+                      </div>
+                    )}
                     {evt.details.questionTag && (
                       <div style={{ marginBottom: 6 }}>
                         <span style={{ color: 'var(--text-muted)' }}>Question Tag: </span>
@@ -606,11 +809,191 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
                         <span>{evt.details.count}</span>
                       </div>
                     )}
+
+                    {/* Quick in-log action inside details */}
+                    {participantEmail && (
+                      <div style={{ marginTop: 'var(--space-sm)', paddingTop: 'var(--space-xs)', borderTop: '1px solid var(--border)' }}>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          style={{ fontSize: '0.75rem', padding: '2px 8px', borderColor: 'rgba(255, 107, 107, 0.4)', color: '#ff6b6b' }}
+                          onClick={() =>
+                            openFlagModal({
+                              email: participantEmail,
+                              name: evt.details?.participantName,
+                              action: evt.action === 'FLAG_PARTICIPANT' ? 'unflag' : 'flag',
+                            })
+                          }
+                        >
+                          {evt.action === 'FLAG_PARTICIPANT' ? 'Unflag Candidate in Database' : 'Flag Candidate in Database'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Flag / Unflag Participant Modal */}
+      {flagModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 'var(--space-md)',
+            backdropFilter: 'blur(4px)',
+          }}
+          onClick={() => {
+            if (!flagSubmitting) setFlagModalOpen(false);
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: 520,
+              width: '100%',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-light)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-md)' }}>
+              <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 700 }}>
+                {flagAction === 'unflag' ? 'Remove Participant Flag' : 'Flag Participant'}
+              </h3>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setFlagModalOpen(false)}
+                disabled={flagSubmitting}
+                style={{ padding: '2px 8px' }}
+              >
+                Close
+              </button>
+            </div>
+
+            {flagError && (
+              <div className="alert alert-danger" style={{ marginBottom: 'var(--space-md)' }}>
+                {flagError}
+              </div>
+            )}
+
+            <form onSubmit={handleFlagSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>
+                  Participant Email *
+                </label>
+                <input
+                  type="email"
+                  required
+                  className="input"
+                  placeholder="candidate@example.com"
+                  value={flagEmail}
+                  onChange={e => setFlagEmail(e.target.value)}
+                  disabled={flagSubmitting}
+                  style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>
+                  Candidate Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Full name"
+                  value={flagName}
+                  onChange={e => setFlagName(e.target.value)}
+                  disabled={flagSubmitting}
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              {flagAction === 'flag' ? (
+                <>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>
+                      Flag Category *
+                    </label>
+                    <select
+                      className="input"
+                      value={flagCategory}
+                      onChange={e => setFlagCategory(e.target.value)}
+                      disabled={flagSubmitting}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="Integrity Flag">Integrity Flag</option>
+                      <option value="Proctoring Anomaly">Proctoring Anomaly</option>
+                      <option value="Unfair Means / Cheating">Unfair Means / Cheating</option>
+                      <option value="Multiple Faces Detected">Multiple Faces Detected</option>
+                      <option value="Absence from Camera">Absence from Camera</option>
+                      <option value="Tab Switching Violation">Tab Switching Violation</option>
+                      <option value="Identity Verification Issue">Identity Verification Issue</option>
+                      <option value="Disciplinary Review">Disciplinary Review</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>
+                      Audit Notes / Reason *
+                    </label>
+                    <textarea
+                      className="input"
+                      rows={3}
+                      required
+                      placeholder="Describe reason for flagging this participant..."
+                      value={flagReason}
+                      onChange={e => setFlagReason(e.target.value)}
+                      disabled={flagSubmitting}
+                      style={{ width: '100%', resize: 'vertical' }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: 'var(--space-md)', background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)' }}>
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                    This will remove the integrity flag from participant <strong>{flagEmail}</strong> and unflag any associated examination results.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-sm" style={{ marginTop: 'var(--space-sm)' }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setFlagModalOpen(false)}
+                  disabled={flagSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={`btn btn-sm ${flagAction === 'unflag' ? 'btn-outline' : 'btn-primary'}`}
+                  style={flagAction === 'flag' ? { background: '#9b2226', borderColor: '#9b2226' } : {}}
+                  disabled={flagSubmitting}
+                >
+                  {flagSubmitting
+                    ? 'Processing...'
+                    : flagAction === 'unflag'
+                    ? 'Remove Flag'
+                    : 'Confirm and Flag'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

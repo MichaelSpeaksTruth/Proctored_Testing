@@ -1,16 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { rtdb } from '@/lib/firebase';
+import { auth, rtdb } from '@/lib/firebase';
 import { ref, get, set, remove } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
+import { logAuditEvent } from '@/lib/auditLogger';
 
 interface Participant {
   email: string;
   name?: string;
   allowed: boolean;
   tests?: Record<string, boolean>;
+  flagged?: boolean;
+  flagCategory?: string;
+  flagReason?: string;
+  flaggedAt?: string;
 }
 
 interface TestOption {
@@ -102,18 +107,41 @@ function ParticipantsContent() {
     setError(null);
     const lines = emailInput.split('\n').map((e) => e.trim()).filter(Boolean);
     let count = 0;
+    let singleName = '';
+    let singleEmail = '';
     for (const line of lines) {
       const parts = line.split(',');
       if (parts.length >= 2) {
         const name = parts[0].trim();
         const email = parts[1].trim();
-        if (await addParticipant(name, email)) count++;
+        if (await addParticipant(name, email)) {
+          count++;
+          singleName = name;
+          singleEmail = email;
+        }
       }
     }
     if (count === 0 && lines.length > 0) {
        setError('Failed to add participants. Ensure format is "Name, Email" and Name is provided.');
     } else {
        setMsg(`Added ${count} participant(s).`);
+       if (count > 0 && selectedTestId) {
+         const testTitle = tests.find(t => t.id === selectedTestId)?.title || selectedTestId;
+         logAuditEvent({
+           actorEmail: auth.currentUser?.email || process.env.NEXT_PUBLIC_ADMIN_1 || 'admin',
+           actorName: `${auth.currentUser?.displayName || 'Admin'} (Admin Sr.)`,
+           actorRole: 'Admin Sr.',
+           action: 'ADD_PARTICIPANT',
+           actionLabel: count === 1 ? 'Added Participant' : 'Added Participants',
+           targetTitle: count === 1 ? `${singleName} (${singleEmail})` : `${count} participant(s)`,
+           details: {
+             count,
+             testId: selectedTestId,
+             testTitle,
+             ...(count === 1 ? { participantEmail: singleEmail, participantName: singleName } : {}),
+           },
+         });
+       }
     }
     setEmailInput('');
     setLoading(false);
@@ -137,6 +165,23 @@ function ParticipantsContent() {
         if (await addParticipant(name, email)) count++;
       }
       setMsg(`Imported ${count} participant(s) from file.`);
+
+      if (count > 0 && selectedTestId) {
+        const testTitle = tests.find(t => t.id === selectedTestId)?.title || selectedTestId;
+        logAuditEvent({
+          actorEmail: auth.currentUser?.email || process.env.NEXT_PUBLIC_ADMIN_1 || 'admin',
+          actorName: `${auth.currentUser?.displayName || 'Admin'} (Admin Sr.)`,
+          actorRole: 'Admin Sr.',
+          action: 'BULK_ADD_PARTICIPANTS',
+          actionLabel: 'Imported Participants via CSV',
+          targetTitle: `${count} participant(s)`,
+          details: {
+            count,
+            testId: selectedTestId,
+            testTitle,
+          },
+        });
+      }
     } catch (e) {
       setError('Failed to parse file. Ensure it has an "email" column.');
     } finally {
@@ -161,6 +206,21 @@ function ParticipantsContent() {
     } else {
       await remove(ref(rtdb, `participants/${key}`));
     }
+
+    const testTitle = tests.find(t => t.id === selectedTestId)?.title || selectedTestId;
+    logAuditEvent({
+      actorEmail: auth.currentUser?.email || process.env.NEXT_PUBLIC_ADMIN_1 || 'admin',
+      actorName: `${auth.currentUser?.displayName || 'Admin'} (Admin Sr.)`,
+      actorRole: 'Admin Sr.',
+      action: 'DELETE_PARTICIPANT',
+      actionLabel: 'Removed Participant from Test',
+      targetTitle: email,
+      details: {
+        participantEmail: email,
+        testId: selectedTestId,
+        testTitle,
+      },
+    });
   };
 
   const handleSaveEdit = async (oldEmail: string) => {
@@ -366,7 +426,14 @@ function ParticipantsContent() {
                       <>
                         <td style={{ fontWeight: 500 }}>{p.name || '-'}</td>
                         <td style={{ fontFamily: 'var(--font-mono)' }}>{p.email}</td>
-                        <td><span className="badge badge-green">Approved</span></td>
+                        <td>
+                          <span className="badge badge-green">Approved</span>
+                          {p.flagged && (
+                            <span className="badge badge-red" style={{ marginLeft: 6 }}>
+                              Flagged: {p.flagCategory || 'Integrity'}
+                            </span>
+                          )}
+                        </td>
                         <td>
                           <div className="flex gap-sm">
                             <button

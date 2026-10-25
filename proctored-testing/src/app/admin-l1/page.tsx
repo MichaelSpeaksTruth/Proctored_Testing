@@ -30,6 +30,9 @@ interface ParticipantItem {
   name?: string;
   allowed: boolean;
   tests?: Record<string, boolean>;
+  flagged?: boolean;
+  flagCategory?: string;
+  flagReason?: string;
 }
 
 interface TestOption {
@@ -810,6 +813,15 @@ function AdminL1Content() {
                                 <span className="badge badge-green">Allowed</span>
                               ) : (
                                 <span className="badge badge-red">Blocked</span>
+                              )}
+                              {cand.flagged && (
+                                <span
+                                  className="badge badge-red"
+                                  style={{ marginLeft: 6, fontSize: '0.6875rem' }}
+                                  title={cand.flagReason || undefined}
+                                >
+                                  Flagged: {cand.flagCategory || 'Integrity'}
+                                </span>
                               )}
                             </td>
                             <td>

@@ -108,9 +108,11 @@ The platform features a multi-tiered Role-Based Access Control (RBAC) system for
 ### 8.2 Activity Audit & Events Logging Engine
 
 - **Comprehensive Telemetry:** An automated audit logger (`auditLogger.ts`) records all state-changing administrative actions to Firebase Realtime Database (`audit_logs`).
-- **Logged Events:** Question additions, question edits, question deletions, section creations, section updates, section deletions, test creations/deletions, solution submissions, and personnel approvals/rejections/revocations.
-- **Rich Metadata:** Every event logs the actor's email, name, role badge, timestamp (relative & ISO), target examination, section, question tag, and preview snippet.
-- **Dual-Surface Visibility:** The interactive Events View component (`EventsAuditView.tsx`) is accessible to **Admin L1** in their dedicated dashboard and to **Admin Sr.** inside the Personnel Management console.
+- **Logged Events:** Question additions, question edits, question deletions, section creations, section updates, section deletions, test creations/deletions, solution submissions, personnel approvals/rejections/revocations, participant enrollments (single & CSV bulk import), participant deletions, and candidate integrity flag/unflag events.
+- **Rich Metadata:** Every event logs the actor's email, name, role badge, timestamp (relative & ISO), target examination, section, question tag, candidate identifiers, violation category, and preview snippet.
+- **In-Log Participant Flagging:** Administrators can flag or unflag candidates directly within the audit log interface. Flagging propagates integrity statuses across participant directories and examination results, documenting the violation category and disciplinary notes.
+- **Global Log Management:** Supreme administrators (**Admin Sr.**) hold full log governance, including single log deletion and filtered bulk purge operations via `/admin/logs`, protected by RTDB security rules.
+- **Dual-Surface Visibility:** The interactive Events View component (`EventsAuditView.tsx`) is accessible to **Admin L1** in their dedicated dashboard (`/admin-l1`) and to **Admin Sr.** inside the dedicated Global Audit Logs page (`/admin/logs`) and Personnel Management console.
 
 ### 8.3 Personnel Request & Verification Flow
 
