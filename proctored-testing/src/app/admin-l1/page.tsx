@@ -267,34 +267,30 @@ function AdminL1Content() {
           style={{
             marginBottom: 'var(--space-xl)',
             borderRadius: 'var(--radius-lg)',
-            padding: '12px var(--space-lg)',
           }}
         >
           <div className="brand">
-            <div style={{ width: 34, height: 34, borderRadius: '4px', overflow: 'hidden' }}>
-              <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={34} height={34} style={{ objectFit: 'cover' }} />
+            <div style={{ width: 32, height: 32, borderRadius: '4px', overflow: 'hidden' }}>
+              <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={32} height={32} style={{ objectFit: 'cover' }} />
             </div>
             <div>
-              <div className="brand-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>AeroSoc Examination Portal</span>
-                <span
-                  className="badge"
-                  style={{
-                    background: 'rgba(33, 150, 243, 0.2)',
-                    color: '#64b5f6',
-                    border: '1px solid rgba(33, 150, 243, 0.5)',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                  }}
-                >
-                  Admin L1 Portal
-                </span>
-              </div>
-              <div className="brand-sub">Observation, Audit Log &amp; Candidate Evaluation</div>
+              <div className="brand-name">AeroSoc Admin L1</div>
+              <div className="brand-sub">BIT Mesra · Examination Supervisory Portal</div>
             </div>
           </div>
 
           <div className="flex items-center gap-md navbar-actions">
+            <span
+              className="badge badge-gray"
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Admin L1
+            </span>
             <span
               style={{
                 fontSize: '0.8125rem',
