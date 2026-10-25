@@ -485,8 +485,8 @@ function QuestionSetterContent() {
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tag: {q.tag}</div>
                               </div>
                               <div className="flex gap-sm">
-                                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-blue)' }} onClick={() => handleEditClick(selectedTest.id, sec.id, q)}>✎ Edit</button>
-                                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-red-light)' }} onClick={() => deleteQuestion(selectedTest.id, sec.id, q.id)}>🗑 Delete</button>
+                                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-blue)' }} onClick={() => handleEditClick(selectedTest.id, sec.id, q)}>Edit</button>
+                                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-red-light)' }} onClick={() => deleteQuestion(selectedTest.id, sec.id, q.id)}>Delete</button>
                               </div>
                             </div>
                           ))}
@@ -514,7 +514,7 @@ function QuestionSetterContent() {
                             <div key={q.id} style={{ padding: '12px', background: 'var(--bg-input)', borderRadius: 4, marginBottom: 8 }}>
                               <div style={{ fontSize: '0.875rem', marginBottom: 8 }}>
                                 {q.text} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Tag: {q.tag})</span>
-                                {hasAns && <span style={{ marginLeft: 8, color: 'var(--accent-green)' }}>✅ Solution Received</span>}
+                                {hasAns && <span style={{ marginLeft: 8, color: 'var(--accent-green)' }}>Solution Received</span>}
                               </div>
                               {q.type === 'mcq' ? (
                                 <select 

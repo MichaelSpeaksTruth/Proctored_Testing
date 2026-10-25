@@ -122,9 +122,9 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
   };
 
   const rankStyle = (rank: number) => {
-    if (rank === 1) return { className: 'rank-1', symbol: '🥇 1' };
-    if (rank === 2) return { className: 'rank-2', symbol: '🥈 2' };
-    if (rank === 3) return { className: 'rank-3', symbol: '🥉 3' };
+    if (rank === 1) return { className: 'rank-1', symbol: '1' };
+    if (rank === 2) return { className: 'rank-2', symbol: '2' };
+    if (rank === 3) return { className: 'rank-3', symbol: '3' };
     return { className: '', symbol: String(rank) };
   };
 
@@ -319,7 +319,7 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                                           gap: 4
                                         }}
                                       >
-                                        📷 View Proof
+                                        View Proof
                                       </button>
                                     )}
                                   </div>
@@ -378,7 +378,7 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                 onClick={() => setPreviewSnapshot(null)}
                 style={{ padding: '2px 8px' }}
               >
-                ✕ Close
+                Close
               </button>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}

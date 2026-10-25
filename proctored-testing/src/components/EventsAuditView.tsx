@@ -126,7 +126,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
             fontWeight: 600,
           }}
         >
-          👑 Admin Sr.
+          Admin Sr.
         </span>
       );
     }
@@ -136,7 +136,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
           className="badge badge-green"
           style={{ fontSize: '0.75rem', fontWeight: 600 }}
         >
-          ✏️ Question Setter
+          Question Setter
         </span>
       );
     }
@@ -152,7 +152,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
             fontWeight: 600,
           }}
         >
-          🛡️ Admin L1
+          Admin L1
         </span>
       );
     }
@@ -214,7 +214,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
             disabled={loading}
             style={{ display: 'flex', alignItems: 'center', gap: 6 }}
           >
-            🔄 {loading ? 'Refreshing...' : 'Refresh Logs'}
+            {loading ? 'Refreshing...' : 'Refresh Logs'}
           </button>
         </div>
 

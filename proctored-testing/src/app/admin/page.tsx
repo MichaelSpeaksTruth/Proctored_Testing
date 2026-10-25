@@ -54,7 +54,7 @@ function AdminHomeContent() {
               fontWeight: 700,
             }}
           >
-            👑 Admin Sr.
+            Admin Sr.
           </span>
           <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
             {email}

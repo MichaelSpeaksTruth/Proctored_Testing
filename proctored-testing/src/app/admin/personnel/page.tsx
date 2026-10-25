@@ -196,15 +196,15 @@ function PersonnelManagement() {
             fontWeight: 600,
           }}
         >
-          🛡️ Admin L1
+          Admin L1
         </span>
       );
     }
     if (role === 'Question Setter') {
-      return <span className="badge badge-green">✏️ Question Setter</span>;
+      return <span className="badge badge-green">Question Setter</span>;
     }
     if (role === "Spectator's View") {
-      return <span className="badge badge-amber">👁️ Spectator&apos;s View</span>;
+      return <span className="badge badge-amber">Spectator&apos;s View</span>;
     }
     return <span className="badge badge-gray">{role}</span>;
   };
@@ -245,7 +245,7 @@ function PersonnelManagement() {
                     letterSpacing: '0.04em',
                   }}
                 >
-                  👑 SUPREME ADMIN LEVEL (Admin Sr.)
+                  SUPREME ADMIN LEVEL (Admin Sr.)
                 </span>
                 <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
                   Platform Root Authority
@@ -278,7 +278,6 @@ function PersonnelManagement() {
                   border: '1px solid var(--border)',
                 }}
               >
-                <span style={{ fontSize: '1rem' }}>🛡️</span>
                 <div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                     Admin Sr. #{idx + 1}
@@ -312,14 +311,14 @@ function PersonnelManagement() {
             onClick={() => setActiveTab('personnel')}
             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
-            👥 Personnel & Requests {requests.length > 0 && `(${requests.length} pending)`}
+            Personnel & Requests {requests.length > 0 && `(${requests.length} pending)`}
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'events' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setActiveTab('events')}
             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
-            📋 Events View (Activity Log)
+            Events View (Activity Log)
           </button>
         </div>
 

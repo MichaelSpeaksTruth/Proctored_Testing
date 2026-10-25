@@ -62,7 +62,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
           <button
             onClick={onClose}
             style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.25rem', cursor: 'pointer', lineHeight: 1 }}
-          >✕</button>
+          >&times;</button>
         </div>
         {children}
       </div>
@@ -84,7 +84,7 @@ function DeleteBtn({ label, onConfirm, disabled }: { label: string; onConfirm: (
   }
   return (
     <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-red-light)' }} disabled={disabled} onClick={() => setConfirming(true)}>
-      🗑 {label}
+      Delete {label}
     </button>
   );
 }
@@ -532,7 +532,7 @@ function SetupContent() {
                             className="btn btn-ghost btn-sm"
                             onClick={() => setEditMode({ kind: 'test', testId: t.id, title: t.title })}
                             title="Rename test"
-                          >✏️</button>
+                          >Edit</button>
                           <DeleteBtn label="" onConfirm={() => deleteTest(t.id)} disabled={loading} />
                         </div>
                       </div>
@@ -601,7 +601,7 @@ function SetupContent() {
                           <button
                             className="btn btn-ghost btn-sm"
                             onClick={() => setEditMode({ kind: 'section', testId: selectedTestId!, sectionId: sec.id, name: sec.name, timeLimit: sec.timeLimit })}
-                          >✏️ Edit</button>
+                          >Edit</button>
                           <DeleteBtn label="Section" onConfirm={() => deleteSection(selectedTestId!, sec.id)} disabled={loading} />
                         </div>
                       </div>
@@ -656,7 +656,7 @@ function SetupContent() {
                                   className="btn btn-ghost btn-sm"
                                   style={{ padding: '2px 8px', fontSize: '0.75rem' }}
                                   onClick={() => setEditMode({ kind: 'question', testId: selectedTestId!, sectionId: sec.id, question: { ...q, options: q.options ? [...q.options] : ['', '', '', ''] } })}
-                                >✏️</button>
+                                >Edit</button>
                                 <DeleteBtn label="" onConfirm={() => deleteQuestion(selectedTestId!, sec.id, q.id)} disabled={loading} />
                               </div>
                             </div>
@@ -845,7 +845,7 @@ function SetupContent() {
                         opts.splice(i, 1);
                         setEditMode({ ...editMode, question: { ...editMode.question, options: opts } });
                       }}
-                    >✕</button>
+                    >&times;</button>
                   )}
                 </div>
               ))}

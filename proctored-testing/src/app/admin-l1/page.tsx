@@ -287,7 +287,7 @@ function AdminL1Content() {
                     fontWeight: 700,
                   }}
                 >
-                  🛡️ Admin L1 Portal
+                  Admin L1 Portal
                 </span>
               </div>
               <div className="brand-sub">Observation, Audit Log &amp; Candidate Evaluation</div>
@@ -328,28 +328,28 @@ function AdminL1Content() {
             onClick={() => setActiveTab('events')}
             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
-            📋 Events View (Activity Log)
+            Events View (Activity Log)
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'tests' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setActiveTab('tests')}
             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
-            📝 Tests &amp; Question Attribution
+            Tests &amp; Question Attribution
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'spectator' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setActiveTab('spectator')}
             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
-            👁️ Spectator View
+            Spectator View
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'participants' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setActiveTab('participants')}
             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
-            👥 Participants (View Only)
+            Participants (View Only)
           </button>
         </div>
 
@@ -472,7 +472,7 @@ function AdminL1Content() {
                           </div>
                           <div className="flex items-center gap-sm">
                             <span className="badge badge-gray">
-                              ⏱️ {Math.round((section.timeLimit || 0) / 60)} mins
+                              {Math.round((section.timeLimit || 0) / 60)} mins
                             </span>
                             <span className="badge badge-gray">
                               {qList.length} {qList.length === 1 ? 'question' : 'questions'}
@@ -587,7 +587,7 @@ function AdminL1Content() {
                                   }}
                                 >
                                   <div className="flex items-center gap-sm" style={{ flexWrap: 'wrap' }}>
-                                    <span style={{ color: 'var(--text-muted)' }}>👤 Question Added by:</span>
+                                    <span style={{ color: 'var(--text-muted)' }}>Added by:</span>
                                     <span style={{ fontWeight: 600, color: 'var(--white)' }}>
                                       {q.authorName || q.authorEmail?.split('@')[0] || 'Admin Sr. / Question Setter (Legacy)'}
                                     </span>
