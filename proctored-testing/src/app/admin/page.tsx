@@ -14,7 +14,7 @@ const ADMIN_TABS = [
   { label: 'System Calibration', href: '/admin/calibration', icon: <Activity size={24} color="var(--accent-green)" />, desc: 'Test AI proctoring models and sensors' },
   { label: 'Test Setup', href: '/admin/setup', icon: <Settings size={24} color="var(--text-muted)" />, desc: 'Create sections, questions, and timers' },
   { label: 'Participants', href: '/admin/participants', icon: <Users size={24} color="var(--text-muted)" />, desc: 'Upload and manage examinee emails' },
-  { label: 'Personnel Management', href: '/admin/personnel', icon: <Shield size={24} color="var(--text-muted)" />, desc: 'Approve and manage Question Setters and Spectators' },
+  { label: 'Personnel Management', href: '/admin/personnel', icon: <Shield size={24} color="var(--text-muted)" />, desc: 'Manage Admin L1, Setters, Spectators & Activity Log' },
   { label: 'Control Panel', href: '/admin/control', icon: <Zap size={24} color="var(--accent-red)" />, desc: 'Start, monitor, and end the live test' },
   { label: 'Results & Grading', href: '/admin/results', icon: <Award size={24} color="var(--accent-amber)" />, desc: 'Upload answer key, declare results, and review AI proctoring reports' },
 ];
@@ -44,6 +44,18 @@ function AdminHomeContent() {
           </div>
         </div>
         <div className="flex items-center gap-md navbar-actions">
+          <span
+            className="badge"
+            style={{
+              background: 'rgba(155, 34, 38, 0.25)',
+              color: '#ff6b6b',
+              border: '1px solid rgba(155, 34, 38, 0.6)',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+            }}
+          >
+            👑 Admin Sr.
+          </span>
           <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
             {email}
           </span>

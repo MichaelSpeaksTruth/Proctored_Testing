@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { auth, rtdb } from '@/lib/firebase';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User } from 'firebase/auth';
 import { ref, get, update, set } from 'firebase/database';
-import { isAdmin, isQuestionSetter, isSpectator } from '@/lib/adminUtils';
+import { isAdmin, isQuestionSetter, isSpectator, isAdminL1 } from '@/lib/adminUtils';
 import Image from 'next/image';
 
 type Mode = 'candidate' | 'personnel' | 'apply';
@@ -55,6 +55,9 @@ export default function LoginPage() {
             return;
           } else if (isSpectator(pData.role)) {
             router.replace('/spectator');
+            return;
+          } else if (isAdminL1(pData.role)) {
+            router.replace('/admin-l1');
             return;
           }
         }
@@ -167,6 +170,7 @@ export default function LoginPage() {
           const role = personnelSnap.val().role;
           if (isQuestionSetter(role)) router.replace('/question-setter');
           else if (isSpectator(role)) router.replace('/spectator');
+          else if (isAdminL1(role)) router.replace('/admin-l1');
           return;
         }
         
@@ -381,6 +385,7 @@ export default function LoginPage() {
                         <select required value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
                           <option value="Question Setter">Question Setter</option>
                           <option value="Spectator's View">Spectator&#39;s View</option>
+                          <option value="Admin L1">Admin L1</option>
                         </select>
                       </div>
 

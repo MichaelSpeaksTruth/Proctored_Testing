@@ -10,6 +10,11 @@ export interface Question {
   tag: string;
   timeLimit?: number;
   authorEmail?: string;
+  authorName?: string;
+  authorRole?: string;
+  createdAt?: string;
+  lastEditedBy?: string;
+  lastEditedAt?: string;
 }
 
 interface Props {

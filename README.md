@@ -92,13 +92,29 @@ The system enforces a strict defense-in-depth security perimeter:
 
 ## 8. Role-Based Access Control and Security Architecture
 
-The platform features a multi-tiered Role-Based Access Control system for delegating exam responsibilities securely.
+The platform features a multi-tiered Role-Based Access Control (RBAC) system for delegating and auditing examination responsibilities securely.
 
-**Personnel Request Flow:** Users authenticate via Google Auth to apply for roles such as Question Setter or Spectator. The Firebase Realtime Database rules strictly validate the email payload. 
+### 8.1 Role Hierarchy
 
-**Question Setter Module:** Approved Question Setters create exam sections and upload questions stamped with a unique 9-character alphanumeric tag and bound to their email. Database rules strictly prevent cross-author tampering.
+- **Admin Sr. (Supreme Administrators):** Root administrators (`NEXT_PUBLIC_ADMIN_1`, `NEXT_PUBLIC_ADMIN_2`) holding complete authority over test setups, candidate enrollments, personnel approvals, results declaration, and system calibration. All actions taken by supreme admins are explicitly stamped as **Admin Sr.** in the system audit logs.
+- **Admin L1 (Supervisory & Audit Administrator):** A specialized observational role designed for club leadership and senior monitors. Admin L1 users have access to:
+  1. **Organized Events View:** Real-time chronological audit trail of all actions performed by Question Setters and Admin Sr. (question additions/edits/deletions, section updates, personnel actions). Includes role filters, category filters, and preview details.
+  2. **Test Structure & Question Attribution:** Full inspection of tests and sections, with an explicit attribution badge under every question indicating who created it, their role, and timestamps. Strictly read-only to prevent unauthorized alterations.
+  3. **Spectator View Access:** Full access to the live leaderboard, Interviewer Mode (filtering Qualified/Waitlisted candidates, AI review severity, proctoring flags, search), and Excel exports (`.xlsx`).
+  4. **Participants Directory (Read-Only):** Secure inspection of registered candidate rosters and examination enrollments without modification privileges.
+- **Question Setter:** Authorized club personnel permitted to create exam sections, upload and edit questions with unique 9-character alphanumeric tags (`#123ABCXYZ`), and submit solutions once tests conclude. Database rules enforce author-only modifications.
+- **Spectator's View:** Dedicated evaluation role for interviewers to view declared candidate rankings, AI integrity summaries, flagged incidents, and evidence snapshots.
 
-**Strict Results Declaration and Merge Engine:** The administrative "Declare Results" function implements an unyielding validation check blocking result computation if any Question Setter fails to upload a valid solution for their authored question.
+### 8.2 Activity Audit & Events Logging Engine
+
+- **Comprehensive Telemetry:** An automated audit logger (`auditLogger.ts`) records all state-changing administrative actions to Firebase Realtime Database (`audit_logs`).
+- **Logged Events:** Question additions, question edits, question deletions, section creations, section updates, section deletions, test creations/deletions, solution submissions, and personnel approvals/rejections/revocations.
+- **Rich Metadata:** Every event logs the actor's email, name, role badge, timestamp (relative & ISO), target examination, section, question tag, and preview snippet.
+- **Dual-Surface Visibility:** The interactive Events View component (`EventsAuditView.tsx`) is accessible to **Admin L1** in their dedicated dashboard and to **Admin Sr.** inside the Personnel Management console.
+
+### 8.3 Personnel Request & Verification Flow
+
+Users authenticate via Google Auth and submit applications via the **"Seek Permission: Club Personnel Only"** portal selecting their requested role (`Question Setter`, `Spectator's View`, or `Admin L1`). Supreme Admins review and approve/reject applications within the Personnel Management console.
 
 ## 9. Precision Proctoring & Candidate Protection
 

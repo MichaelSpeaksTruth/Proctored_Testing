@@ -6,6 +6,7 @@ import { ref, get, update, set, remove } from 'firebase/database';
 import RoleGuard from '@/components/RoleGuard';
 import { Question } from '@/components/QuestionPanel';
 import { generateQuestionTag } from '@/lib/adminUtils';
+import { logAuditEvent } from '@/lib/auditLogger';
 
 interface Section {
   id: string;
@@ -102,6 +103,21 @@ function QuestionSetterContent() {
     const sectionsCount = test.sections ? test.sections.length : 0;
     await set(ref(rtdb, `tests/${selectedTestId}/sections/${sectionsCount}`), newSection);
     
+    const actorName = auth.currentUser?.displayName || (userEmail ? userEmail.split('@')[0] : 'Question Setter');
+    await logAuditEvent({
+      actorEmail: userEmail,
+      actorName,
+      actorRole: 'Question Setter',
+      action: 'ADD_SECTION',
+      actionLabel: 'Added Section',
+      targetTitle: sectionName.trim(),
+      details: {
+        testId: selectedTestId,
+        testTitle: test.title,
+        sectionName: sectionName.trim(),
+      },
+    });
+
     setSectionName('');
     await fetchTests();
     setLoading(false);
@@ -122,12 +138,16 @@ function QuestionSetterContent() {
       if (collision) newTag = generateQuestionTag();
     }
     
+    const actorName = auth.currentUser?.displayName || (userEmail ? userEmail.split('@')[0] : 'Question Setter');
     const newQ: Question = {
       id: `q_${Date.now()}`,
       text: qText.trim(),
       type: qType,
       tag: newTag,
       authorEmail: userEmail, // mark ownership
+      authorName: actorName,
+      authorRole: 'Question Setter',
+      createdAt: new Date().toISOString(),
     };
     if (qType === 'mcq') {
       newQ.options = qOptions.filter(Boolean);
@@ -139,6 +159,22 @@ function QuestionSetterContent() {
     const qCount = test.sections[sIndex].questions ? test.sections[sIndex].questions.length : 0;
     await set(ref(rtdb, `tests/${selectedTestId}/sections/${sIndex}/questions/${qCount}`), newQ);
     
+    await logAuditEvent({
+      actorEmail: userEmail,
+      actorName,
+      actorRole: 'Question Setter',
+      action: 'ADD_QUESTION',
+      actionLabel: 'Added Question',
+      targetTitle: `Question #${newTag}`,
+      details: {
+        testId: selectedTestId,
+        testTitle: test.title,
+        sectionName: test.sections[sIndex]?.name,
+        questionTag: newTag,
+        questionSnippet: qText.trim().slice(0, 100),
+      },
+    });
+
     setQText(''); setQOptions(['', '', '', '']); setQTimeLimit(0);
     await fetchTests();
     setLoading(false);
@@ -171,11 +207,14 @@ function QuestionSetterContent() {
     const qIndex = test.sections[sIndex].questions.findIndex(q => q.id === editQId);
     
     const oldQ = test.sections[sIndex].questions[qIndex];
+    const actorName = auth.currentUser?.displayName || (userEmail ? userEmail.split('@')[0] : 'Question Setter');
     
     const updatedQ: Question = {
       ...oldQ,
       text: qText.trim(),
       type: qType,
+      lastEditedBy: `${actorName} (Question Setter)`,
+      lastEditedAt: new Date().toISOString(),
     };
     if (qType === 'mcq') {
       updatedQ.options = qOptions.filter(Boolean);
@@ -190,6 +229,22 @@ function QuestionSetterContent() {
     
     await set(ref(rtdb, `tests/${selectedTestId}/sections/${sIndex}/questions/${qIndex}`), updatedQ);
     
+    await logAuditEvent({
+      actorEmail: userEmail,
+      actorName,
+      actorRole: 'Question Setter',
+      action: 'EDIT_QUESTION',
+      actionLabel: 'Edited Question',
+      targetTitle: `Question #${oldQ.tag}`,
+      details: {
+        testId: selectedTestId,
+        testTitle: test.title,
+        sectionName: test.sections[sIndex]?.name,
+        questionTag: oldQ.tag,
+        questionSnippet: qText.trim().slice(0, 100),
+      },
+    });
+
     setQText(''); setQOptions(['', '', '', '']); setQTimeLimit(0); setEditQId(null);
     await fetchTests();
     setLoading(false);
@@ -203,8 +258,26 @@ function QuestionSetterContent() {
     const test = tests.find(t => t.id === testId)!;
     const sIndex = test.sections.findIndex(s => s.id === sectionId);
     const qIndex = test.sections[sIndex].questions.findIndex(q => q.id === questionId);
+    const qToDelete = test.sections[sIndex]?.questions[qIndex];
+    
     await remove(ref(rtdb, `tests/${testId}/sections/${sIndex}/questions/${qIndex}`));
     
+    const actorName = auth.currentUser?.displayName || (userEmail ? userEmail.split('@')[0] : 'Question Setter');
+    await logAuditEvent({
+      actorEmail: userEmail,
+      actorName,
+      actorRole: 'Question Setter',
+      action: 'DELETE_QUESTION',
+      actionLabel: 'Deleted Question',
+      targetTitle: `Question #${qToDelete?.tag || questionId}`,
+      details: {
+        testId,
+        testTitle: test.title,
+        sectionName: test.sections[sIndex]?.name,
+        questionTag: qToDelete?.tag,
+      },
+    });
+
     await fetchTests();
     setLoading(false);
     flash('Question deleted.');
@@ -244,6 +317,22 @@ function QuestionSetterContent() {
       
       const newKey = { ...existing, ...solutions };
       await update(ref(rtdb, 'answerKeys'), { [selectedTestId]: newKey });
+
+      const actorName = auth.currentUser?.displayName || (userEmail ? userEmail.split('@')[0] : 'Question Setter');
+      await logAuditEvent({
+        actorEmail: userEmail,
+        actorName,
+        actorRole: 'Question Setter',
+        action: 'SUBMIT_SOLUTIONS',
+        actionLabel: 'Submitted Solutions',
+        targetTitle: test.title,
+        details: {
+          testId: selectedTestId,
+          testTitle: test.title,
+          count: Object.keys(solutions).length,
+        },
+      });
+
       flash('Solutions submitted successfully.');
     } catch (e) {
       console.error(e);

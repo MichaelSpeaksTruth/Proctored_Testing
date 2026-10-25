@@ -1,3 +1,5 @@
+export type PersonnelRole = 'Question Setter' | "Spectator's View" | 'Admin L1';
+
 export function isAdmin(email: string | null | undefined): boolean {
   if (!email) return false;
   return (
@@ -6,12 +8,20 @@ export function isAdmin(email: string | null | undefined): boolean {
   );
 }
 
+export function isSupremeAdmin(email: string | null | undefined): boolean {
+  return isAdmin(email);
+}
+
 export function isQuestionSetter(role: string | null | undefined): boolean {
   return role === 'Question Setter';
 }
 
 export function isSpectator(role: string | null | undefined): boolean {
   return role === "Spectator's View";
+}
+
+export function isAdminL1(role: string | null | undefined): boolean {
+  return role === 'Admin L1';
 }
 
 export function generateQuestionTag(): string {

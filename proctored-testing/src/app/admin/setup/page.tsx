@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { rtdb } from '@/lib/firebase';
+import { auth, rtdb } from '@/lib/firebase';
 import { ref, push, get, update, set } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 import { Question } from '@/components/QuestionPanel';
+import { logAuditEvent } from '@/lib/auditLogger';
 
 interface Section {
   id: string;
@@ -136,6 +137,13 @@ function SetupContent() {
 
   const selectedTest = tests.find(t => t.id === selectedTestId) || null;
 
+  const getAdminActor = () => {
+    const user = auth.currentUser;
+    const actorEmail = user?.email || process.env.NEXT_PUBLIC_ADMIN_1 || 'admin@aerosoc';
+    const actorName = `${user?.displayName || 'Admin'} (Admin Sr.)`;
+    return { actorEmail, actorName, actorRole: 'Admin Sr.' as const };
+  };
+
   // ── CREATE TEST ─────────────────────────────────────────────────────────────
   const createTest = async () => {
     if (!newTitle.trim()) return;
@@ -151,6 +159,18 @@ function SetupContent() {
       status: 'pending',
       createdAt: new Date().toISOString(),
     });
+
+    const { actorEmail, actorName, actorRole } = getAdminActor();
+    await logAuditEvent({
+      actorEmail,
+      actorName,
+      actorRole,
+      action: 'CREATE_TEST',
+      actionLabel: 'Created Test',
+      targetTitle: newTitle.trim(),
+      details: { testId: newRef.key || undefined, testTitle: newTitle.trim() },
+    });
+
     setNewTitle('');
     setSelectedTestId(newRef.key);
     await fetchTests();
@@ -161,6 +181,7 @@ function SetupContent() {
   // ── DELETE TEST ─────────────────────────────────────────────────────────────
   const deleteTest = async (testId: string) => {
     setLoading(true);
+    const testToDelete = tests.find(t => t.id === testId);
     
     // Clean up test references from all participants
     const pSnap = await get(ref(rtdb, 'participants'));
@@ -178,6 +199,18 @@ function SetupContent() {
     }
 
     await set(ref(rtdb, `tests/${testId}`), null);
+
+    const { actorEmail, actorName, actorRole } = getAdminActor();
+    await logAuditEvent({
+      actorEmail,
+      actorName,
+      actorRole,
+      action: 'DELETE_TEST',
+      actionLabel: 'Deleted Test',
+      targetTitle: testToDelete?.title || testId,
+      details: { testId, testTitle: testToDelete?.title },
+    });
+
     if (selectedTestId === testId) setSelectedTestId(null);
     await fetchTests();
     setLoading(false);
@@ -218,6 +251,18 @@ function SetupContent() {
     await update(ref(rtdb, `tests/${selectedTestId}`), {
       sections: [...(test.sections || []), newSection],
     });
+
+    const { actorEmail, actorName, actorRole } = getAdminActor();
+    await logAuditEvent({
+      actorEmail,
+      actorName,
+      actorRole,
+      action: 'ADD_SECTION',
+      actionLabel: 'Added Section',
+      targetTitle: sectionName.trim(),
+      details: { testId: selectedTestId, testTitle: test.title, sectionName: sectionName.trim() },
+    });
+
     setSectionName('');
     await fetchTests();
     setLoading(false);
@@ -228,8 +273,21 @@ function SetupContent() {
   const deleteSection = async (testId: string, sectionId: string) => {
     setLoading(true);
     const test = tests.find(t => t.id === testId)!;
+    const secToDelete = test.sections.find(s => s.id === sectionId);
     const updatedSections = test.sections.filter(s => s.id !== sectionId);
     await update(ref(rtdb, `tests/${testId}`), { sections: updatedSections });
+
+    const { actorEmail, actorName, actorRole } = getAdminActor();
+    await logAuditEvent({
+      actorEmail,
+      actorName,
+      actorRole,
+      action: 'DELETE_SECTION',
+      actionLabel: 'Deleted Section',
+      targetTitle: secToDelete?.name || sectionId,
+      details: { testId, testTitle: test.title, sectionName: secToDelete?.name },
+    });
+
     await fetchTests();
     setLoading(false);
     flash('Section deleted.');
@@ -250,6 +308,18 @@ function SetupContent() {
         : s
     );
     await update(ref(rtdb, `tests/${editMode.testId}`), { sections: updatedSections });
+
+    const { actorEmail, actorName, actorRole } = getAdminActor();
+    await logAuditEvent({
+      actorEmail,
+      actorName,
+      actorRole,
+      action: 'UPDATE_SECTION',
+      actionLabel: 'Updated Section',
+      targetTitle: editMode.name.trim(),
+      details: { testId: editMode.testId, testTitle: test.title, sectionName: editMode.name.trim() },
+    });
+
     await fetchTests();
     setLoading(false);
     setEditMode({ kind: 'none' });
@@ -261,11 +331,16 @@ function SetupContent() {
     if (!selectedTestId || !qText.trim() || !qSectionId || !qTag.trim()) return;
     setLoading(true);
     const test = tests.find(t => t.id === selectedTestId)!;
+    const { actorEmail, actorName, actorRole } = getAdminActor();
     const newQ: Question = {
       id: `q_${Date.now()}`,
       text: qText.trim(),
       type: qType,
       tag: qTag.trim(),
+      authorEmail: actorEmail,
+      authorName: actorName,
+      authorRole: 'Admin Sr.',
+      createdAt: new Date().toISOString(),
     };
     if (qType === 'mcq') {
       newQ.options = qOptions.filter(Boolean);
@@ -277,6 +352,23 @@ function SetupContent() {
       s.id === qSectionId ? { ...s, questions: [...s.questions, newQ] } : s
     );
     await update(ref(rtdb, `tests/${selectedTestId}`), { sections: updatedSections });
+
+    await logAuditEvent({
+      actorEmail,
+      actorName,
+      actorRole,
+      action: 'ADD_QUESTION',
+      actionLabel: 'Added Question',
+      targetTitle: `Question #${qTag.trim()}`,
+      details: {
+        testId: selectedTestId,
+        testTitle: test.title,
+        sectionName: test.sections.find(s => s.id === qSectionId)?.name,
+        questionTag: qTag.trim(),
+        questionSnippet: qText.trim().slice(0, 100),
+      },
+    });
+
     setQText(''); setQTag(''); setQOptions(['', '', '', '']); setQTimeLimit(0);
     await fetchTests();
     setLoading(false);
@@ -287,12 +379,30 @@ function SetupContent() {
   const deleteQuestion = async (testId: string, sectionId: string, questionId: string) => {
     setLoading(true);
     const test = tests.find(t => t.id === testId)!;
+    const qToDelete = test.sections.find(s => s.id === sectionId)?.questions.find(q => q.id === questionId);
     const updatedSections = test.sections.map(s =>
       s.id === sectionId
         ? { ...s, questions: s.questions.filter(q => q.id !== questionId) }
         : s
     );
     await update(ref(rtdb, `tests/${testId}`), { sections: updatedSections });
+
+    const { actorEmail, actorName, actorRole } = getAdminActor();
+    await logAuditEvent({
+      actorEmail,
+      actorName,
+      actorRole,
+      action: 'DELETE_QUESTION',
+      actionLabel: 'Deleted Question',
+      targetTitle: `Question #${qToDelete?.tag || questionId}`,
+      details: {
+        testId,
+        testTitle: test.title,
+        sectionName: test.sections.find(s => s.id === sectionId)?.name,
+        questionTag: qToDelete?.tag,
+      },
+    });
+
     await fetchTests();
     setLoading(false);
     flash('Question deleted.');
@@ -305,17 +415,43 @@ function SetupContent() {
     if (!q.text.trim() || !q.tag.trim()) return;
     setLoading(true);
     const test = tests.find(t => t.id === editMode.testId)!;
+    const { actorEmail, actorName, actorRole } = getAdminActor();
     const updatedSections = test.sections.map(s =>
       s.id === editMode.sectionId
         ? {
           ...s,
           questions: s.questions.map(existing =>
-            existing.id === q.id ? { ...q, text: q.text.trim(), tag: q.tag.trim() } : existing
+            existing.id === q.id
+              ? {
+                  ...q,
+                  text: q.text.trim(),
+                  tag: q.tag.trim(),
+                  lastEditedBy: actorName,
+                  lastEditedAt: new Date().toISOString(),
+                }
+              : existing
           ),
         }
         : s
     );
     await update(ref(rtdb, `tests/${editMode.testId}`), { sections: updatedSections });
+
+    await logAuditEvent({
+      actorEmail,
+      actorName,
+      actorRole,
+      action: 'EDIT_QUESTION',
+      actionLabel: 'Edited Question',
+      targetTitle: `Question #${q.tag.trim()}`,
+      details: {
+        testId: editMode.testId,
+        testTitle: test.title,
+        sectionName: test.sections.find(s => s.id === editMode.sectionId)?.name,
+        questionTag: q.tag.trim(),
+        questionSnippet: q.text.trim().slice(0, 100),
+      },
+    });
+
     await fetchTests();
     setLoading(false);
     setEditMode({ kind: 'none' });

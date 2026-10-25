@@ -63,7 +63,7 @@ Before clicking Deploy, expand the **Environment Variables** section and add the
 - `NEXT_PUBLIC_FIREBASE_APP_ID`: The app ID string
 - `NEXT_PUBLIC_FIREBASE_DATABASE_URL`: The URL to your realtime database (e.g., `https://your-project-default-rtdb.asia-southeast1.firebasedatabase.app/`)
 
-*Administrators (Users who can declare results and override rules):*
+*Supreme Administrators (Admin Sr. — Users who can configure tests, declare results, manage personnel, and override rules):*
 - `NEXT_PUBLIC_ADMIN_1`: `imanuragkrverma@gmail.com` (or your email)
 - `NEXT_PUBLIC_ADMIN_2`: `ananyakrishnan2102@gmail.com` (or your co-admin email)
 

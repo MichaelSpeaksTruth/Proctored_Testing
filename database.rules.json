@@ -1,5 +1,9 @@
 {
   "rules": {
+    "audit_logs": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
     "personnel_requests": {
       ".read": "auth != null",
       "$emailKey": {

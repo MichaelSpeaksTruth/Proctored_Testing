@@ -192,5 +192,5 @@ function SpectatorContent() {
 }
 
 export default function SpectatorPage() {
-  return <RoleGuard requiredRole="Spectator's View"><SpectatorContent /></RoleGuard>;
+  return <RoleGuard requiredRole={["Spectator's View", "Admin L1"]}><SpectatorContent /></RoleGuard>;
 }
