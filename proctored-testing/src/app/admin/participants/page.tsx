@@ -12,10 +12,6 @@ interface Participant {
   name?: string;
   allowed: boolean;
   tests?: Record<string, boolean>;
-  flagged?: boolean;
-  flagCategory?: string;
-  flagReason?: string;
-  flaggedAt?: string;
 }
 
 interface TestOption {
@@ -426,14 +422,7 @@ function ParticipantsContent() {
                       <>
                         <td style={{ fontWeight: 500 }}>{p.name || '-'}</td>
                         <td style={{ fontFamily: 'var(--font-mono)' }}>{p.email}</td>
-                        <td>
-                          <span className="badge badge-green">Approved</span>
-                          {p.flagged && (
-                            <span className="badge badge-red" style={{ marginLeft: 6 }}>
-                              Flagged: {p.flagCategory || 'Integrity'}
-                            </span>
-                          )}
-                        </td>
+                        <td><span className="badge badge-green">Approved</span></td>
                         <td>
                           <div className="flex gap-sm">
                             <button
