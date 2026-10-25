@@ -22,6 +22,14 @@ interface TestDraft {
   status: string;
 }
 
+// ─── Arrays helper ─────────────────────────────────────────────────────────
+const toArr = <T,>(v: unknown): T[] => {
+  if (!v) return [];
+  if (Array.isArray(v)) return (v as T[]).filter(Boolean);
+  if (typeof v === 'object') return Object.values(v as Record<string, T>).filter(Boolean);
+  return [];
+};
+
 function QuestionSetterContent() {
   const [tests, setTests] = useState<TestDraft[]>([]);
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
@@ -55,14 +63,6 @@ function QuestionSetterContent() {
     const snap = await get(ref(rtdb, 'tests'));
     const val = snap.val();
     if (!val) { setTests([]); return; }
-    
-    // Arrays helper
-    const toArr = <T,>(v: unknown): T[] => {
-      if (!v) return [];
-      if (Array.isArray(v)) return (v as T[]).filter(Boolean);
-      if (typeof v === 'object') return Object.values(v as Record<string, T>).filter(Boolean);
-      return [];
-    };
 
     const parsed: TestDraft[] = Object.keys(val).map(key => {
       const t = val[key];
@@ -156,8 +156,10 @@ function QuestionSetterContent() {
       newQ.timeLimit = qTimeLimit;
     }
     const sIndex = test.sections.findIndex(s => s.id === qSectionId);
-    const qCount = test.sections[sIndex].questions ? test.sections[sIndex].questions.length : 0;
-    await set(ref(rtdb, `tests/${selectedTestId}/sections/${sIndex}/questions/${qCount}`), newQ);
+    const qSnap = await get(ref(rtdb, `tests/${selectedTestId}/sections/${sIndex}/questions`));
+    const currentQuestions: Question[] = toArr<Question>(qSnap.val());
+    const updatedQuestions = [...currentQuestions, newQ];
+    await set(ref(rtdb, `tests/${selectedTestId}/sections/${sIndex}/questions`), updatedQuestions);
     
     await logAuditEvent({
       actorEmail: userEmail,
@@ -204,9 +206,9 @@ function QuestionSetterContent() {
     setLoading(true);
     const test = tests.find(t => t.id === selectedTestId)!;
     const sIndex = test.sections.findIndex(s => s.id === qSectionId);
-    const qIndex = test.sections[sIndex].questions.findIndex(q => q.id === editQId);
-    
-    const oldQ = test.sections[sIndex].questions[qIndex];
+    const qSnap = await get(ref(rtdb, `tests/${selectedTestId}/sections/${sIndex}/questions`));
+    const currentQuestions: Question[] = toArr<Question>(qSnap.val());
+    const oldQ = currentQuestions.find(q => q.id === editQId) || test.sections[sIndex].questions.find(q => q.id === editQId)!;
     const actorName = auth.currentUser?.displayName || (userEmail ? userEmail.split('@')[0] : 'Question Setter');
     
     const updatedQ: Question = {
@@ -227,7 +229,8 @@ function QuestionSetterContent() {
       delete updatedQ.timeLimit;
     }
     
-    await set(ref(rtdb, `tests/${selectedTestId}/sections/${sIndex}/questions/${qIndex}`), updatedQ);
+    const updatedQuestions = currentQuestions.map(q => q.id === editQId ? updatedQ : q);
+    await set(ref(rtdb, `tests/${selectedTestId}/sections/${sIndex}/questions`), updatedQuestions);
     
     await logAuditEvent({
       actorEmail: userEmail,
@@ -257,10 +260,12 @@ function QuestionSetterContent() {
     setLoading(true);
     const test = tests.find(t => t.id === testId)!;
     const sIndex = test.sections.findIndex(s => s.id === sectionId);
-    const qIndex = test.sections[sIndex].questions.findIndex(q => q.id === questionId);
-    const qToDelete = test.sections[sIndex]?.questions[qIndex];
+    const qSnap = await get(ref(rtdb, `tests/${testId}/sections/${sIndex}/questions`));
+    const currentQuestions: Question[] = toArr<Question>(qSnap.val());
+    const qToDelete = currentQuestions.find(q => q.id === questionId) || test.sections[sIndex]?.questions.find(q => q.id === questionId);
+    const updatedQuestions = currentQuestions.filter(q => q.id !== questionId);
     
-    await remove(ref(rtdb, `tests/${testId}/sections/${sIndex}/questions/${qIndex}`));
+    await set(ref(rtdb, `tests/${testId}/sections/${sIndex}/questions`), updatedQuestions);
     
     const actorName = auth.currentUser?.displayName || (userEmail ? userEmail.split('@')[0] : 'Question Setter');
     await logAuditEvent({

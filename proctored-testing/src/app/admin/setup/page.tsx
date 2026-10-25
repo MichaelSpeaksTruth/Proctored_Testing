@@ -32,8 +32,8 @@ type EditMode =
 // ─── tiny helper ─────────────────────────────────────────────────────────────
 const toArr = <T,>(v: unknown): T[] => {
   if (!v) return [];
-  if (Array.isArray(v)) return v as T[];
-  if (typeof v === 'object') return Object.values(v as Record<string, T>);
+  if (Array.isArray(v)) return (v as T[]).filter(Boolean);
+  if (typeof v === 'object') return Object.values(v as Record<string, T>).filter(Boolean);
   return [];
 };
 

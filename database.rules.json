@@ -45,7 +45,7 @@
           "$sectionIdx": {
             "questions": {
               "$questionIdx": {
-                ".validate": "newData.child('authorEmail').val() == auth.token.email || auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'"
+                ".validate": "newData.val() == data.val() || newData.child('authorEmail').val() == auth.token.email || data.child('authorEmail').val() == auth.token.email || auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'"
               }
             }
           }
