@@ -3,21 +3,70 @@
 import { useEffect, useState } from 'react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { useRouter } from 'next/navigation';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 import Image from 'next/image';
+import {
+  Settings,
+  Users,
+  Zap,
+  Award,
+  Activity,
+  Shield,
+  FileText,
+  ChevronRight,
+} from 'lucide-react';
 
-import { Settings, Users, Zap, Award, Activity, Shield, FileText } from 'lucide-react';
+interface TabItem {
+  label: string;
+  href: string;
+  icon: React.ReactNode;
+  desc: string;
+}
 
-const ADMIN_TABS = [
-  { label: 'System Calibration', href: '/admin/calibration', icon: <Activity size={24} color="var(--accent-green)" />, desc: 'Test AI proctoring models and sensors' },
-  { label: 'Test Setup', href: '/admin/setup', icon: <Settings size={24} color="var(--text-muted)" />, desc: 'Create sections, questions, and timers' },
-  { label: 'Participants', href: '/admin/participants', icon: <Users size={24} color="var(--text-muted)" />, desc: 'Upload and manage examinee emails' },
-  { label: 'Personnel Management', href: '/admin/personnel', icon: <Shield size={24} color="var(--text-muted)" />, desc: 'Manage Admin L1, Setters, Spectators & Activity Log' },
-  { label: 'Global Audit Logs', href: '/admin/logs', icon: <FileText size={24} color="var(--text-muted)" />, desc: 'Inspect, filter, and delete platform activity records' },
-  { label: 'Control Panel', href: '/admin/control', icon: <Zap size={24} color="var(--accent-red)" />, desc: 'Start, monitor, and end the live test' },
-  { label: 'Results & Grading', href: '/admin/results', icon: <Award size={24} color="var(--accent-amber)" />, desc: 'Upload answer key, declare results, and review AI proctoring reports' },
+const ADMIN_TABS: TabItem[] = [
+  {
+    label: 'Test Setup',
+    href: '/admin/setup',
+    icon: <Settings size={18} color="var(--text-secondary)" />,
+    desc: 'Create sections, questions, and timers',
+  },
+  {
+    label: 'Participants',
+    href: '/admin/participants',
+    icon: <Users size={18} color="var(--text-secondary)" />,
+    desc: 'Upload and manage examinee emails',
+  },
+  {
+    label: 'Personnel Management',
+    href: '/admin/personnel',
+    icon: <Shield size={18} color="var(--text-secondary)" />,
+    desc: 'Manage Admin L1, Setters, Spectators & Activity Log',
+  },
+  {
+    label: 'Control Panel',
+    href: '/admin/control',
+    icon: <Zap size={18} color="#ff6b6b" />,
+    desc: 'Start, monitor, and end the live test',
+  },
+  {
+    label: 'System Calibration',
+    href: '/admin/calibration',
+    icon: <Activity size={18} color="#52b788" />,
+    desc: 'Test AI proctoring models and sensors',
+  },
+  {
+    label: 'Global Audit Logs',
+    href: '/admin/logs',
+    icon: <FileText size={18} color="var(--text-secondary)" />,
+    desc: 'Inspect, filter, and delete platform activity records',
+  },
+  {
+    label: 'Results & Grading',
+    href: '/admin/results',
+    icon: <Award size={18} color="#f4a261" />,
+    desc: 'Upload answer key, declare results, and review AI reports',
+  },
 ];
 
 function AdminHomeContent() {
@@ -31,84 +80,177 @@ function AdminHomeContent() {
   }, []);
 
   return (
-    <main className="page-wrapper" style={{ minHeight: '100vh', padding: 'var(--space-md) 0' }}>
-      <div className="container">
-      {/* Navbar */}
-      <nav className="navbar" style={{ marginBottom: 'var(--space-2xl)', borderRadius: 'var(--radius-lg)' }}>
-        <div className="brand">
-          <div style={{ width: 32, height: 32, borderRadius: '4px', overflow: 'hidden' }}>
-            <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={32} height={32} style={{ objectFit: 'cover' }} />
+    <main className="page-wrapper" style={{ minHeight: '100vh', padding: '16px 0 var(--space-xl)' }}>
+      <div className="container" style={{ maxWidth: 1200 }}>
+        {/* Compact Navbar */}
+        <nav
+          className="navbar"
+          style={{
+            marginBottom: 'var(--space-lg)',
+            borderRadius: 'var(--radius-md)',
+            padding: '10px 18px',
+            border: '1px solid var(--border)',
+          }}
+        >
+          <div className="brand">
+            <div style={{ width: 28, height: 28, borderRadius: 'var(--radius-xs)', overflow: 'hidden' }}>
+              <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={28} height={28} style={{ objectFit: 'cover' }} />
+            </div>
+            <div>
+              <div className="brand-name" style={{ fontSize: '0.9375rem', fontWeight: 700, letterSpacing: '-0.01em' }}>
+                AeroSoc Admin
+              </div>
+              <div className="brand-sub" style={{ fontSize: '0.625rem', letterSpacing: '0.08em' }}>
+                BIT Mesra &middot; Examination Control
+              </div>
+            </div>
           </div>
+
+          <div className="flex items-center gap-md navbar-actions">
+            <span
+              className="badge"
+              style={{
+                background: 'rgba(155, 34, 38, 0.25)',
+                color: '#ff6b6b',
+                border: '1px solid rgba(155, 34, 38, 0.6)',
+                fontSize: '0.6875rem',
+                fontWeight: 700,
+                padding: '2px 8px',
+              }}
+            >
+              Admin Sr.
+            </span>
+            <span style={{ fontSize: '0.78125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              {email}
+            </span>
+            <button
+              id="admin-signout"
+              className="btn btn-outline btn-sm"
+              style={{ padding: '4px 12px', fontSize: '0.8125rem' }}
+              onClick={() => auth.signOut()}
+            >
+              Sign Out
+            </button>
+          </div>
+        </nav>
+
+        {/* Dashboard Title Strip */}
+        <div
+          className="flex justify-between items-center"
+          style={{
+            marginBottom: 'var(--space-md)',
+            padding: '4px 2px',
+            flexWrap: 'wrap',
+            gap: 8,
+          }}
+        >
           <div>
-            <div className="brand-name">AeroSoc Admin</div>
-            <div className="brand-sub">BIT Mesra · Examination Control</div>
+            <h1 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+              Admin Dashboard
+            </h1>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+              Manage the examination lifecycle from setup to results declaration.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-sm">
+            <span
+              style={{
+                fontSize: '0.75rem',
+                color: 'var(--text-muted)',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                padding: '4px 10px',
+                borderRadius: 'var(--radius-xs)',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              7 Modules Available
+            </span>
           </div>
         </div>
-        <div className="flex items-center gap-md navbar-actions">
-          <span
-            className="badge"
-            style={{
-              background: 'rgba(155, 34, 38, 0.25)',
-              color: '#ff6b6b',
-              border: '1px solid rgba(155, 34, 38, 0.6)',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-            }}
-          >
-            Admin Sr.
-          </span>
-          <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-            {email}
-          </span>
-          <button
-            id="admin-signout"
-            className="btn btn-outline btn-sm"
-            onClick={() => auth.signOut()}
-          >
-            Sign Out
-          </button>
-        </div>
-      </nav>
 
-      <div style={{ marginBottom: 'var(--space-2xl)' }}>
-          <h1 style={{ marginBottom: 'var(--space-sm)' }}>Admin Dashboard</h1>
-          <p>Manage the examination lifecycle from setup to results declaration.</p>
-        </div>
-
-        <div className="grid-2" style={{ gap: 'var(--space-lg)' }}>
+        {/* High-Density Modular Navigation Grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: '12px',
+          }}
+        >
           {ADMIN_TABS.map((tab) => (
             <Link key={tab.href} href={tab.href} style={{ textDecoration: 'none' }}>
               <div
-                className="card"
                 id={`admin-nav-${tab.label.toLowerCase().replace(/\s+/g, '-')}`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 'var(--space-lg)',
+                  gap: 12,
+                  padding: '14px 16px',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)',
                   cursor: 'pointer',
-                  transition: 'border-color 200ms ease',
+                  transition: 'all var(--transition-fast)',
+                  height: '100%',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border-focus)';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border)';
+                  e.currentTarget.style.background = 'var(--bg-card)';
+                  e.currentTarget.style.transform = 'translateY(0)';
                 }}
               >
                 <div
                   style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: 'var(--radius-md)',
-                    background: 'var(--bg-secondary)',
+                    width: 36,
+                    height: 36,
+                    borderRadius: 'var(--radius-xs)',
+                    background: 'rgba(255, 255, 255, 0.03)',
                     border: '1px solid var(--border)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '1.5rem',
                     flexShrink: 0,
                   }}
                 >
                   {tab.icon}
                 </div>
-                <div>
-                  <h3 style={{ marginBottom: 4 }}>{tab.label}</h3>
-                  <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>{tab.desc}</p>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                      marginBottom: 2,
+                      letterSpacing: '-0.01em',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {tab.label}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '0.75rem',
+                      color: 'var(--text-muted)',
+                      lineHeight: 1.35,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {tab.desc}
+                  </div>
                 </div>
+
+                <ChevronRight size={14} color="var(--text-dim)" style={{ flexShrink: 0 }} />
               </div>
             </Link>
           ))}
