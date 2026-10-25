@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { rtdb } from '@/lib/firebase';
-import { ref, get } from 'firebase/database';
+import { auth, rtdb } from '@/lib/firebase';
+import { ref, get, remove, update } from 'firebase/database';
+import { onAuthStateChanged } from 'firebase/auth';
 import { AuditEvent } from '@/lib/auditLogger';
+import { isAdmin } from '@/lib/adminUtils';
 
 interface EventsAuditViewProps {
   embeddedInAdmin?: boolean;
@@ -16,6 +18,16 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
   const [actionCategory, setActionCategory] = useState<string>('ALL');
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [isSrAdmin, setIsSrAdmin] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, u => {
+      setIsSrAdmin(isAdmin(u?.email));
+    });
+    return () => unsub();
+  }, []);
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -43,6 +55,43 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
+
+  const handleDeleteLog = async (logId: string) => {
+    if (!confirm('Are you sure you want to permanently delete this audit log entry?')) return;
+    setDeletingId(logId);
+    try {
+      await remove(ref(rtdb, `audit_logs/${logId}`));
+      setEvents(prev => prev.filter(e => e.id !== logId));
+      setActionMsg('Audit log entry deleted successfully.');
+      setTimeout(() => setActionMsg(null), 3000);
+    } catch (err) {
+      console.error('Failed to delete audit log:', err);
+      alert('Error deleting audit log: You must be Admin Sr.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleClearFiltered = async () => {
+    const count = filteredEvents.length;
+    if (!confirm(`Are you sure you want to permanently delete ${count} audit log entries?`)) return;
+    setLoading(true);
+    try {
+      const updates: Record<string, null> = {};
+      filteredEvents.forEach(e => {
+        updates[`audit_logs/${e.id}`] = null;
+      });
+      await update(ref(rtdb), updates);
+      setActionMsg(`Successfully deleted ${count} audit log entries.`);
+      setTimeout(() => setActionMsg(null), 3000);
+      await fetchEvents();
+    } catch (err) {
+      console.error('Failed to bulk delete audit logs:', err);
+      alert('Error deleting logs');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredEvents = useMemo(() => {
     return events.filter(evt => {
@@ -188,6 +237,12 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
+      {actionMsg && (
+        <div className="alert alert-success" style={{ animation: 'fadeIn 150ms ease' }}>
+          {actionMsg}
+        </div>
+      )}
+
       {/* Header & Stats bar */}
       <div
         className="card"
@@ -202,20 +257,31 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
         >
           <div>
             <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>
-              Activity Audit & Events View
+              Activity Audit &amp; Events View
             </h2>
             <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4 }}>
               Detailed chronological log of question setters, supreme administrators (Admin Sr.), and personnel actions.
             </p>
           </div>
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={fetchEvents}
-            disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            {loading ? 'Refreshing...' : 'Refresh Logs'}
-          </button>
+          <div className="flex items-center gap-sm" style={{ flexWrap: 'wrap' }}>
+            {isSrAdmin && filteredEvents.length > 0 && (
+              <button
+                className="btn btn-outline btn-sm"
+                style={{ color: 'var(--accent-red-light)', borderColor: 'rgba(155, 34, 38, 0.5)' }}
+                onClick={handleClearFiltered}
+                disabled={loading}
+              >
+                Delete {filteredEvents.length === events.length ? 'All Logs' : `Filtered Logs (${filteredEvents.length})`}
+              </button>
+            )}
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={fetchEvents}
+              disabled={loading}
+            >
+              {loading ? 'Refreshing...' : 'Refresh Logs'}
+            </button>
+          </div>
         </div>
 
         {/* Metric Quick Stats */}
@@ -305,7 +371,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
           </div>
         </div>
 
-        {/* Filter Pills */}
+        {/* Filter Buttons */}
         <div
           style={{
             display: 'flex',
@@ -371,7 +437,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
         <div className="card" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9375rem' }}>
             {events.length === 0
-              ? 'No activity events recorded yet. Actions by Question Setters and Admin Sr. will appear here.'
+              ? 'No activity events recorded yet.'
               : 'No activity matches your filters.'}
           </p>
         </div>
@@ -444,7 +510,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
                     )}
                   </div>
 
-                  {/* Right: Timestamp & Details toggle */}
+                  {/* Right: Timestamp & Controls */}
                   <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                     <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
                       <span title={time.formatted}>{time.relative}</span>
@@ -459,15 +525,27 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
                       {time.formatted}
                     </div>
 
-                    {evt.details && Object.keys(evt.details).length > 0 && (
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        style={{ fontSize: '0.75rem', padding: '2px 8px', color: 'var(--accent-green-light)' }}
-                        onClick={() => setExpandedEventId(isExpanded ? null : evt.id)}
-                      >
-                        {isExpanded ? 'Hide Details ▲' : 'View Details ▼'}
-                      </button>
-                    )}
+                    <div className="flex items-center gap-xs" style={{ marginTop: 2 }}>
+                      {evt.details && Object.keys(evt.details).length > 0 && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontSize: '0.75rem', padding: '2px 8px', color: 'var(--accent-green-light)' }}
+                          onClick={() => setExpandedEventId(isExpanded ? null : evt.id)}
+                        >
+                          {isExpanded ? 'Hide Details' : 'View Details'}
+                        </button>
+                      )}
+                      {isSrAdmin && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontSize: '0.75rem', padding: '2px 8px', color: 'var(--accent-red-light)' }}
+                          onClick={() => handleDeleteLog(evt.id)}
+                          disabled={deletingId === evt.id}
+                        >
+                          {deletingId === evt.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 

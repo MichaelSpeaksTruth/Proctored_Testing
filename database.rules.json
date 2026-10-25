@@ -2,7 +2,10 @@
   "rules": {
     "audit_logs": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      "$logId": {
+        ".write": "auth != null",
+        ".validate": "newData.exists() || auth.token.email == 'imanuragkrverma@gmail.com' || auth.token.email == 'ananyakrishnan2102@gmail.com'"
+      }
     },
     "personnel_requests": {
       ".read": "auth != null",

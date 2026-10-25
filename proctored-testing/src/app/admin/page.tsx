@@ -8,13 +8,14 @@ import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 import Image from 'next/image';
 
-import { Settings, Users, Zap, Award, Activity, Shield } from 'lucide-react';
+import { Settings, Users, Zap, Award, Activity, Shield, FileText } from 'lucide-react';
 
 const ADMIN_TABS = [
   { label: 'System Calibration', href: '/admin/calibration', icon: <Activity size={24} color="var(--accent-green)" />, desc: 'Test AI proctoring models and sensors' },
   { label: 'Test Setup', href: '/admin/setup', icon: <Settings size={24} color="var(--text-muted)" />, desc: 'Create sections, questions, and timers' },
   { label: 'Participants', href: '/admin/participants', icon: <Users size={24} color="var(--text-muted)" />, desc: 'Upload and manage examinee emails' },
   { label: 'Personnel Management', href: '/admin/personnel', icon: <Shield size={24} color="var(--text-muted)" />, desc: 'Manage Admin L1, Setters, Spectators & Activity Log' },
+  { label: 'Global Audit Logs', href: '/admin/logs', icon: <FileText size={24} color="var(--text-muted)" />, desc: 'Inspect, filter, and delete platform activity records' },
   { label: 'Control Panel', href: '/admin/control', icon: <Zap size={24} color="var(--accent-red)" />, desc: 'Start, monitor, and end the live test' },
   { label: 'Results & Grading', href: '/admin/results', icon: <Award size={24} color="var(--accent-amber)" />, desc: 'Upload answer key, declare results, and review AI proctoring reports' },
 ];
