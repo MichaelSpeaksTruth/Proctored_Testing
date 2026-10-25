@@ -239,7 +239,7 @@ function CalibrationContent() {
                   return (
                     <span key={k} style={{
                       fontSize: '0.6875rem', padding: '2px 7px',
-                      borderRadius: 100, 
+                      borderRadius: 2, 
                       border: `1px solid ${isActive ? v.color : v.color + '44'}`,
                       color: isActive ? '#000' : v.color, 
                       background: isActive ? v.color : `${v.color}11`,

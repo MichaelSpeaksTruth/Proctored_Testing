@@ -190,10 +190,14 @@ function PersonnelManagement() {
         <span
           className="badge"
           style={{
-            background: 'rgba(33, 150, 243, 0.2)',
+            background: 'rgba(33, 150, 243, 0.12)',
             color: '#64b5f6',
-            border: '1px solid rgba(33, 150, 243, 0.5)',
+            border: '1px solid rgba(33, 150, 243, 0.4)',
             fontWeight: 600,
+            fontSize: '0.6875rem',
+            padding: '2px 7px',
+            borderRadius: '2px',
+            whiteSpace: 'nowrap',
           }}
         >
           Admin L1
@@ -201,12 +205,48 @@ function PersonnelManagement() {
       );
     }
     if (role === 'Question Setter') {
-      return <span className="badge badge-green">Question Setter</span>;
+      return (
+        <span
+          className="badge badge-green"
+          style={{
+            borderRadius: '2px',
+            padding: '2px 7px',
+            fontSize: '0.6875rem',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Question Setter
+        </span>
+      );
     }
     if (role === "Spectator's View") {
-      return <span className="badge badge-amber">Spectator&apos;s View</span>;
+      return (
+        <span
+          className="badge badge-amber"
+          style={{
+            borderRadius: '2px',
+            padding: '2px 7px',
+            fontSize: '0.6875rem',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Spectator&apos;s View
+        </span>
+      );
     }
-    return <span className="badge badge-gray">{role}</span>;
+    return (
+      <span
+        className="badge badge-gray"
+        style={{
+          borderRadius: '2px',
+          padding: '2px 7px',
+          fontSize: '0.6875rem',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {role}
+      </span>
+    );
   };
 
   return (
@@ -228,7 +268,8 @@ function PersonnelManagement() {
           className="card"
           style={{
             marginBottom: 'var(--space-xl)',
-            borderLeft: '4px solid #ff6b6b',
+            borderLeft: '3px solid #ff6b6b',
+            borderRadius: 'var(--radius-sm)',
             background: 'linear-gradient(180deg, var(--bg-card) 0%, var(--bg-secondary) 100%)',
           }}
         >
@@ -238,11 +279,14 @@ function PersonnelManagement() {
                 <span
                   className="badge"
                   style={{
-                    background: 'rgba(155, 34, 38, 0.3)',
+                    background: 'rgba(155, 34, 38, 0.18)',
                     color: '#ff6b6b',
-                    border: '1px solid rgba(155, 34, 38, 0.7)',
+                    border: '1px solid rgba(155, 34, 38, 0.5)',
                     fontWeight: 700,
-                    letterSpacing: '0.04em',
+                    fontSize: '0.6875rem',
+                    letterSpacing: '0.06em',
+                    padding: '2px 7px',
+                    borderRadius: '2px',
                   }}
                 >
                   SUPREME ADMIN LEVEL (Admin Sr.)
@@ -271,15 +315,15 @@ function PersonnelManagement() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 10,
+                  gap: 12,
                   padding: '8px 14px',
                   background: 'var(--bg-primary)',
-                  borderRadius: 'var(--radius-sm)',
+                  borderRadius: '3px',
                   border: '1px solid var(--border)',
                 }}
               >
                 <div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Admin Sr. #{idx + 1}
                   </div>
                   <div
@@ -348,7 +392,7 @@ function PersonnelManagement() {
                         <th>Email</th>
                         <th>Roll Number</th>
                         <th>Position</th>
-                        <th>Role Requested</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>Role Requested</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -359,7 +403,7 @@ function PersonnelManagement() {
                           <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>{req.email}</td>
                           <td>{req.rollNumber}</td>
                           <td>{req.position}</td>
-                          <td>{renderRoleBadge(req.role)}</td>
+                          <td style={{ whiteSpace: 'nowrap' }}>{renderRoleBadge(req.role)}</td>
                           <td>
                             <div className="flex gap-sm">
                               <button className="btn btn-success btn-sm" onClick={() => handleApprove(req)}>
@@ -397,7 +441,7 @@ function PersonnelManagement() {
                         <th>Name</th>
                         <th>Email</th>
                         <th>Position</th>
-                        <th>Role</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>Role</th>
                         <th>Approved On</th>
                         <th>Actions</th>
                       </tr>
@@ -408,7 +452,7 @@ function PersonnelManagement() {
                           <td style={{ fontWeight: 600 }}>{person.name}</td>
                           <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>{person.email}</td>
                           <td>{person.position || '—'}</td>
-                          <td>{renderRoleBadge(person.role)}</td>
+                          <td style={{ whiteSpace: 'nowrap' }}>{renderRoleBadge(person.role)}</td>
                           <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                             {person.approvedAt ? new Date(person.approvedAt).toLocaleDateString() : '—'}
                           </td>

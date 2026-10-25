@@ -955,7 +955,7 @@ function TestContent() {
           <div style={{
             background: 'var(--bg-card)',
             border: '1px solid rgba(255, 42, 79, 0.2)',
-            borderRadius: 16,
+            borderRadius: 6,
             padding: 'clamp(20px, 5vw, 40px)',
             width: '100%',
             maxWidth: 480,
@@ -986,7 +986,7 @@ function TestContent() {
           <div style={{
             background: 'var(--bg-card)',
             border: '1px solid rgba(255, 42, 79, 0.3)',
-            borderRadius: 16,
+            borderRadius: 6,
             padding: 'clamp(24px, 5vw, 48px)',
             width: '100%',
             maxWidth: 480,
@@ -1044,7 +1044,7 @@ function TestContent() {
             </p>
 
             {/* Camera preview — responsive, no fixed pixel dimensions */}
-            <div className="shoulder-cam-container" style={{ position: 'relative', width: '100%', maxWidth: 480, background: '#000', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', aspectRatio: '4 / 3' }}>
+            <div className="shoulder-cam-container" style={{ position: 'relative', width: '100%', maxWidth: 480, background: '#000', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 6, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', aspectRatio: '4 / 3' }}>
               <WebcamFeed stream={stream} embedded={true} sharedVideoRef={videoRef} />
               
               {/* Premium HUD Target Frame */}
@@ -1070,7 +1070,7 @@ function TestContent() {
           <div style={{
             background: 'var(--bg-card)',
             border: '1px solid rgba(255, 42, 79, 0.3)',
-            borderRadius: 16,
+            borderRadius: 6,
             padding: '40px 48px',
             maxWidth: 480,
             boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(255, 42, 79, 0.1)',

@@ -183,11 +183,13 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
         <span
           className="badge"
           style={{
-            background: 'rgba(155, 34, 38, 0.25)',
+            background: 'rgba(155, 34, 38, 0.18)',
             color: '#ff6b6b',
-            border: '1px solid rgba(155, 34, 38, 0.6)',
-            fontSize: '0.75rem',
+            border: '1px solid rgba(155, 34, 38, 0.5)',
+            fontSize: '0.6875rem',
             fontWeight: 600,
+            borderRadius: '2px',
+            padding: '2px 7px',
           }}
         >
           Admin Sr.
@@ -198,7 +200,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
       return (
         <span
           className="badge badge-green"
-          style={{ fontSize: '0.75rem', fontWeight: 600 }}
+          style={{ fontSize: '0.6875rem', fontWeight: 600, borderRadius: '2px', padding: '2px 7px' }}
         >
           Question Setter
         </span>
@@ -209,18 +211,20 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
         <span
           className="badge"
           style={{
-            background: 'rgba(33, 150, 243, 0.2)',
+            background: 'rgba(33, 150, 243, 0.12)',
             color: '#64b5f6',
-            border: '1px solid rgba(33, 150, 243, 0.5)',
-            fontSize: '0.75rem',
+            border: '1px solid rgba(33, 150, 243, 0.4)',
+            fontSize: '0.6875rem',
             fontWeight: 600,
+            borderRadius: '2px',
+            padding: '2px 7px',
           }}
         >
           Admin L1
         </span>
       );
     }
-    return <span className="badge badge-gray">{role}</span>;
+    return <span className="badge badge-gray" style={{ borderRadius: '2px', padding: '2px 7px', fontSize: '0.6875rem' }}>{role}</span>;
   };
 
   const formatTimestamp = (iso: string) => {
