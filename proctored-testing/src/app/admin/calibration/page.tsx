@@ -84,33 +84,33 @@ function CalibrationContent() {
   useEffect(() => () => { stream?.getTracks().forEach(t => t.stop()); }, [stream]);
 
   return (
-    <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
-      <div className="container" style={{ maxWidth: 1100, paddingTop: 'var(--space-2xl)' }}>
+    <main style={{ minHeight: '100vh', padding: '16px 0 var(--space-xl)' }}>
+      <div className="container" style={{ maxWidth: 1100 }}>
 
         {/* Header */}
-        <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-2xl)' }}>
+        <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <h1 style={{ marginBottom: 'var(--space-sm)' }}>System Calibration</h1>
-            <p>Test all AI proctoring models locally - no flags are written to the database in this mode.</p>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>System Calibration</h1>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Test all AI proctoring models locally - no flags are written to the database in this mode.</p>
           </div>
           <Link href="/admin">
-            <button className="btn btn-outline">← Dashboard</button>
+            <button className="btn btn-outline btn-sm">&larr; Dashboard</button>
           </Link>
         </div>
 
         {!permissionsGranted ? (
-          <div className="card" style={{ maxWidth: 480, margin: '0 auto', textAlign: 'center' }}>
-            <h2 style={{ marginBottom: 'var(--space-sm)' }}>Start Calibration</h2>
-            <p style={{ marginBottom: 'var(--space-xl)', color: 'var(--text-muted)' }}>
+          <div className="card" style={{ maxWidth: 480, margin: '0 auto', textAlign: 'center', padding: '24px 20px' }}>
+            <h2 style={{ marginBottom: 'var(--space-sm)', fontSize: '1.25rem' }}>Start Calibration</h2>
+            <p style={{ marginBottom: 'var(--space-lg)', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
               Camera and microphone access is required to run the proctoring stack locally.
             </p>
             {permError && (
-              <div className="alert alert-danger" style={{ marginBottom: 'var(--space-lg)' }}>
+              <div className="alert alert-danger" style={{ marginBottom: 'var(--space-md)' }}>
                 {permError}
               </div>
             )}
             <button
-              className="btn btn-primary btn-lg"
+              className="btn btn-primary"
               style={{ width: '100%', justifyContent: 'center' }}
               onClick={requestPermissions}
               disabled={requestingPermissions}
@@ -119,7 +119,7 @@ function CalibrationContent() {
             </button>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-xl)', alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-md)', alignItems: 'start' }}>
 
             {/* ── Left: Camera + Canvas overlay ── */}
             <div className="card" style={{ padding: 'var(--space-md)' }}>

@@ -49,8 +49,6 @@ function ParticipantsContent() {
   useEffect(() => { 
     fetchTests(); 
     
-    // Use onValue for participants to automatically handle any auth timing issues
-    // and keep the participants list in sync in real-time.
     import('firebase/database').then(({ onValue }) => {
       const unsub = onValue(ref(rtdb, 'participants'), (snap) => {
         const val = snap.val();
@@ -81,7 +79,6 @@ function ParticipantsContent() {
     if (!trimmedEmail || !trimmedEmail.includes('@') || !trimmedName) return false;
     const key = encodeEmail(trimmedEmail);
     
-    // Check existing participant to avoid overwriting other tests
     const existingSnap = await get(ref(rtdb, `participants/${key}`));
     const existing = existingSnap.val() || {};
     
@@ -98,133 +95,121 @@ function ParticipantsContent() {
   };
 
   const handleManualAdd = async () => {
+    if (!selectedTestId) {
+      setError('Please select a test first.');
+      return;
+    }
     setLoading(true);
-    setMsg(null);
     setError(null);
-    const lines = emailInput.split('\n').map((e) => e.trim()).filter(Boolean);
-    let count = 0;
-    let singleName = '';
-    let singleEmail = '';
+    setMsg(null);
+
+    const lines = emailInput.split('\n');
+    let addedCount = 0;
+
     for (const line of lines) {
       const parts = line.split(',');
       if (parts.length >= 2) {
-        const name = parts[0].trim();
-        const email = parts[1].trim();
-        if (await addParticipant(name, email)) {
-          count++;
-          singleName = name;
-          singleEmail = email;
-        }
+        const name = parts[0];
+        const email = parts.slice(1).join(',');
+        const ok = await addParticipant(name, email);
+        if (ok) addedCount++;
+      } else if (parts.length === 1 && parts[0].includes('@')) {
+        const email = parts[0];
+        const name = email.split('@')[0];
+        const ok = await addParticipant(name, email);
+        if (ok) addedCount++;
       }
     }
-    if (count === 0 && lines.length > 0) {
-       setError('Failed to add participants. Ensure format is "Name, Email" and Name is provided.');
-    } else {
-       setMsg(`Added ${count} participant(s).`);
-       if (count > 0 && selectedTestId) {
-         const testTitle = tests.find(t => t.id === selectedTestId)?.title || selectedTestId;
-         logAuditEvent({
-           actorEmail: auth.currentUser?.email || process.env.NEXT_PUBLIC_ADMIN_1 || 'admin',
-           actorName: `${auth.currentUser?.displayName || 'Admin'} (Admin Sr.)`,
-           actorRole: 'Admin Sr.',
-           action: 'ADD_PARTICIPANT',
-           actionLabel: count === 1 ? 'Added Participant' : 'Added Participants',
-           targetTitle: count === 1 ? `${singleName} (${singleEmail})` : `${count} participant(s)`,
-           details: {
-             count,
-             testId: selectedTestId,
-             testTitle,
-             ...(count === 1 ? { participantEmail: singleEmail, participantName: singleName } : {}),
-           },
-         });
-       }
-    }
+
     setEmailInput('');
+    setMsg(`Successfully registered ${addedCount} participants for this test.`);
     setLoading(false);
   };
 
   const handleCsvUpload = async () => {
+    if (!selectedTestId) {
+      setError('Please select a test first.');
+      return;
+    }
     if (!csvFile) return;
+
     setLoading(true);
-    setMsg(null);
     setError(null);
+    setMsg(null);
+
     try {
       const { read, utils } = await import('xlsx');
-      const buffer = await csvFile.arrayBuffer();
-      const wb = read(buffer);
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = utils.sheet_to_json<{ email?: string; Email?: string; name?: string; Name?: string }>(sheet);
-      let count = 0;
-      for (const row of rows) {
-        const email = String(row.email || row.Email || '').trim().toLowerCase();
-        const name = String(row.name || row.Name || '').trim();
-        if (await addParticipant(name, email)) count++;
-      }
-      setMsg(`Imported ${count} participant(s) from file.`);
+      const data = await csvFile.arrayBuffer();
+      const workbook = read(data);
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rows: any[] = utils.sheet_to_json(worksheet);
 
-      if (count > 0 && selectedTestId) {
-        const testTitle = tests.find(t => t.id === selectedTestId)?.title || selectedTestId;
-        logAuditEvent({
-          actorEmail: auth.currentUser?.email || process.env.NEXT_PUBLIC_ADMIN_1 || 'admin',
-          actorName: `${auth.currentUser?.displayName || 'Admin'} (Admin Sr.)`,
-          actorRole: 'Admin Sr.',
-          action: 'BULK_ADD_PARTICIPANTS',
-          actionLabel: 'Imported Participants via CSV',
-          targetTitle: `${count} participant(s)`,
-          details: {
-            count,
-            testId: selectedTestId,
-            testTitle,
-          },
-        });
+      let addedCount = 0;
+
+      for (const row of rows) {
+        let name = '';
+        let email = '';
+
+        for (const k of Object.keys(row)) {
+          const lk = k.toLowerCase().trim();
+          if (lk === 'email' || lk === 'email address' || lk === 'mail') {
+            email = String(row[k] || '');
+          }
+          if (lk === 'name' || lk === 'student name' || lk === 'candidate name' || lk === 'full name') {
+            name = String(row[k] || '');
+          }
+        }
+
+        if (email) {
+          if (!name) name = email.split('@')[0];
+          const ok = await addParticipant(name, email);
+          if (ok) addedCount++;
+        }
       }
-    } catch (e) {
-      setError('Failed to parse file. Ensure it has an "email" column.');
+
+      setCsvFile(null);
+      setMsg(`Successfully imported and enrolled ${addedCount} participants.`);
+    } catch (err: any) {
+      console.error(err);
+      setError('Failed to parse file: ' + err.message);
     } finally {
       setLoading(false);
-      setCsvFile(null);
     }
   };
 
   const handleRemove = async (email: string) => {
-    if (!selectedTestId) return;
+    if (!confirm(`Remove ${email} from this test?`)) return;
+    setLoading(true);
     const key = encodeEmail(email);
+    
     const existingSnap = await get(ref(rtdb, `participants/${key}`));
-    const existing = existingSnap.val();
-    if (existing && existing.tests) {
-      delete existing.tests[selectedTestId];
-      if (Object.keys(existing.tests).length === 0) {
-        // If they belong to no tests, remove them completely
+    const existing = existingSnap.val() || {};
+    
+    if (existing.tests && existing.tests[selectedTestId]) {
+      const newTests = { ...existing.tests };
+      delete newTests[selectedTestId];
+      
+      if (Object.keys(newTests).length === 0) {
         await remove(ref(rtdb, `participants/${key}`));
       } else {
-        await set(ref(rtdb, `participants/${key}`), existing);
+        await set(ref(rtdb, `participants/${key}/tests`), newTests);
       }
-    } else {
-      await remove(ref(rtdb, `participants/${key}`));
     }
 
-    const testTitle = tests.find(t => t.id === selectedTestId)?.title || selectedTestId;
-    logAuditEvent({
-      actorEmail: auth.currentUser?.email || process.env.NEXT_PUBLIC_ADMIN_1 || 'admin',
-      actorName: `${auth.currentUser?.displayName || 'Admin'} (Admin Sr.)`,
-      actorRole: 'Admin Sr.',
-      action: 'DELETE_PARTICIPANT',
-      actionLabel: 'Removed Participant from Test',
-      targetTitle: email,
-      details: {
-        participantEmail: email,
-        testId: selectedTestId,
-        testTitle,
-      },
-    });
+    setLoading(false);
   };
 
   const handleSaveEdit = async (oldEmail: string) => {
-    const newEmailTrimmed = editForm.email.trim().toLowerCase();
     const newNameTrimmed = editForm.name.trim();
-
+    const newEmailTrimmed = editForm.email.trim().toLowerCase();
+    
+    if (!newNameTrimmed) {
+      setError('Name cannot be empty.');
+      return;
+    }
     if (!newEmailTrimmed || !newEmailTrimmed.includes('@')) {
-      setError('Invalid email format during edit.');
+      setError('A valid email address is required.');
       return;
     }
     
@@ -280,194 +265,279 @@ function ParticipantsContent() {
   const pageData = filteredParticipants.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
-    <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
-      <div className="container">
-        <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-xl)' }}>
-          <Link href="/admin" className="btn btn-ghost btn-sm">← Back</Link>
-          <h1 style={{ fontSize: '1.75rem' }}>Participant Management</h1>
+    <main style={{ minHeight: '100vh', padding: '16px 0 var(--space-xl)' }}>
+      <div className="container" style={{ maxWidth: 1200 }}>
+        <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap' }}>
+          <Link href="/admin" className="btn btn-ghost btn-sm">&larr; Back</Link>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
+            Participant Management
+          </h1>
         </div>
 
-        <div className="card" style={{ marginBottom: 'var(--space-xl)' }}>
+        <div className="card" style={{ marginBottom: 'var(--space-lg)', padding: '16px' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label htmlFor="test-select" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Select Test to Manage Participants</label>
+            <label htmlFor="test-select" style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.8125rem' }}>
+              Select Examination
+            </label>
             <select 
               id="test-select" 
               value={selectedTestId} 
               onChange={e => setSelectedTestId(e.target.value)}
-              style={{ maxWidth: 400 }}
+              style={{ maxWidth: 450 }}
             >
-              <option value="">-- Select a test --</option>
+              <option value="">-- Choose an examination --</option>
               {tests.map(t => (<option key={t.id} value={t.id}>{t.title}</option>))}
             </select>
           </div>
         </div>
 
         {selectedTestId ? (
-        <>
-          <div className="grid-2" style={{ gap: 'var(--space-lg)', marginBottom: 'var(--space-xl)' }}>
-          {/* Manual add */}
-          <div className="card">
-            <h3 style={{ marginBottom: 'var(--space-md)' }}>Add Manually</h3>
-            <div className="form-group">
-              <label htmlFor="email-input">Name and Email (one per line, comma separated)</label>
-              <textarea
-                id="email-input"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                placeholder={"John Doe, student1@example.com\nJane Smith, student2@example.com"}
-                rows={5}
-              />
-            </div>
-            <button id="add-emails-btn" className="btn btn-primary" onClick={handleManualAdd} disabled={loading || !emailInput.trim()}>
-              {loading ? 'Adding...' : 'Add Participants'}
-            </button>
-          </div>
+          <>
+            <div className="grid-2" style={{ gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
+              {/* Manual add */}
+              <div className="card" style={{ padding: '16px' }}>
+                <h3 style={{ marginBottom: 'var(--space-sm)', fontSize: '1.05rem' }}>Add Manually</h3>
+                <div className="form-group">
+                  <label htmlFor="email-input" style={{ fontSize: '0.75rem' }}>Name, Email (one per line)</label>
+                  <textarea
+                    id="email-input"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder={"John Doe, student1@example.com\nJane Smith, student2@example.com"}
+                    rows={4}
+                  />
+                </div>
+                <button id="add-emails-btn" className="btn btn-primary btn-sm" onClick={handleManualAdd} disabled={loading || !emailInput.trim()}>
+                  {loading ? 'Adding...' : 'Add Participants'}
+                </button>
+              </div>
 
-          {/* CSV upload */}
-          <div className="card">
-            <h3 style={{ marginBottom: 'var(--space-md)' }}>Import CSV / XLSX</h3>
-            <p style={{ fontSize: '0.875rem', marginBottom: 'var(--space-md)' }}>
-              Upload a CSV or Excel file with a <code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)' }}>name</code> and an <code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)' }}>email</code> column.
-            </p>
-            <div className="form-group">
-              <label htmlFor="csv-upload">Select File</label>
-              <input
-                id="csv-upload"
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-              />
-            </div>
-            <button id="import-csv-btn" className="btn btn-primary" onClick={handleCsvUpload} disabled={loading || !csvFile}>
-              {loading ? 'Importing...' : 'Import File'}
-            </button>
-          </div>
-        </div>
-
-        {msg && <div className="alert alert-success">{msg}</div>}
-        {error && <div className="alert alert-danger">{error}</div>}
-
-        {/* Participants list */}
-        <div className="card">
-          <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-md)' }}>
-            <h3>Registered Participants</h3>
-            <div className="flex items-center gap-sm">
-              <button 
-                className="btn btn-outline btn-sm"
-                onClick={handleDownloadParticipants}
-                disabled={filteredParticipants.length === 0}
-              >
-                ⬇ Download XLSX
-              </button>
-              <span className="badge badge-gray">{filteredParticipants.length} total</span>
-            </div>
-          </div>
-          <table id="participants-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageData.map((p, idx) => {
-                const isEditing = editingEmail === p.email;
-                return (
-                  <tr key={p.email}>
-                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{page * PAGE_SIZE + idx + 1}</td>
-                    {isEditing ? (
-                      <>
-                        <td>
-                          <input
-                            type="text"
-                            value={editForm.name}
-                            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                            className="input"
-                            style={{ padding: '4px 8px', width: '100%' }}
-                            placeholder="Name"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={editForm.email}
-                            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                            className="input"
-                            style={{ padding: '4px 8px', width: '100%', fontFamily: 'var(--font-mono)' }}
-                          />
-                        </td>
-                        <td><span className="badge badge-amber">Editing</span></td>
-                        <td>
-                          <div className="flex gap-sm">
-                            <button
-                              className="btn btn-primary btn-sm"
-                              onClick={() => handleSaveEdit(p.email)}
-                              disabled={loading}
-                            >
-                              Save
-                            </button>
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              onClick={() => setEditingEmail(null)}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td style={{ fontWeight: 500 }}>{p.name || '-'}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)' }}>{p.email}</td>
-                        <td><span className="badge badge-green">Approved</span></td>
-                        <td>
-                          <div className="flex gap-sm">
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              onClick={() => {
-                                setEditingEmail(p.email);
-                                setEditForm({ name: p.name || '', email: p.email });
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              id={`remove-${p.email}`}
-                              style={{ color: 'var(--accent-red-light)' }}
-                              onClick={() => handleRemove(p.email)}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </td>
-                      </>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between" style={{ marginTop: 'var(--space-lg)' }}>
-              <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filteredParticipants.length)} of {filteredParticipants.length}
-              </span>
-              <div className="flex gap-sm">
-                <button className="btn btn-outline btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Prev</button>
-                <button className="btn btn-outline btn-sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>Next</button>
+              {/* CSV upload */}
+              <div className="card" style={{ padding: '16px' }}>
+                <h3 style={{ marginBottom: 'var(--space-sm)', fontSize: '1.05rem' }}>Import CSV / Excel</h3>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 'var(--space-sm)' }}>
+                  Upload a spreadsheet with <code style={{ background: 'var(--bg-input)', padding: '2px 4px', borderRadius: 2 }}>name</code> and <code style={{ background: 'var(--bg-input)', padding: '2px 4px', borderRadius: 2 }}>email</code> columns.
+                </p>
+                <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
+                  <input
+                    id="csv-upload"
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                    style={{ fontSize: '0.8125rem' }}
+                  />
+                </div>
+                <button id="import-csv-btn" className="btn btn-primary btn-sm" onClick={handleCsvUpload} disabled={loading || !csvFile}>
+                  {loading ? 'Importing...' : 'Import File'}
+                </button>
               </div>
             </div>
-          )}
-        </div>
-        </>
+
+            {msg && <div className="alert alert-success" style={{ marginBottom: 'var(--space-md)' }}>{msg}</div>}
+            {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--space-md)' }}>{error}</div>}
+
+            {/* Participants list */}
+            <div className="card" style={{ padding: '16px' }}>
+              <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-md)', flexWrap: 'wrap', gap: 8 }}>
+                <h3 style={{ margin: 0, fontSize: '1.125rem' }}>Registered Participants</h3>
+                <div className="flex items-center gap-sm">
+                  <button 
+                    className="btn btn-outline btn-sm"
+                    style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                    onClick={handleDownloadParticipants}
+                    disabled={filteredParticipants.length === 0}
+                  >
+                    Download XLSX
+                  </button>
+                  <span className="badge badge-gray">{filteredParticipants.length} total</span>
+                </div>
+              </div>
+
+              {filteredParticipants.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No participants registered for this test yet.</p>
+              ) : (
+                <>
+                  {/* Desktop Table View */}
+                  <div className="table-responsive desktop-only">
+                    <table id="participants-table" className="table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Name</th>
+                          <th>Email</th>
+                          <th>Status</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pageData.map((p, idx) => {
+                          const isEditing = editingEmail === p.email;
+                          return (
+                            <tr key={p.email}>
+                              <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{page * PAGE_SIZE + idx + 1}</td>
+                              {isEditing ? (
+                                <>
+                                  <td>
+                                    <input
+                                      type="text"
+                                      value={editForm.name}
+                                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                                      className="input"
+                                      style={{ padding: '4px 8px', width: '100%' }}
+                                      placeholder="Name"
+                                    />
+                                  </td>
+                                  <td>
+                                    <input
+                                      type="text"
+                                      value={editForm.email}
+                                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                                      className="input"
+                                      style={{ padding: '4px 8px', width: '100%', fontFamily: 'var(--font-mono)' }}
+                                    />
+                                  </td>
+                                  <td><span className="badge badge-amber">Editing</span></td>
+                                  <td>
+                                    <div className="flex gap-sm">
+                                      <button
+                                        className="btn btn-primary btn-sm"
+                                        onClick={() => handleSaveEdit(p.email)}
+                                        disabled={loading}
+                                      >
+                                        Save
+                                      </button>
+                                      <button
+                                        className="btn btn-ghost btn-sm"
+                                        onClick={() => setEditingEmail(null)}
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td style={{ fontWeight: 500 }}>{p.name || '-'}</td>
+                                  <td style={{ fontFamily: 'var(--font-mono)' }}>{p.email}</td>
+                                  <td><span className="badge badge-green">Approved</span></td>
+                                  <td>
+                                    <div className="flex gap-sm">
+                                      <button
+                                        className="btn btn-ghost btn-sm"
+                                        onClick={() => {
+                                          setEditingEmail(p.email);
+                                          setEditForm({ name: p.name || '', email: p.email });
+                                        }}
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        className="btn btn-ghost btn-sm"
+                                        id={`remove-${p.email}`}
+                                        style={{ color: 'var(--accent-red-light)' }}
+                                        onClick={() => handleRemove(p.email)}
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Cards View */}
+                  <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {pageData.map((p, idx) => (
+                      <div
+                        key={p.email}
+                        style={{
+                          background: 'var(--bg-input)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '12px 14px',
+                        }}
+                      >
+                        <div className="flex justify-between items-start" style={{ gap: 8, marginBottom: 4 }}>
+                          <div>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginRight: 6 }}>
+                              #{page * PAGE_SIZE + idx + 1}
+                            </span>
+                            <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)' }}>
+                              {p.name || 'Unnamed'}
+                            </span>
+                          </div>
+                          <span className="badge badge-green">Approved</span>
+                        </div>
+
+                        <div
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.78125rem',
+                            color: 'var(--text-secondary)',
+                            wordBreak: 'break-all',
+                            marginBottom: 10,
+                          }}
+                        >
+                          {p.email}
+                        </div>
+
+                        <div className="flex gap-sm" style={{ justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                          <button
+                            className="btn btn-outline btn-sm"
+                            style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                            onClick={() => {
+                              setEditingEmail(p.email);
+                              setEditForm({ name: p.name || '', email: p.email });
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ color: 'var(--accent-red-light)', padding: '4px 10px', fontSize: '0.75rem' }}
+                            onClick={() => handleRemove(p.email)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex justify-between items-center" style={{ marginTop: 'var(--space-md)' }}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        disabled={page === 0}
+                        onClick={() => setPage(page - 1)}
+                      >
+                        Previous
+                      </button>
+                      <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                        Page {page + 1} of {totalPages}
+                      </span>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        disabled={page >= totalPages - 1}
+                        onClick={() => setPage(page + 1)}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </>
         ) : (
-          <div className="card" style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}>
-            <p style={{ color: 'var(--text-muted)' }}>Please select a test above to view and manage participants.</p>
+          <div className="card" style={{ textAlign: 'center', padding: '32px 16px' }}>
+            <p style={{ color: 'var(--text-muted)', margin: 0 }}>Please select an examination above to manage candidate enrollments.</p>
           </div>
         )}
       </div>
@@ -476,5 +546,9 @@ function ParticipantsContent() {
 }
 
 export default function ParticipantsPage() {
-  return <AdminGuard><ParticipantsContent /></AdminGuard>;
+  return (
+    <AdminGuard>
+      <ParticipantsContent />
+    </AdminGuard>
+  );
 }

@@ -98,39 +98,44 @@ function PersonnelManagement() {
         position: req.position,
         approvedAt: new Date().toISOString(),
       });
+
       // Remove from requests
       await remove(ref(rtdb, `personnel_requests/${req.id}`));
 
+      // Audit Log
       const { actorEmail, actorName, actorRole } = getAdminActor();
       await logAuditEvent({
         actorEmail,
         actorName,
         actorRole,
         action: 'APPROVE_PERSONNEL',
-        actionLabel: 'Approved Personnel Access',
+        actionLabel: 'Approved Personnel Request',
         targetTitle: `${req.name} (${req.role})`,
         details: {
-          targetEmail: req.email,
-          targetRole: req.role,
-          targetName: req.name,
+          personnelEmail: req.email,
+          personnelName: req.name,
+          grantedRole: req.role,
+          position: req.position,
         },
       });
 
-      setMsg(`Approved ${req.name} as ${req.role}`);
+      setMsg(`Approved ${req.name} as ${req.role}.`);
       await fetchRequests();
-    } catch (e) {
-      console.error(e);
-      setMsg('Error approving request');
+    } catch (err: any) {
+      console.error(err);
+      setMsg(`Failed to approve request: ${err.message}`);
+    } finally {
       setLoading(false);
     }
   };
 
   const handleReject = async (req: PersonnelRequest) => {
-    if (!confirm(`Are you sure you want to reject ${req.name}?`)) return;
+    if (!confirm(`Are you sure you want to reject the application for ${req.name}?`)) return;
     setLoading(true);
     try {
       await remove(ref(rtdb, `personnel_requests/${req.id}`));
 
+      // Audit Log
       const { actorEmail, actorName, actorRole } = getAdminActor();
       await logAuditEvent({
         actorEmail,
@@ -140,46 +145,53 @@ function PersonnelManagement() {
         actionLabel: 'Rejected Personnel Request',
         targetTitle: `${req.name} (${req.role})`,
         details: {
-          targetEmail: req.email,
-          targetRole: req.role,
-          targetName: req.name,
+          personnelEmail: req.email,
+          personnelName: req.name,
+          rejectedRole: req.role,
         },
       });
 
-      setMsg(`Rejected application for ${req.name}`);
+      setMsg(`Rejected application for ${req.name}.`);
       await fetchRequests();
-    } catch (e) {
-      console.error(e);
-      setMsg('Error rejecting request');
+    } catch (err: any) {
+      console.error(err);
+      setMsg(`Failed to reject request: ${err.message}`);
+    } finally {
       setLoading(false);
     }
   };
 
   const handleRevoke = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to revoke personnel access for ${name}?`)) return;
+    if (!confirm(`Revoke access for ${name}? They will lose permissions immediately.`)) return;
     setLoading(true);
     try {
+      const snap = await get(ref(rtdb, `personnel/${id}`));
+      const personData = snap.val();
+
       await remove(ref(rtdb, `personnel/${id}`));
 
+      // Audit Log
       const { actorEmail, actorName, actorRole } = getAdminActor();
       await logAuditEvent({
         actorEmail,
         actorName,
         actorRole,
         action: 'REVOKE_PERSONNEL',
-        actionLabel: 'Revoked Personnel Access',
-        targetTitle: name,
+        actionLabel: 'Revoked Personnel Role',
+        targetTitle: `${name}`,
         details: {
-          targetPersonnelId: id,
-          targetName: name,
+          personnelEmail: personData?.email || id,
+          personnelName: name,
+          revokedRole: personData?.role,
         },
       });
 
-      setMsg(`Revoked access for ${name}`);
+      setMsg(`Access revoked for ${name}.`);
       await fetchRequests();
-    } catch (e) {
-      console.error(e);
-      setMsg('Error revoking access');
+    } catch (err: any) {
+      console.error(err);
+      setMsg(`Failed to revoke access: ${err.message}`);
+    } finally {
       setLoading(false);
     }
   };
@@ -188,15 +200,11 @@ function PersonnelManagement() {
     if (role === 'Admin L1') {
       return (
         <span
-          className="badge"
+          className="badge badge-gray"
           style={{
-            background: 'rgba(33, 150, 243, 0.12)',
-            color: '#64b5f6',
-            border: '1px solid rgba(33, 150, 243, 0.4)',
-            fontWeight: 600,
-            fontSize: '0.6875rem',
-            padding: '2px 7px',
             borderRadius: '2px',
+            padding: '2px 7px',
+            fontSize: '0.6875rem',
             whiteSpace: 'nowrap',
           }}
         >
@@ -250,14 +258,18 @@ function PersonnelManagement() {
   };
 
   return (
-    <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
-      <div className="container">
+    <main style={{ minHeight: '100vh', padding: '16px 0 var(--space-xl)' }}>
+      <div className="container" style={{ maxWidth: 1200 }}>
         {/* Navigation & Title */}
-        <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-xl)' }}>
-          <Link href="/admin" className="btn btn-ghost btn-sm">← Back</Link>
+        <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap' }}>
+          <Link href="/admin" className="btn btn-ghost btn-sm">
+            &larr; Back
+          </Link>
           <div>
-            <h1 style={{ fontSize: '1.75rem', margin: 0 }}>Personnel & RBAC Management</h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: 4 }}>
+            <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
+              Personnel &amp; RBAC Management
+            </h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: 4 }}>
               Administer role allocations, supreme admin credentials (Admin Sr.), and inspect audit activity logs.
             </p>
           </div>
@@ -267,15 +279,16 @@ function PersonnelManagement() {
         <div
           className="card"
           style={{
-            marginBottom: 'var(--space-xl)',
+            marginBottom: 'var(--space-lg)',
             borderLeft: '3px solid #ff6b6b',
             borderRadius: 'var(--radius-sm)',
             background: 'linear-gradient(180deg, var(--bg-card) 0%, var(--bg-secondary) 100%)',
+            padding: '16px 20px',
           }}
         >
-          <div className="flex justify-between items-center" style={{ flexWrap: 'wrap', gap: 'var(--space-md)' }}>
+          <div className="flex justify-between items-center" style={{ flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
             <div>
-              <div className="flex items-center gap-sm">
+              <div className="flex items-center gap-sm" style={{ flexWrap: 'wrap' }}>
                 <span
                   className="badge"
                   style={{
@@ -295,7 +308,7 @@ function PersonnelManagement() {
                   Platform Root Authority
                 </span>
               </div>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: 8 }}>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: 8 }}>
                 Identified in system audit logs as <strong>Admin Sr.</strong> Has absolute permission over all test configs, results, and personnel RBAC.
               </p>
             </div>
@@ -303,10 +316,10 @@ function PersonnelManagement() {
 
           <div
             style={{
-              display: 'flex',
-              gap: 'var(--space-md)',
-              flexWrap: 'wrap',
-              marginTop: 'var(--space-md)',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: 10,
+              marginTop: 12,
             }}
           >
             {supremeAdmins.map((admEmail, idx) => (
@@ -316,13 +329,13 @@ function PersonnelManagement() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 12,
-                  padding: '8px 14px',
+                  padding: '8px 12px',
                   background: 'var(--bg-primary)',
                   borderRadius: '3px',
                   border: '1px solid var(--border)',
                 }}
               >
-                <div>
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Admin Sr. #{idx + 1}
                   </div>
@@ -331,6 +344,7 @@ function PersonnelManagement() {
                       fontFamily: 'var(--font-mono)',
                       fontSize: '0.8125rem',
                       color: 'var(--white)',
+                      wordBreak: 'break-all',
                     }}
                   >
                     {admEmail}
@@ -345,130 +359,245 @@ function PersonnelManagement() {
         <div
           className="flex gap-sm"
           style={{
-            marginBottom: 'var(--space-xl)',
+            marginBottom: 'var(--space-lg)',
             borderBottom: '1px solid var(--border)',
             paddingBottom: 'var(--space-sm)',
+            overflowX: 'auto',
           }}
         >
           <button
             className={`btn btn-sm ${activeTab === 'personnel' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setActiveTab('personnel')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}
           >
-            Personnel & Requests {requests.length > 0 && `(${requests.length} pending)`}
+            Personnel &amp; Requests {requests.length > 0 && `(${requests.length} pending)`}
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'events' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setActiveTab('events')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}
           >
             Events View (Activity Log)
           </button>
         </div>
 
-        {msg && <div className="alert alert-success" style={{ marginBottom: 'var(--space-lg)' }}>{msg}</div>}
+        {msg && <div className="alert alert-success" style={{ marginBottom: 'var(--space-md)' }}>{msg}</div>}
 
         {activeTab === 'events' ? (
           <EventsAuditView embeddedInAdmin={true} />
         ) : (
-          <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
             {/* Pending Applications Card */}
-            <div className="card" style={{ marginBottom: 'var(--space-xl)' }}>
-              <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-md)' }}>
-                <h3 style={{ margin: 0 }}>Pending Applications</h3>
+            <div className="card">
+              <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-md)', flexWrap: 'wrap', gap: 8 }}>
+                <h3 style={{ margin: 0, fontSize: '1.125rem' }}>Pending Applications</h3>
                 <span className="badge badge-gray">{requests.length} Pending</span>
               </div>
               
               {loading ? (
-                <p>Loading applications...</p>
+                <p style={{ color: 'var(--text-muted)' }}>Loading applications...</p>
               ) : requests.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)' }}>No pending personnel requests.</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No pending personnel requests.</p>
               ) : (
-                <div className="table-responsive">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Roll Number</th>
-                        <th>Position</th>
-                        <th style={{ whiteSpace: 'nowrap' }}>Role Requested</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {requests.map(req => (
-                        <tr key={req.id}>
-                          <td style={{ fontWeight: 600 }}>{req.name}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>{req.email}</td>
-                          <td>{req.rollNumber}</td>
-                          <td>{req.position}</td>
-                          <td style={{ whiteSpace: 'nowrap' }}>{renderRoleBadge(req.role)}</td>
-                          <td>
-                            <div className="flex gap-sm">
-                              <button className="btn btn-success btn-sm" onClick={() => handleApprove(req)}>
-                                Approve
-                              </button>
-                              <button className="btn btn-danger btn-sm" onClick={() => handleReject(req)}>
-                                Reject
-                              </button>
-                            </div>
-                          </td>
+                <>
+                  {/* Desktop Table View */}
+                  <div className="table-responsive desktop-only">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>Email</th>
+                          <th>Roll Number</th>
+                          <th>Position</th>
+                          <th style={{ whiteSpace: 'nowrap' }}>Role Requested</th>
+                          <th>Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {requests.map(req => (
+                          <tr key={req.id}>
+                            <td style={{ fontWeight: 600 }}>{req.name}</td>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>{req.email}</td>
+                            <td>{req.rollNumber}</td>
+                            <td>{req.position}</td>
+                            <td style={{ whiteSpace: 'nowrap' }}>{renderRoleBadge(req.role)}</td>
+                            <td>
+                              <div className="flex gap-sm">
+                                <button className="btn btn-success btn-sm" onClick={() => handleApprove(req)}>
+                                  Approve
+                                </button>
+                                <button className="btn btn-danger btn-sm" onClick={() => handleReject(req)}>
+                                  Reject
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Cards View */}
+                  <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {requests.map(req => (
+                      <div
+                        key={req.id}
+                        style={{
+                          background: 'var(--bg-input)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '12px 14px',
+                        }}
+                      >
+                        <div className="flex justify-between items-start" style={{ gap: 8, marginBottom: 6 }}>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)' }}>
+                              {req.name}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                              {req.position || 'Applicant'} &middot; {req.rollNumber || '—'}
+                            </div>
+                          </div>
+                          <div>{renderRoleBadge(req.role)}</div>
+                        </div>
+
+                        <div
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.78125rem',
+                            color: 'var(--text-secondary)',
+                            wordBreak: 'break-all',
+                            marginBottom: 10,
+                          }}
+                        >
+                          {req.email}
+                        </div>
+
+                        <div className="flex gap-sm">
+                          <button
+                            className="btn btn-success btn-sm"
+                            style={{ flex: 1 }}
+                            onClick={() => handleApprove(req)}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            style={{ flex: 1 }}
+                            onClick={() => handleReject(req)}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
 
             {/* Approved Personnel Card */}
             <div className="card">
-              <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-md)' }}>
-                <h3 style={{ margin: 0 }}>Approved Personnel (Club Members)</h3>
+              <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-md)', flexWrap: 'wrap', gap: 8 }}>
+                <h3 style={{ margin: 0, fontSize: '1.125rem' }}>Approved Personnel (Club Members)</h3>
                 <span className="badge badge-gray">{approvedPersonnel.length} Active</span>
               </div>
 
               {loading ? (
-                <p>Loading personnel...</p>
+                <p style={{ color: 'var(--text-muted)' }}>Loading personnel...</p>
               ) : approvedPersonnel.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)' }}>No approved personnel yet.</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No approved personnel yet.</p>
               ) : (
-                <div className="table-responsive">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Position</th>
-                        <th style={{ whiteSpace: 'nowrap' }}>Role</th>
-                        <th>Approved On</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {approvedPersonnel.map(person => (
-                        <tr key={person.id}>
-                          <td style={{ fontWeight: 600 }}>{person.name}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>{person.email}</td>
-                          <td>{person.position || '—'}</td>
-                          <td style={{ whiteSpace: 'nowrap' }}>{renderRoleBadge(person.role)}</td>
-                          <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            {person.approvedAt ? new Date(person.approvedAt).toLocaleDateString() : '—'}
-                          </td>
-                          <td>
-                            <button className="btn btn-danger btn-sm" onClick={() => handleRevoke(person.id, person.name)}>
-                              Revoke Access
-                            </button>
-                          </td>
+                <>
+                  {/* Desktop Table View */}
+                  <div className="table-responsive desktop-only">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>Email</th>
+                          <th>Position</th>
+                          <th style={{ whiteSpace: 'nowrap' }}>Role</th>
+                          <th>Approved On</th>
+                          <th>Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {approvedPersonnel.map(person => (
+                          <tr key={person.id}>
+                            <td style={{ fontWeight: 600 }}>{person.name}</td>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>{person.email}</td>
+                            <td>{person.position || '—'}</td>
+                            <td style={{ whiteSpace: 'nowrap' }}>{renderRoleBadge(person.role)}</td>
+                            <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              {person.approvedAt ? new Date(person.approvedAt).toLocaleDateString() : '—'}
+                            </td>
+                            <td>
+                              <button className="btn btn-danger btn-sm" onClick={() => handleRevoke(person.id, person.name)}>
+                                Revoke Access
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Cards View */}
+                  <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {approvedPersonnel.map(person => (
+                      <div
+                        key={person.id}
+                        style={{
+                          background: 'var(--bg-input)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '12px 14px',
+                        }}
+                      >
+                        <div className="flex justify-between items-start" style={{ gap: 8, marginBottom: 4 }}>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)' }}>
+                              {person.name}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                              {person.position || 'Club Member'}
+                            </div>
+                          </div>
+                          <div>{renderRoleBadge(person.role)}</div>
+                        </div>
+
+                        <div
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.78125rem',
+                            color: 'var(--text-secondary)',
+                            wordBreak: 'break-all',
+                            marginBottom: 8,
+                          }}
+                        >
+                          {person.email}
+                        </div>
+
+                        <div className="flex justify-between items-center" style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4 }}>
+                          <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                            {person.approvedAt ? `Approved: ${new Date(person.approvedAt).toLocaleDateString()}` : ''}
+                          </span>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                            onClick={() => handleRevoke(person.id, person.name)}
+                          >
+                            Revoke Access
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
-          </>
+          </div>
         )}
       </div>
     </main>

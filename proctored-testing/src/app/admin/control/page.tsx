@@ -130,17 +130,17 @@ function ControlContent() {
   const statusColor = testStatus === 'active' ? '#52b788' : testStatus === 'ended' ? 'var(--accent-red-light)' : 'var(--text-muted)';
 
   return (
-    <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
-      <div className="container">
-        <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-xl)' }}>
-          <Link href="/admin" className="btn btn-ghost btn-sm">← Back</Link>
-          <h1 style={{ fontSize: '1.75rem' }}>Control Panel</h1>
+    <main style={{ minHeight: '100vh', padding: '16px 0 var(--space-xl)' }}>
+      <div className="container" style={{ maxWidth: 1200 }}>
+        <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap' }}>
+          <Link href="/admin" className="btn btn-ghost btn-sm">&larr; Back</Link>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>Control Panel</h1>
         </div>
 
-        {msg && <div className="alert alert-info" style={{ marginBottom: 'var(--space-lg)' }}>{msg}</div>}
+        {msg && <div className="alert alert-info" style={{ marginBottom: 'var(--space-md)' }}>{msg}</div>}
 
         {/* Live status */}
-        <div className="card" style={{ marginBottom: 'var(--space-lg)', display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+        <div className="card" style={{ marginBottom: 'var(--space-md)', display: 'flex', alignItems: 'center', gap: 'var(--space-md)', padding: '14px 18px' }}>
           <div
             style={{
               width: 12, height: 12, borderRadius: '50%',
@@ -162,10 +162,10 @@ function ControlContent() {
           </div>
         </div>
 
-        <div className="grid-2" style={{ gap: 'var(--space-lg)', alignItems: 'start' }}>
+        <div className="grid-2" style={{ gap: 'var(--space-md)', alignItems: 'start' }}>
           {/* Start controls */}
-          <div className="card">
-            <h3 style={{ marginBottom: 'var(--space-md)' }}>Start Examination</h3>
+          <div className="card" style={{ padding: '16px' }}>
+            <h3 style={{ marginBottom: 'var(--space-md)', fontSize: '1.05rem' }}>Start Examination</h3>
             <div className="form-group">
               <label htmlFor="test-select">Select Test</label>
               <select id="test-select" value={selectedTestId} onChange={e => setSelectedTestId(e.target.value)}>
@@ -180,7 +180,7 @@ function ControlContent() {
               onClick={startTest}
               disabled={loading || !selectedTestId || testStatus === 'active'}
             >
-              ▶ Start Test Now
+              Start Test Now
             </button>
             <div className="divider" />
             <div className="form-group">

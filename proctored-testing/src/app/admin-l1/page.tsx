@@ -322,28 +322,28 @@ function AdminL1Content() {
           <button
             className={`btn btn-sm ${activeTab === 'events' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setActiveTab('events')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}
           >
             Events View (Activity Log)
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'tests' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setActiveTab('tests')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}
           >
             Tests &amp; Question Attribution
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'spectator' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setActiveTab('spectator')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}
           >
             Spectator View
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'participants' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setActiveTab('participants')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}
           >
             Participants (View Only)
           </button>
@@ -786,54 +786,117 @@ function AdminL1Content() {
               ) : filteredParticipants.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)' }}>No participants found matching criteria.</p>
               ) : (
-                <div className="table-responsive">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Candidate Name</th>
-                        <th>Email</th>
-                        <th>Permission Status</th>
-                        <th>Enrolled Examinations</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredParticipants.map(cand => {
-                        const enrolledTestIds = cand.tests ? Object.keys(cand.tests) : [];
-                        return (
-                          <tr key={cand.email}>
-                            <td style={{ fontWeight: 600 }}>{cand.name || '—'}</td>
-                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>
-                              {cand.email}
-                            </td>
-                            <td>
+                <>
+                  <div className="table-responsive desktop-only">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Candidate Name</th>
+                          <th>Email</th>
+                          <th>Permission Status</th>
+                          <th>Enrolled Examinations</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredParticipants.map(cand => {
+                          const enrolledTestIds = cand.tests ? Object.keys(cand.tests) : [];
+                          return (
+                            <tr key={cand.email}>
+                              <td style={{ fontWeight: 600 }}>{cand.name || '—'}</td>
+                              <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>
+                                {cand.email}
+                              </td>
+                              <td>
+                                {cand.allowed ? (
+                                  <span className="badge badge-green">Allowed</span>
+                                ) : (
+                                  <span className="badge badge-red">Blocked</span>
+                                )}
+                              </td>
+                              <td>
+                                {enrolledTestIds.length === 0 ? (
+                                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>None</span>
+                                ) : (
+                                  <div className="flex gap-xs" style={{ flexWrap: 'wrap' }}>
+                                    {enrolledTestIds.map(tid => {
+                                      const match = spectatorTests.find(t => t.id === tid);
+                                      return (
+                                        <span key={tid} className="badge badge-gray" style={{ fontSize: '0.6875rem' }}>
+                                          {match?.title || tid}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Cards View */}
+                  <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {filteredParticipants.map(cand => {
+                      const enrolledTestIds = cand.tests ? Object.keys(cand.tests) : [];
+                      return (
+                        <div
+                          key={cand.email}
+                          style={{
+                            background: 'var(--bg-input)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 'var(--radius-sm)',
+                            padding: '12px 14px',
+                          }}
+                        >
+                          <div className="flex justify-between items-start" style={{ gap: 8, marginBottom: 4 }}>
+                            <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)' }}>
+                              {cand.name || 'Unnamed Candidate'}
+                            </div>
+                            <div>
                               {cand.allowed ? (
                                 <span className="badge badge-green">Allowed</span>
                               ) : (
                                 <span className="badge badge-red">Blocked</span>
                               )}
-                            </td>
-                            <td>
-                              {enrolledTestIds.length === 0 ? (
-                                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>None</span>
-                              ) : (
-                                <div className="flex gap-xs" style={{ flexWrap: 'wrap' }}>
-                                  {enrolledTestIds.map(tid => {
-                                    const match = spectatorTests.find(t => t.id === tid);
-                                    return (
-                                      <span key={tid} className="badge badge-gray" style={{ fontSize: '0.6875rem' }}>
-                                        {match?.title || tid}
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '0.78125rem',
+                              color: 'var(--text-secondary)',
+                              wordBreak: 'break-all',
+                              marginBottom: 8,
+                            }}
+                          >
+                            {cand.email}
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginRight: 6 }}>
+                              Tests:
+                            </span>
+                            {enrolledTestIds.length === 0 ? (
+                              <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>None</span>
+                            ) : (
+                              <div className="flex gap-xs" style={{ flexWrap: 'wrap', marginTop: 4 }}>
+                                {enrolledTestIds.map(tid => {
+                                  const match = spectatorTests.find(t => t.id === tid);
+                                  return (
+                                    <span key={tid} className="badge badge-gray" style={{ fontSize: '0.6875rem' }}>
+                                      {match?.title || tid}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
           </div>

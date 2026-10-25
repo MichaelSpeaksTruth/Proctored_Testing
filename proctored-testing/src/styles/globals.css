@@ -262,6 +262,13 @@ select {
 }
 
 /* ===== TABLES ===== */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: var(--space-md);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -924,5 +931,31 @@ tr:last-child td { border-bottom: none; }
   
   #leaderboard-table td[colSpan="8"]::before {
     display: none;
+  }
+}
+
+/* ===== RESPONSIVE UTILITIES ===== */
+.mobile-only { display: none !important; }
+.desktop-only { display: block !important; }
+.desktop-only-flex { display: flex !important; }
+.mobile-only-flex { display: none !important; }
+
+@media (max-width: 768px) {
+  .mobile-only { display: block !important; }
+  .mobile-only-flex { display: flex !important; }
+  .desktop-only { display: none !important; }
+  .desktop-only-flex { display: none !important; }
+
+  main {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .table-responsive table {
+    min-width: 560px;
+  }
+
+  input, select, textarea {
+    font-size: 16px !important;
   }
 }

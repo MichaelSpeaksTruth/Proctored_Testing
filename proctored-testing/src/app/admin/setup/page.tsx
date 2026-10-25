@@ -46,7 +46,7 @@ function Modal({ title, onClose, maxWidth = 560, children }: { title: string; on
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
         background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(5px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12,
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -57,7 +57,7 @@ function Modal({ title, onClose, maxWidth = 560, children }: { title: string; on
           border: '1px solid var(--border-light)',
           boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
           borderRadius: 'var(--radius-md)',
-          padding: '24px',
+          padding: '16px 20px',
         }}
       >
         <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)' }}>
@@ -549,8 +549,8 @@ function SetupContent() {
   const totalQuestionsCount = selectedTest?.sections.reduce((acc, s) => acc + s.questions.length, 0) || 0;
 
   return (
-    <main style={{ minHeight: '100vh', padding: 'var(--space-xl) var(--space-lg)' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+    <main style={{ minHeight: '100vh', padding: '16px 0 var(--space-xl)' }}>
+      <div className="container" style={{ maxWidth: 1400, margin: '0 auto' }}>
         
         {/* Top Header Bar */}
         <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-md)' }}>

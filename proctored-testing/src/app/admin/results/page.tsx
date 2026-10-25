@@ -420,20 +420,20 @@ function ResultsContent() {
 
 
   return (
-    <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
-      <div className="container" style={{ maxWidth: '1800px', width: '100%' }}>
-        <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-xl)' }}>
-          <Link href="/admin" className="btn btn-ghost btn-sm">← Back</Link>
-          <h1 style={{ fontSize: '1.75rem' }}>Results & Grading</h1>
+    <main style={{ minHeight: '100vh', padding: '16px 0 var(--space-xl)' }}>
+      <div className="container" style={{ maxWidth: 1400, width: '100%' }}>
+        <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap' }}>
+          <Link href="/admin" className="btn btn-ghost btn-sm">&larr; Back</Link>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>Results &amp; Grading</h1>
         </div>
 
-        {msg && <div className="alert alert-success" style={{ marginBottom: 'var(--space-lg)' }}>{msg}</div>}
-        {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--space-lg)' }}>{error}</div>}
+        {msg && <div className="alert alert-success" style={{ marginBottom: 'var(--space-md)' }}>{msg}</div>}
+        {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--space-md)' }}>{error}</div>}
 
         {/* Test select + Answer key upload */}
-        <div className="grid-2" style={{ gap: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
-          <div className="card">
-            <h3 style={{ marginBottom: 'var(--space-md)' }}>Select Test</h3>
+        <div className="grid-2" style={{ gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
+          <div className="card" style={{ padding: '16px' }}>
+            <h3 style={{ marginBottom: 'var(--space-md)', fontSize: '1.05rem' }}>Select Test</h3>
             <div className="form-group">
               <label htmlFor="results-test-select">Test</label>
               <select id="results-test-select" value={selectedTestId} onChange={e => setSelectedTestId(e.target.value)}>
@@ -448,12 +448,12 @@ function ResultsContent() {
               onClick={declareResults}
               disabled={loading || !selectedTestId}
             >
-              {loading ? 'Calculating...' : ' Declare Results'}
+              {loading ? 'Calculating...' : 'Declare Results'}
             </button>
           </div>
 
-          <div className="card">
-            <h3 style={{ marginBottom: 'var(--space-md)' }}>Upload Answer Key</h3>
+          <div className="card" style={{ padding: '16px' }}>
+            <h3 style={{ marginBottom: 'var(--space-md)', fontSize: '1.05rem' }}>Upload Answer Key</h3>
             <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 'var(--space-md)' }}>
               Question Setters upload solutions to their own questions. You can manually merge an XLSX file here if needed.
             </p>
@@ -488,14 +488,14 @@ function ResultsContent() {
           <div className="card">
             <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
               <h2 style={{ fontSize: '1.375rem', margin: 0 }}>Leaderboard</h2>
-              <div className="flex items-center gap-md">
+              <div className="flex items-center gap-md" style={{ flexWrap: 'wrap', width: '100%' }}>
                 <input
                   type="text"
                   className="input"
                   placeholder="Search candidate name or email..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ width: '250px' }}
+                  style={{ flex: '1 1 220px' }}
                 />
                 <div className="flex items-center gap-sm">
                   <span className="badge badge-gray">{filteredLeaderboard.length} candidates</span>
