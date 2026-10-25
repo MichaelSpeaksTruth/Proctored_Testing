@@ -38,11 +38,6 @@ function PersonnelManagement() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const supremeAdmins = [
-    process.env.NEXT_PUBLIC_ADMIN_1,
-    process.env.NEXT_PUBLIC_ADMIN_2,
-  ].filter(Boolean) as string[];
-
   const getAdminActor = () => {
     const user = auth.currentUser;
     const actorEmail = user?.email || process.env.NEXT_PUBLIC_ADMIN_1 || 'admin@aerosoc';
@@ -270,88 +265,8 @@ function PersonnelManagement() {
               Personnel &amp; RBAC Management
             </h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: 4 }}>
-              Administer role allocations, supreme admin credentials (Admin Sr.), and inspect audit activity logs.
+              Administer role allocations and inspect activity audit logs.
             </p>
-          </div>
-        </div>
-
-        {/* Supreme Admin (Admin Sr.) Header Card */}
-        <div
-          className="card"
-          style={{
-            marginBottom: 'var(--space-lg)',
-            borderLeft: '3px solid #ff6b6b',
-            borderRadius: 'var(--radius-sm)',
-            background: 'linear-gradient(180deg, var(--bg-card) 0%, var(--bg-secondary) 100%)',
-            padding: '16px 20px',
-          }}
-        >
-          <div className="flex justify-between items-center" style={{ flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
-            <div>
-              <div className="flex items-center gap-sm" style={{ flexWrap: 'wrap' }}>
-                <span
-                  className="badge"
-                  style={{
-                    background: 'rgba(155, 34, 38, 0.18)',
-                    color: '#ff6b6b',
-                    border: '1px solid rgba(155, 34, 38, 0.5)',
-                    fontWeight: 700,
-                    fontSize: '0.6875rem',
-                    letterSpacing: '0.06em',
-                    padding: '2px 7px',
-                    borderRadius: '2px',
-                  }}
-                >
-                  SUPREME ADMIN LEVEL (Admin Sr.)
-                </span>
-                <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                  Platform Root Authority
-                </span>
-              </div>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: 8 }}>
-                Identified in system audit logs as <strong>Admin Sr.</strong> Has absolute permission over all test configs, results, and personnel RBAC.
-              </p>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-              gap: 10,
-              marginTop: 12,
-            }}
-          >
-            {supremeAdmins.map((admEmail, idx) => (
-              <div
-                key={admEmail}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '8px 12px',
-                  background: 'var(--bg-primary)',
-                  borderRadius: '3px',
-                  border: '1px solid var(--border)',
-                }}
-              >
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Admin Sr. #{idx + 1}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.8125rem',
-                      color: 'var(--white)',
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    {admEmail}
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
 
