@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { auth, rtdb } from '@/lib/firebase';
 import { ref, push, get, update, set } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 import { Question } from '@/components/QuestionPanel';
 import { logAuditEvent } from '@/lib/auditLogger';
+import { generateQuestionTag } from '@/lib/adminUtils';
 
 interface Section {
   id: string;
@@ -20,16 +21,17 @@ interface TestDraft {
   title: string;
   sections: Section[];
   status: string;
+  createdAt?: string;
 }
 
-// ─── Inline edit state types ─────────────────────────────────────────────────
+// Inline edit state types
 type EditMode =
   | { kind: 'none' }
   | { kind: 'test'; testId: string; title: string }
   | { kind: 'section'; testId: string; sectionId: string; name: string; timeLimit: number }
   | { kind: 'question'; testId: string; sectionId: string; question: Question };
 
-// ─── tiny helper ─────────────────────────────────────────────────────────────
+// Array conversion helper
 const toArr = <T,>(v: unknown): T[] => {
   if (!v) return [];
   if (Array.isArray(v)) return (v as T[]).filter(Boolean);
@@ -37,13 +39,13 @@ const toArr = <T,>(v: unknown): T[] => {
   return [];
 };
 
-// ─── Inline modal shell ───────────────────────────────────────────────────────
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+// Clean Modal shell
+function Modal({ title, onClose, maxWidth = 560, children }: { title: string; onClose: () => void; maxWidth?: number; children: React.ReactNode }) {
   return (
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(5px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
@@ -51,17 +53,22 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       <div
         className="card"
         style={{
-          width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
+          width: '100%', maxWidth, maxHeight: '92vh', overflowY: 'auto',
           border: '1px solid var(--border-light)',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
-          animation: 'fadeIn 150ms ease',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
+          borderRadius: 'var(--radius-md)',
+          padding: '24px',
         }}
       >
         <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)' }}>
-          <h3 style={{ fontSize: '1.125rem', margin: 0 }}>{title}</h3>
+          <h3 style={{ fontSize: '1.125rem', margin: 0, letterSpacing: '-0.01em' }}>{title}</h3>
           <button
             onClick={onClose}
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.25rem', cursor: 'pointer', lineHeight: 1 }}
+            aria-label="Close"
+            style={{
+              background: 'transparent', border: 'none', color: 'var(--text-muted)',
+              fontSize: '1.25rem', cursor: 'pointer', lineHeight: 1, padding: 4,
+            }}
           >&times;</button>
         </div>
         {children}
@@ -70,13 +77,13 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-// ─── Danger confirm button ────────────────────────────────────────────────────
+// Danger confirm button
 function DeleteBtn({ label, onConfirm, disabled }: { label: string; onConfirm: () => void; disabled?: boolean }) {
   const [confirming, setConfirming] = useState(false);
   if (confirming) {
     return (
       <span className="flex gap-sm" style={{ alignItems: 'center' }}>
-        <span style={{ fontSize: '0.8125rem', color: 'var(--accent-red-light)' }}>Sure?</span>
+        <span style={{ fontSize: '0.8125rem', color: 'var(--accent-red-light)', fontFamily: 'var(--font-mono)' }}>Confirm?</span>
         <button className="btn btn-danger btn-sm" disabled={disabled} onClick={() => { setConfirming(false); onConfirm(); }}>Yes, delete</button>
         <button className="btn btn-ghost btn-sm" onClick={() => setConfirming(false)}>Cancel</button>
       </span>
@@ -89,29 +96,33 @@ function DeleteBtn({ label, onConfirm, disabled }: { label: string; onConfirm: (
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
 function SetupContent() {
   const [tests, setTests] = useState<TestDraft[]>([]);
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
-  const [newTitle, setNewTitle] = useState('');
+  const [activeSectionId, setActiveSectionId] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [msgKind, setMsgKind] = useState<'success' | 'error'>('success');
 
-  // New section form
+  // Modal display states
+  const [isCreateTestOpen, setIsCreateTestOpen] = useState(false);
+  const [isAddSectionOpen, setIsAddSectionOpen] = useState(false);
+  const [isAddQuestionOpen, setIsAddQuestionOpen] = useState(false);
+  const [editMode, setEditMode] = useState<EditMode>({ kind: 'none' });
+
+  // Creation forms
+  const [newTitle, setNewTitle] = useState('');
   const [sectionName, setSectionName] = useState('');
   const [sectionTime, setSectionTime] = useState(1800);
 
   // New question form
-  const [qText, setQText] = useState('');
+  const [qSectionId, setQSectionId] = useState('');
   const [qType, setQType] = useState<'mcq' | 'short'>('mcq');
+  const [qText, setQText] = useState('');
   const [qOptions, setQOptions] = useState(['', '', '', '']);
   const [qTag, setQTag] = useState('');
-  const [qSectionId, setQSectionId] = useState('');
   const [qTimeLimit, setQTimeLimit] = useState(0);
-
-  // Edit state
-  const [editMode, setEditMode] = useState<EditMode>({ kind: 'none' });
 
   const flash = (text: string, kind: 'success' | 'error' = 'success') => {
     setMsg(text); setMsgKind(kind);
@@ -121,7 +132,11 @@ function SetupContent() {
   const fetchTests = useCallback(async () => {
     const snap = await get(ref(rtdb, 'tests'));
     const val = snap.val();
-    if (!val) { setTests([]); return; }
+    if (!val) {
+      setTests([]);
+      setSelectedTestId(null);
+      return;
+    }
     const parsed: TestDraft[] = Object.keys(val).map(key => {
       const t = val[key];
       const sections: Section[] = toArr<Section>(t.sections).map((s: Section) => ({
@@ -131,11 +146,25 @@ function SetupContent() {
       return { id: key, ...t, sections };
     });
     setTests(parsed);
+
+    // Auto-select first test if none currently selected
+    setSelectedTestId(prev => {
+      if (prev && parsed.some(t => t.id === prev)) return prev;
+      return parsed.length > 0 ? parsed[0].id : null;
+    });
   }, []);
 
   useEffect(() => { fetchTests(); }, [fetchTests]);
 
   const selectedTest = tests.find(t => t.id === selectedTestId) || null;
+
+  // Sync active section if current selection is invalid
+  useEffect(() => {
+    if (!selectedTest) return;
+    if (activeSectionId !== 'all' && !selectedTest.sections.some(s => s.id === activeSectionId)) {
+      setActiveSectionId('all');
+    }
+  }, [selectedTest, activeSectionId]);
 
   const getAdminActor = () => {
     const user = auth.currentUser;
@@ -172,18 +201,19 @@ function SetupContent() {
     });
 
     setNewTitle('');
+    setIsCreateTestOpen(false);
     setSelectedTestId(newRef.key);
+    setActiveSectionId('all');
     await fetchTests();
     setLoading(false);
-    flash('Test created.');
+    flash('Test created successfully.');
   };
 
   // ── DELETE TEST ─────────────────────────────────────────────────────────────
   const deleteTest = async (testId: string) => {
     setLoading(true);
     const testToDelete = tests.find(t => t.id === testId);
-    
-    // Clean up test references from all participants
+
     const pSnap = await get(ref(rtdb, 'participants'));
     const pVal = pSnap.val();
     if (pVal) {
@@ -211,7 +241,10 @@ function SetupContent() {
       details: { testId, testTitle: testToDelete?.title },
     });
 
-    if (selectedTestId === testId) setSelectedTestId(null);
+    if (selectedTestId === testId) {
+      setSelectedTestId(null);
+      setActiveSectionId('all');
+    }
     await fetchTests();
     setLoading(false);
     flash('Test deleted.');
@@ -264,6 +297,8 @@ function SetupContent() {
     });
 
     setSectionName('');
+    setIsAddSectionOpen(false);
+    setActiveSectionId(newSection.id);
     await fetchTests();
     setLoading(false);
     flash(`Section "${newSection.name}" added.`);
@@ -288,6 +323,9 @@ function SetupContent() {
       details: { testId, testTitle: test.title, sectionName: secToDelete?.name },
     });
 
+    if (activeSectionId === sectionId) {
+      setActiveSectionId('all');
+    }
     await fetchTests();
     setLoading(false);
     flash('Section deleted.');
@@ -324,6 +362,19 @@ function SetupContent() {
     setLoading(false);
     setEditMode({ kind: 'none' });
     flash('Section updated.');
+  };
+
+  // ── OPEN ADD QUESTION MODAL ─────────────────────────────────────────────────
+  const openAddQuestionModal = (defaultSectionId?: string) => {
+    if (!selectedTest) return;
+    const targetSec = defaultSectionId || (activeSectionId !== 'all' ? activeSectionId : selectedTest.sections[0]?.id || '');
+    setQSectionId(targetSec);
+    setQText('');
+    setQType('mcq');
+    setQOptions(['', '', '', '']);
+    setQTag(generateQuestionTag());
+    setQTimeLimit(0);
+    setIsAddQuestionOpen(true);
   };
 
   // ── ADD QUESTION ────────────────────────────────────────────────────────────
@@ -369,7 +420,7 @@ function SetupContent() {
       },
     });
 
-    setQText(''); setQTag(''); setQOptions(['', '', '', '']); setQTimeLimit(0);
+    setIsAddQuestionOpen(false);
     await fetchTests();
     setLoading(false);
     flash('Question added.');
@@ -415,7 +466,7 @@ function SetupContent() {
     if (!q.text.trim() || !q.tag.trim()) return;
     setLoading(true);
     const test = tests.find(t => t.id === editMode.testId)!;
-    const { actorEmail, actorName, actorRole } = getAdminActor();
+    const { actorName, actorEmail, actorRole } = getAdminActor();
     const updatedSections = test.sections.map(s =>
       s.id === editMode.sectionId
         ? {
@@ -458,15 +509,75 @@ function SetupContent() {
     flash('Question updated.');
   };
 
-  // ── RENDER ──────────────────────────────────────────────────────────────────
+  // ── COMPUTED QUESTION LIST FOR DISPLAY ──────────────────────────────────────
+  interface DisplayQuestion extends Question {
+    sectionId: string;
+    sectionName: string;
+    questionIndex: number;
+  }
+
+  const displayedQuestions = useMemo(() => {
+    if (!selectedTest) return [];
+    const list: DisplayQuestion[] = [];
+
+    const sectionsToInclude = activeSectionId === 'all'
+      ? selectedTest.sections
+      : selectedTest.sections.filter(s => s.id === activeSectionId);
+
+    sectionsToInclude.forEach(sec => {
+      sec.questions.forEach((q, idx) => {
+        list.push({
+          ...q,
+          sectionId: sec.id,
+          sectionName: sec.name,
+          questionIndex: idx + 1,
+        });
+      });
+    });
+
+    if (!searchQuery.trim()) return list;
+    const qLower = searchQuery.toLowerCase().trim();
+    return list.filter(item =>
+      item.text.toLowerCase().includes(qLower) ||
+      item.tag.toLowerCase().includes(qLower) ||
+      (item.authorName && item.authorName.toLowerCase().includes(qLower)) ||
+      (item.options && item.options.some(opt => opt.toLowerCase().includes(qLower)))
+    );
+  }, [selectedTest, activeSectionId, searchQuery]);
+
+  const activeSection = selectedTest?.sections.find(s => s.id === activeSectionId);
+  const totalQuestionsCount = selectedTest?.sections.reduce((acc, s) => acc + s.questions.length, 0) || 0;
+
   return (
-    <main style={{ minHeight: '100vh', padding: 'var(--space-xl)' }}>
-      <div className="container">
-        <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-xl)' }}>
-          <Link href="/admin" className="btn btn-ghost btn-sm">← Back</Link>
-          <h1 style={{ fontSize: '1.75rem' }}>Test Setup</h1>
+    <main style={{ minHeight: '100vh', padding: 'var(--space-xl) var(--space-lg)' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+        
+        {/* Top Header Bar */}
+        <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
+          <div className="flex items-center gap-md">
+            <Link href="/admin" className="btn btn-ghost btn-sm">
+              &larr; Back to Dashboard
+            </Link>
+            <div>
+              <h1 style={{ fontSize: '1.75rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>Test Setup</h1>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>
+                Admin Sr. curriculum and question bank controller
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-sm">
+            <button
+              id="open-create-test-btn"
+              className="btn btn-primary"
+              onClick={() => { setNewTitle(''); setIsCreateTestOpen(true); }}
+            >
+              + Create New Test
+            </button>
+          </div>
         </div>
 
+        {/* Status Notification */}
         {msg && (
           <div
             className={`alert alert-${msgKind === 'success' ? 'success' : 'info'}`}
@@ -476,266 +587,703 @@ function SetupContent() {
           </div>
         )}
 
-        <div className="grid-2" style={{ gap: 'var(--space-lg)', alignItems: 'start' }}>
-          {/* ── Left: test list + create ────────────────────────────────── */}
-          <div>
-            <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
-              <h3 style={{ marginBottom: 'var(--space-md)' }}>Create New Test</h3>
-              <div className="form-group">
-                <label htmlFor="test-title">Test Title</label>
-                <input
-                  id="test-title"
-                  value={newTitle}
-                  onChange={e => setNewTitle(e.target.value)}
-                  placeholder="e.g. AeroSoc Round 1"
-                  onKeyDown={e => e.key === 'Enter' && createTest()}
-                />
-              </div>
-              <button id="create-test-btn" className="btn btn-primary" onClick={createTest} disabled={loading || !newTitle.trim()}>
-                Create Test
-              </button>
-            </div>
-
-            <div className="card">
-              <h3 style={{ marginBottom: 'var(--space-md)' }}>Existing Tests</h3>
-              {tests.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No tests created yet.</p>
-              ) : (
-                <div className="flex-col gap-sm">
-                  {tests.map(t => (
-                    <div
-                      key={t.id}
-                      onClick={() => setSelectedTestId(t.id)}
-                      style={{
-                        padding: '12px 16px',
-                        background: selectedTestId === t.id ? 'rgba(255,255,255,0.06)' : 'var(--bg-input)',
-                        border: `1px solid ${selectedTestId === t.id ? 'var(--border-light)' : 'var(--border)'}`,
-                        borderRadius: 'var(--radius-md)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <div className="flex justify-between items-center">
-                        <button
-                          id={`select-test-${t.id}`}
-                          onClick={() => setSelectedTestId(t.id)}
-                          style={{
-                            background: 'none', border: 'none',
-                            color: 'var(--text-primary)', fontFamily: 'var(--font-sans)',
-                            fontSize: '0.9375rem', cursor: 'pointer', textAlign: 'left',
-                            fontWeight: 500, padding: 0, flex: 1,
-                          }}
-                        >
-                          {t.title}
-                        </button>
-                        <div className="flex gap-sm" onClick={e => e.stopPropagation()}>
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => setEditMode({ kind: 'test', testId: t.id, title: t.title })}
-                            title="Rename test"
-                          >Edit</button>
-                          <DeleteBtn label="" onConfirm={() => deleteTest(t.id)} disabled={loading} />
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
-                        {t.sections.length} sections · {t.sections.reduce((a, s) => a + s.questions.length, 0)} questions
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+        {/* ── Test Selector Ribbon ────────────────────────────────────── */}
+        <div
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            padding: '16px 20px',
+            marginBottom: 'var(--space-lg)',
+          }}
+        >
+          <div className="flex justify-between items-center" style={{ marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Select Active Test ({tests.length})
+            </span>
           </div>
 
-          {/* ── Right: section + question builder ──────────────────────── */}
-          {selectedTest && (
-            <div>
-              {/* Add Section */}
-              <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
-                <h3 style={{ marginBottom: 'var(--space-md)' }}>Add Section to "{selectedTest.title}"</h3>
-                <div className="form-group">
-                  <label htmlFor="section-name">Section Name</label>
-                  <input id="section-name" value={sectionName} onChange={e => setSectionName(e.target.value)} placeholder="e.g. Aptitude" />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="section-time">Time Limit (seconds)</label>
-                  <input id="section-time" type="number" value={sectionTime} onChange={e => setSectionTime(Number(e.target.value))} />
-                </div>
-                <button id="add-section-btn" className="btn btn-primary" onClick={addSection} disabled={loading || !sectionName.trim()}>
-                  Add Section
-                </button>
-              </div>
-
-              {/* Sections Preview with edit/delete */}
-              {selectedTest.sections.length > 0 && (
-                <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
-                  <h3 style={{ marginBottom: 'var(--space-md)' }}>Sections &amp; Questions</h3>
-                  {selectedTest.sections.map((sec, si) => (
-                    <div
-                      key={sec.id}
-                      style={{
-                        marginBottom: 'var(--space-md)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 'var(--radius-md)',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {/* Section header */}
-                      <div
-                        className="flex justify-between items-center"
-                        style={{
-                          padding: '10px 14px',
-                          background: 'rgba(255,255,255,0.04)',
-                          borderBottom: '1px solid var(--border)',
-                        }}
-                      >
-                        <div className="flex items-center gap-sm">
-                          <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                            §{si + 1}
-                          </span>
-                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{sec.name}</span>
-                          <span className="badge badge-gray" style={{ fontSize: '0.75rem' }}>
-                            {sec.questions.length} Qs · {Math.floor(sec.timeLimit / 60)}m
-                          </span>
-                        </div>
-                        <div className="flex gap-sm">
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => setEditMode({ kind: 'section', testId: selectedTestId!, sectionId: sec.id, name: sec.name, timeLimit: sec.timeLimit })}
-                          >Edit</button>
-                          <DeleteBtn label="Section" onConfirm={() => deleteSection(selectedTestId!, sec.id)} disabled={loading} />
-                        </div>
-                      </div>
-
-                      {/* Questions list */}
-                      <div style={{ padding: '10px 14px' }}>
-                        {sec.questions.length === 0 ? (
-                          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No questions yet.</p>
-                        ) : (
-                          sec.questions.map((q, qi) => (
-                            <div
-                              key={q.id}
-                              style={{
-                                display: 'flex', alignItems: 'flex-start', gap: 10,
-                                padding: '8px 10px',
-                                background: 'var(--bg-input)',
-                                borderRadius: 'var(--radius-sm)',
-                                border: '1px solid var(--border)',
-                                marginBottom: 6,
-                                fontSize: '0.875rem',
-                              }}
-                            >
-                              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', flexShrink: 0, marginTop: 1 }}>
-                                Q{qi + 1}
-                              </span>
-                              <div style={{ flex: 1, color: 'var(--text-secondary)' }}>
-                                {q.text.substring(0, 80)}{q.text.length > 80 ? '...' : ''}
-                                {q.type === 'mcq' && q.options && (
-                                  <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                    {q.options.map((opt, oi) => (
-                                      <span
-                                        key={oi}
-                                        style={{
-                                          fontSize: '0.75rem', padding: '2px 8px',
-                                          background: 'rgba(255,255,255,0.06)',
-                                          border: '1px solid var(--border)',
-                                          borderRadius: 'var(--radius-sm)',
-                                          color: 'var(--text-muted)',
-                                        }}
-                                      >
-                                        {String.fromCharCode(65 + oi)}: {opt}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                                <div style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                                  #{q.tag} · {q.type}{q.timeLimit ? ` · ${q.timeLimit}s` : ''}
-                                </div>
-                              </div>
-                              <div className="flex gap-sm" style={{ flexShrink: 0 }}>
-                                <button
-                                  className="btn btn-ghost btn-sm"
-                                  style={{ padding: '2px 8px', fontSize: '0.75rem' }}
-                                  onClick={() => setEditMode({ kind: 'question', testId: selectedTestId!, sectionId: sec.id, question: { ...q, options: q.options ? [...q.options] : ['', '', '', ''] } })}
-                                >Edit</button>
-                                <DeleteBtn label="" onConfirm={() => deleteQuestion(selectedTestId!, sec.id, q.id)} disabled={loading} />
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Add Question */}
-              {selectedTest.sections.length > 0 && (
-                <div className="card">
-                  <h3 style={{ marginBottom: 'var(--space-md)' }}>Add Question</h3>
-                  <div className="form-group">
-                    <label htmlFor="q-section">Target Section</label>
-                    <select id="q-section" value={qSectionId} onChange={e => setQSectionId(e.target.value)}>
-                      <option value="">-- Select section --</option>
-                      {selectedTest.sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="q-type">Question Type</label>
-                    <select id="q-type" value={qType} onChange={e => setQType(e.target.value as 'mcq' | 'short')}>
-                      <option value="mcq">Multiple Choice (MCQ)</option>
-                      <option value="short">Short Answer</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="q-text">Question Text</label>
-                    <textarea id="q-text" value={qText} onChange={e => setQText(e.target.value)} rows={3} placeholder="Enter question..." />
-                  </div>
-                  {qType === 'mcq' && (
-                    <div className="form-group">
-                      <label>Options (A, B, C, D)</label>
-                      {qOptions.map((opt, i) => (
-                        <input
-                          key={i}
-                          id={`q-option-${i}`}
-                          value={opt}
-                          onChange={e => { const o = [...qOptions]; o[i] = e.target.value; setQOptions(o); }}
-                          placeholder={`Option ${String.fromCharCode(65 + i)}`}
-                          style={{ marginBottom: 8 }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  <div className="grid-2" style={{ gap: 'var(--space-md)' }}>
-                    <div className="form-group">
-                      <label htmlFor="q-tag">Question Tag</label>
-                      <input id="q-tag" value={qTag} onChange={e => setQTag(e.target.value)} placeholder="e.g. apt_1" style={{ fontFamily: 'var(--font-mono)' }} />
-                    </div>
-                    <div className="form-group">
-                      <label htmlFor="q-timelimit">Per-Question Timer (s, 0=none)</label>
-                      <input id="q-timelimit" type="number" value={qTimeLimit} onChange={e => setQTimeLimit(Number(e.target.value))} />
-                    </div>
-                  </div>
-                  <button
-                    id="add-question-btn"
-                    className="btn btn-primary"
-                    onClick={addQuestion}
-                    disabled={loading || !qText.trim() || !qSectionId || !qTag.trim()}
+          {tests.length === 0 ? (
+            <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <p style={{ margin: 0, fontSize: '0.9375rem' }}>No tests created yet. Click "+ Create New Test" to begin.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
+              {tests.map(t => {
+                const isSelected = selectedTestId === t.id;
+                const qCount = t.sections.reduce((a, s) => a + s.questions.length, 0);
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => { setSelectedTestId(t.id); setActiveSectionId('all'); }}
+                    id={`select-test-${t.id}`}
+                    style={{
+                      minWidth: 260,
+                      maxWidth: 340,
+                      flex: '0 0 auto',
+                      padding: '14px 18px',
+                      background: isSelected ? 'rgba(255,255,255,0.07)' : 'var(--bg-input)',
+                      border: `1px solid ${isSelected ? 'var(--border-focus)' : 'var(--border)'}`,
+                      borderLeft: isSelected ? '3px solid var(--accent-green-light)' : '1px solid var(--border)',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-fast)',
+                    }}
                   >
-                    Add Question
-                  </button>
-                </div>
-              )}
+                    <div className="flex justify-between items-start" style={{ gap: 8 }}>
+                      <span style={{ fontWeight: isSelected ? 700 : 500, fontSize: '0.9375rem', color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                        {t.title}
+                      </span>
+                      <span className="badge badge-gray" style={{ fontSize: '0.6875rem' }}>
+                        {t.status}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 8, fontFamily: 'var(--font-mono)' }}>
+                      {t.sections.length} sections &middot; {qCount} questions
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
+
+        {/* ── Active Test Canvas ──────────────────────────────────────── */}
+        {selectedTest && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
+            
+            {/* Active Test Banner */}
+            <div
+              style={{
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-md)',
+                padding: '20px 24px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 16,
+              }}
+            >
+              <div>
+                <div className="flex items-center gap-sm" style={{ marginBottom: 4 }}>
+                  <h2 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0 }}>{selectedTest.title}</h2>
+                  <span className="badge badge-green" style={{ fontSize: '0.75rem' }}>{selectedTest.status}</span>
+                </div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                  Test ID: {selectedTest.id} &middot; Total Sections: {selectedTest.sections.length} &middot; Total Questions: {totalQuestionsCount}
+                </div>
+              </div>
+
+              <div className="flex gap-sm" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setEditMode({ kind: 'test', testId: selectedTest.id, title: selectedTest.title })}
+                >
+                  Rename Test
+                </button>
+                <DeleteBtn label="Test" onConfirm={() => deleteTest(selectedTest.id)} disabled={loading} />
+                <button
+                  id="open-add-section-btn"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => { setSectionName(''); setSectionTime(1800); setIsAddSectionOpen(true); }}
+                >
+                  + Add Section
+                </button>
+                <button
+                  id="open-add-question-btn"
+                  className="btn btn-primary btn-sm"
+                  disabled={selectedTest.sections.length === 0}
+                  onClick={() => openAddQuestionModal()}
+                >
+                  + Add Question
+                </button>
+              </div>
+            </div>
+
+            {/* Section Tabs Navigation */}
+            <div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  overflowX: 'auto',
+                  borderBottom: '1px solid var(--border)',
+                  paddingBottom: 8,
+                }}
+              >
+                <button
+                  onClick={() => setActiveSectionId('all')}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.875rem',
+                    fontWeight: activeSectionId === 'all' ? 600 : 400,
+                    color: activeSectionId === 'all' ? 'var(--text-primary)' : 'var(--text-muted)',
+                    background: activeSectionId === 'all' ? 'rgba(255,255,255,0.08)' : 'transparent',
+                    border: `1px solid ${activeSectionId === 'all' ? 'var(--border-light)' : 'transparent'}`,
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  All Sections
+                  <span className="badge badge-gray" style={{ fontSize: '0.6875rem', padding: '1px 6px' }}>
+                    {totalQuestionsCount}
+                  </span>
+                </button>
+
+                {selectedTest.sections.map((sec, si) => {
+                  const isActive = activeSectionId === sec.id;
+                  return (
+                    <button
+                      key={sec.id}
+                      onClick={() => setActiveSectionId(sec.id)}
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: '0.875rem',
+                        fontWeight: isActive ? 600 : 400,
+                        color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
+                        background: isActive ? 'rgba(255,255,255,0.08)' : 'transparent',
+                        border: `1px solid ${isActive ? 'var(--border-light)' : 'transparent'}`,
+                        borderRadius: 'var(--radius-sm)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                        &sect;{si + 1}
+                      </span>
+                      {sec.name}
+                      <span className="badge badge-gray" style={{ fontSize: '0.6875rem', padding: '1px 6px' }}>
+                        {sec.questions.length}
+                      </span>
+                    </button>
+                  );
+                })}
+
+                <button
+                  onClick={() => { setSectionName(''); setSectionTime(1800); setIsAddSectionOpen(true); }}
+                  style={{
+                    padding: '8px 14px',
+                    fontSize: '0.8125rem',
+                    color: 'var(--text-muted)',
+                    background: 'transparent',
+                    border: '1px dashed var(--border-light)',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  + New Section
+                </button>
+              </div>
+            </div>
+
+            {/* Active Section Bar (if specific section selected) */}
+            {activeSection && (
+              <div
+                style={{
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '14px 20px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                }}
+              >
+                <div className="flex items-center gap-md">
+                  <span style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-primary)' }}>
+                    {activeSection.name}
+                  </span>
+                  <span className="badge badge-gray" style={{ fontSize: '0.75rem' }}>
+                    Time Limit: {Math.floor(activeSection.timeLimit / 60)}m {activeSection.timeLimit % 60}s
+                  </span>
+                  <span className="badge badge-gray" style={{ fontSize: '0.75rem' }}>
+                    {activeSection.questions.length} questions
+                  </span>
+                </div>
+
+                <div className="flex gap-sm items-center">
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setEditMode({ kind: 'section', testId: selectedTest.id, sectionId: activeSection.id, name: activeSection.name, timeLimit: activeSection.timeLimit })}
+                  >
+                    Edit Section
+                  </button>
+                  <DeleteBtn label="Section" onConfirm={() => deleteSection(selectedTest.id, activeSection.id)} disabled={loading} />
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => openAddQuestionModal(activeSection.id)}
+                  >
+                    + Add Question
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Search & Statistics Filter Bar */}
+            <div className="flex justify-between items-center" style={{ flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ flex: '1 1 320px', maxWidth: 480 }}>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Filter questions by text, #tag, or author..."
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    fontSize: '0.875rem',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)',
+                    color: 'var(--text-primary)',
+                  }}
+                />
+              </div>
+
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                Showing {displayedQuestions.length} of {activeSectionId === 'all' ? totalQuestionsCount : (activeSection?.questions.length || 0)} questions
+              </div>
+            </div>
+
+            {/* ── Full Width Question Cards Canvas ────────────────────── */}
+            {selectedTest.sections.length === 0 ? (
+              <div
+                style={{
+                  padding: '48px 24px',
+                  background: 'var(--bg-card)',
+                  border: '1px dashed var(--border-light)',
+                  borderRadius: 'var(--radius-md)',
+                  textAlign: 'center',
+                }}
+              >
+                <h3 style={{ fontSize: '1.125rem', marginBottom: 8 }}>No sections created yet</h3>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 20 }}>
+                  Tests require at least one section (e.g. "Aptitude", "Technical", "Rocketry") before adding questions.
+                </p>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => { setSectionName(''); setSectionTime(1800); setIsAddSectionOpen(true); }}
+                >
+                  + Add First Section
+                </button>
+              </div>
+            ) : displayedQuestions.length === 0 ? (
+              <div
+                style={{
+                  padding: '48px 24px',
+                  background: 'var(--bg-card)',
+                  border: '1px dashed var(--border-light)',
+                  borderRadius: 'var(--radius-md)',
+                  textAlign: 'center',
+                }}
+              >
+                <h3 style={{ fontSize: '1.125rem', marginBottom: 8 }}>
+                  {searchQuery ? 'No matching questions found' : 'No questions in this section yet'}
+                </h3>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 20 }}>
+                  {searchQuery ? 'Try adjusting your search criteria.' : 'Add questions to populate this section of the test.'}
+                </p>
+                {!searchQuery && (
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => openAddQuestionModal(activeSectionId !== 'all' ? activeSectionId : undefined)}
+                  >
+                    + Add Question
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {displayedQuestions.map(q => (
+                  <div
+                    key={q.id}
+                    id={`question-card-${q.id}`}
+                    style={{
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '20px 24px',
+                      transition: 'border-color var(--transition-fast)',
+                    }}
+                  >
+                    {/* Card Top Row: Meta & Actions */}
+                    <div className="flex justify-between items-center" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+                      <div className="flex items-center gap-sm" style={{ flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                          Q{q.questionIndex}
+                        </span>
+                        
+                        {activeSectionId === 'all' && (
+                          <span className="badge badge-gray" style={{ fontSize: '0.6875rem' }}>
+                            {q.sectionName}
+                          </span>
+                        )}
+
+                        <span className="badge badge-gray" style={{ fontSize: '0.6875rem', textTransform: 'uppercase' }}>
+                          {q.type}
+                        </span>
+
+                        <span
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.75rem',
+                            color: 'var(--text-muted)',
+                            background: 'rgba(255,255,255,0.04)',
+                            padding: '2px 8px',
+                            border: '1px solid var(--border)',
+                            borderRadius: 'var(--radius-xs)',
+                          }}
+                        >
+                          #{q.tag}
+                        </span>
+
+                        {q.timeLimit ? (
+                          <span className="badge badge-gray" style={{ fontSize: '0.6875rem' }}>
+                            Timer: {q.timeLimit}s
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="flex gap-sm items-center">
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setEditMode({
+                            kind: 'question',
+                            testId: selectedTest.id,
+                            sectionId: q.sectionId,
+                            question: { ...q, options: q.options ? [...q.options] : ['', '', '', ''] },
+                          })}
+                        >
+                          Edit
+                        </button>
+                        <DeleteBtn label="" onConfirm={() => deleteQuestion(selectedTest.id, q.sectionId, q.id)} disabled={loading} />
+                      </div>
+                    </div>
+
+                    {/* Question Content (Full Width, No Truncation) */}
+                    <div style={{ fontSize: '1rem', lineHeight: 1.6, color: 'var(--text-primary)', marginBottom: q.options && q.options.length > 0 ? 16 : 12 }}>
+                      {q.text}
+                    </div>
+
+                    {/* Options Grid (MCQ) */}
+                    {q.type === 'mcq' && q.options && q.options.length > 0 && (
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                          gap: 10,
+                          marginBottom: 16,
+                        }}
+                      >
+                        {q.options.map((opt, oi) => (
+                          <div
+                            key={oi}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: 10,
+                              padding: '10px 14px',
+                              background: 'var(--bg-input)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 'var(--radius-sm)',
+                              fontSize: '0.875rem',
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 22,
+                                height: 22,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: 'rgba(255,255,255,0.07)',
+                                border: '1px solid var(--border-light)',
+                                borderRadius: 'var(--radius-xs)',
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                color: 'var(--text-primary)',
+                                flexShrink: 0,
+                                marginTop: 1,
+                              }}
+                            >
+                              {String.fromCharCode(65 + oi)}
+                            </span>
+                            <span style={{ color: 'var(--text-secondary)', wordBreak: 'break-word' }}>
+                              {opt}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Card Footer: Author Attribution & Timestamps */}
+                    <div
+                      style={{
+                        paddingTop: 12,
+                        borderTop: '1px solid var(--border-light)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 8,
+                        fontSize: '0.75rem',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      <div className="flex items-center gap-sm">
+                        <span>
+                          Author: <strong style={{ color: 'var(--text-secondary)' }}>{q.authorName || 'Personnel'}</strong>
+                          {q.authorRole && <span> ({q.authorRole})</span>}
+                        </span>
+                        {q.createdAt && (
+                          <span>&middot; Added: {new Date(q.createdAt).toLocaleDateString()} {new Date(q.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        )}
+                      </div>
+
+                      {q.lastEditedBy && (
+                        <div>
+                          Last edited by <strong style={{ color: 'var(--text-secondary)' }}>{q.lastEditedBy}</strong>
+                          {q.lastEditedAt && <span> on {new Date(q.lastEditedAt).toLocaleDateString()}</span>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ── Edit Modals ──────────────────────────────────────────────────────── */}
+      {/* ── MODALS ───────────────────────────────────────────────────────────── */}
 
-      {/* Edit Test Title */}
+      {/* Create Test Modal */}
+      {isCreateTestOpen && (
+        <Modal title="Create New Test" onClose={() => setIsCreateTestOpen(false)}>
+          <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
+            <label htmlFor="modal-test-title">Test Title</label>
+            <input
+              id="modal-test-title"
+              value={newTitle}
+              onChange={e => setNewTitle(e.target.value)}
+              placeholder="e.g. AeroSoc Recruitment Test (K26)"
+              onKeyDown={e => e.key === 'Enter' && createTest()}
+              autoFocus
+            />
+          </div>
+          <div className="flex gap-sm" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn btn-ghost" onClick={() => setIsCreateTestOpen(false)}>Cancel</button>
+            <button
+              id="modal-submit-create-test"
+              className="btn btn-primary"
+              onClick={createTest}
+              disabled={loading || !newTitle.trim()}
+            >
+              Create Test
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Add Section Modal */}
+      {isAddSectionOpen && selectedTest && (
+        <Modal title={`Add Section to "${selectedTest.title}"`} onClose={() => setIsAddSectionOpen(false)}>
+          <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
+            <label htmlFor="modal-section-name">Section Name</label>
+            <input
+              id="modal-section-name"
+              value={sectionName}
+              onChange={e => setSectionName(e.target.value)}
+              placeholder="e.g. Rocketry & Propulsion"
+              autoFocus
+            />
+          </div>
+          <div className="form-group" style={{ marginBottom: 'var(--space-lg)' }}>
+            <label htmlFor="modal-section-time">Time Limit (seconds)</label>
+            <input
+              id="modal-section-time"
+              type="number"
+              value={sectionTime}
+              onChange={e => setSectionTime(Number(e.target.value))}
+            />
+            <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4, display: 'block', fontFamily: 'var(--font-mono)' }}>
+              = {Math.floor(sectionTime / 60)} minutes {sectionTime % 60} seconds
+            </span>
+          </div>
+          <div className="flex gap-sm" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn btn-ghost" onClick={() => setIsAddSectionOpen(false)}>Cancel</button>
+            <button
+              id="modal-submit-add-section"
+              className="btn btn-primary"
+              onClick={addSection}
+              disabled={loading || !sectionName.trim()}
+            >
+              Add Section
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Add Question Modal */}
+      {isAddQuestionOpen && selectedTest && (
+        <Modal title={`Add Question &mdash; ${selectedTest.title}`} maxWidth={640} onClose={() => setIsAddQuestionOpen(false)}>
+          <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
+            <label htmlFor="modal-q-section">Target Section</label>
+            <select
+              id="modal-q-section"
+              value={qSectionId}
+              onChange={e => setQSectionId(e.target.value)}
+            >
+              {selectedTest.sections.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
+            <label htmlFor="modal-q-type">Question Type</label>
+            <select
+              id="modal-q-type"
+              value={qType}
+              onChange={e => setQType(e.target.value as 'mcq' | 'short')}
+            >
+              <option value="mcq">Multiple Choice (MCQ)</option>
+              <option value="short">Short Answer</option>
+            </select>
+          </div>
+
+          <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
+            <label htmlFor="modal-q-text">Question Text</label>
+            <textarea
+              id="modal-q-text"
+              value={qText}
+              onChange={e => setQText(e.target.value)}
+              rows={4}
+              placeholder="Enter full question statement..."
+              autoFocus
+            />
+          </div>
+
+          {qType === 'mcq' && (
+            <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
+              <div className="flex justify-between items-center" style={{ marginBottom: 6 }}>
+                <label style={{ margin: 0 }}>Options</label>
+                {qOptions.length < 6 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                    onClick={() => setQOptions([...qOptions, ''])}
+                  >
+                    + Add Option
+                  </button>
+                )}
+              </div>
+              {qOptions.map((opt, i) => (
+                <div key={i} className="flex gap-sm" style={{ marginBottom: 8, alignItems: 'center' }}>
+                  <span
+                    style={{
+                      width: 28, height: 28, border: '1px solid var(--border-light)',
+                      borderRadius: 'var(--radius-xs)', display: 'flex', alignItems: 'center',
+                      justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700,
+                      color: 'var(--text-muted)', flexShrink: 0, fontFamily: 'var(--font-mono)',
+                    }}
+                  >
+                    {String.fromCharCode(65 + i)}
+                  </span>
+                  <input
+                    id={`modal-q-option-${i}`}
+                    value={opt}
+                    onChange={e => {
+                      const o = [...qOptions];
+                      o[i] = e.target.value;
+                      setQOptions(o);
+                    }}
+                    placeholder={`Option ${String.fromCharCode(65 + i)}`}
+                    style={{ flex: 1 }}
+                  />
+                  {qOptions.length > 2 && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--accent-red-light)', padding: '2px 8px' }}
+                      onClick={() => {
+                        const o = [...qOptions];
+                        o.splice(i, 1);
+                        setQOptions(o);
+                      }}
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid-2" style={{ gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
+            <div className="form-group">
+              <div className="flex justify-between items-center" style={{ marginBottom: 4 }}>
+                <label htmlFor="modal-q-tag" style={{ margin: 0 }}>Question Tag</label>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: '0.6875rem', padding: '1px 6px', fontFamily: 'var(--font-mono)' }}
+                  onClick={() => setQTag(generateQuestionTag())}
+                >
+                  Generate
+                </button>
+              </div>
+              <input
+                id="modal-q-tag"
+                value={qTag}
+                onChange={e => setQTag(e.target.value)}
+                placeholder="e.g. 875TOD30P"
+                style={{ fontFamily: 'var(--font-mono)' }}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="modal-q-time">Per-Question Timer (s, 0=none)</label>
+              <input
+                id="modal-q-time"
+                type="number"
+                value={qTimeLimit}
+                onChange={e => setQTimeLimit(Number(e.target.value))}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-sm" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn btn-ghost" onClick={() => setIsAddQuestionOpen(false)}>Cancel</button>
+            <button
+              id="modal-submit-add-question"
+              className="btn btn-primary"
+              onClick={addQuestion}
+              disabled={loading || !qText.trim() || !qSectionId || !qTag.trim()}
+            >
+              Add Question
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit Test Title Modal */}
       {editMode.kind === 'test' && (
         <Modal title="Rename Test" onClose={() => setEditMode({ kind: 'none' })}>
-          <div className="form-group">
+          <div className="form-group" style={{ marginBottom: 'var(--space-lg)' }}>
             <label htmlFor="edit-test-title">New Title</label>
             <input
               id="edit-test-title"
@@ -752,10 +1300,10 @@ function SetupContent() {
         </Modal>
       )}
 
-      {/* Edit Section */}
+      {/* Edit Section Modal */}
       {editMode.kind === 'section' && (
         <Modal title="Edit Section" onClose={() => setEditMode({ kind: 'none' })}>
-          <div className="form-group">
+          <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
             <label htmlFor="edit-section-name">Section Name</label>
             <input
               id="edit-section-name"
@@ -764,7 +1312,7 @@ function SetupContent() {
               autoFocus
             />
           </div>
-          <div className="form-group">
+          <div className="form-group" style={{ marginBottom: 'var(--space-lg)' }}>
             <label htmlFor="edit-section-time">Time Limit (seconds)</label>
             <input
               id="edit-section-time"
@@ -772,7 +1320,7 @@ function SetupContent() {
               value={editMode.timeLimit}
               onChange={e => setEditMode({ ...editMode, timeLimit: Number(e.target.value) })}
             />
-            <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+            <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4, display: 'block', fontFamily: 'var(--font-mono)' }}>
               = {Math.floor(editMode.timeLimit / 60)}m {editMode.timeLimit % 60}s
             </span>
           </div>
@@ -783,10 +1331,10 @@ function SetupContent() {
         </Modal>
       )}
 
-      {/* Edit Question */}
+      {/* Edit Question Modal */}
       {editMode.kind === 'question' && (
-        <Modal title="Edit Question" onClose={() => setEditMode({ kind: 'none' })}>
-          <div className="form-group">
+        <Modal title="Edit Question" maxWidth={640} onClose={() => setEditMode({ kind: 'none' })}>
+          <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
             <label htmlFor="edit-q-type">Question Type</label>
             <select
               id="edit-q-type"
@@ -804,7 +1352,7 @@ function SetupContent() {
               <option value="short">Short Answer</option>
             </select>
           </div>
-          <div className="form-group">
+          <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
             <label htmlFor="edit-q-text">Question Text</label>
             <textarea
               id="edit-q-text"
@@ -815,15 +1363,30 @@ function SetupContent() {
             />
           </div>
           {editMode.question.type === 'mcq' && (
-            <div className="form-group">
-              <label>Options</label>
+            <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
+              <div className="flex justify-between items-center" style={{ marginBottom: 6 }}>
+                <label style={{ margin: 0 }}>Options</label>
+                {(editMode.question.options || []).length < 6 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                    onClick={() => {
+                      const opts = [...(editMode.question.options || []), ''];
+                      setEditMode({ ...editMode, question: { ...editMode.question, options: opts } });
+                    }}
+                  >
+                    + Add Option
+                  </button>
+                )}
+              </div>
               {(editMode.question.options || ['', '', '', '']).map((opt, i) => (
                 <div key={i} className="flex gap-sm" style={{ marginBottom: 8, alignItems: 'center' }}>
                   <span style={{
                     width: 28, height: 28, border: '1px solid var(--border-light)',
-                    borderRadius: '50%', display: 'flex', alignItems: 'center',
+                    borderRadius: 'var(--radius-xs)', display: 'flex', alignItems: 'center',
                     justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700,
-                    color: 'var(--text-muted)', flexShrink: 0,
+                    color: 'var(--text-muted)', flexShrink: 0, fontFamily: 'var(--font-mono)',
                   }}>{String.fromCharCode(65 + i)}</span>
                   <input
                     id={`edit-q-option-${i}`}
@@ -838,8 +1401,9 @@ function SetupContent() {
                   />
                   {(editMode.question.options || []).length > 2 && (
                     <button
+                      type="button"
                       className="btn btn-ghost btn-sm"
-                      style={{ color: 'var(--accent-red-light)', flexShrink: 0 }}
+                      style={{ color: 'var(--accent-red-light)', padding: '2px 8px' }}
                       onClick={() => {
                         const opts = [...(editMode.question.options || [])];
                         opts.splice(i, 1);
@@ -849,19 +1413,9 @@ function SetupContent() {
                   )}
                 </div>
               ))}
-              {(editMode.question.options || []).length < 6 && (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  style={{ marginTop: 4 }}
-                  onClick={() => {
-                    const opts = [...(editMode.question.options || []), ''];
-                    setEditMode({ ...editMode, question: { ...editMode.question, options: opts } });
-                  }}
-                >+ Add option</button>
-              )}
             </div>
           )}
-          <div className="grid-2" style={{ gap: 'var(--space-md)' }}>
+          <div className="grid-2" style={{ gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
             <div className="form-group">
               <label htmlFor="edit-q-tag">Tag</label>
               <input
