@@ -37,6 +37,13 @@ function ParticipantsContent() {
   const encodeEmail = (e: string) => e.replace(/\./g, ',');
   const decodeEmail = (e: string) => e.replace(/,/g, '.');
 
+  const getAdminActor = () => {
+    const user = auth.currentUser;
+    const actorEmail = user?.email || process.env.NEXT_PUBLIC_ADMIN_1 || 'admin@aerosoc';
+    const actorName = `${user?.displayName || 'Admin'} (Admin Sr.)`;
+    return { actorEmail, actorName, actorRole: 'Admin Sr.' as const };
+  };
+
   const fetchTests = async () => {
     try {
       const res = await fetch('/api/tests-list');
@@ -139,6 +146,26 @@ function ParticipantsContent() {
         ? `Successfully registered ${addedCount} unique participants (${duplicateCount} duplicate entries merged).`
         : `Successfully registered ${addedCount} participants for this test.`
     );
+
+    if (addedCount > 0) {
+      const testTitle = tests.find(t => t.id === selectedTestId)?.title || selectedTestId;
+      const { actorEmail, actorName, actorRole } = getAdminActor();
+      await logAuditEvent({
+        actorEmail,
+        actorName,
+        actorRole,
+        action: addedCount === 1 ? 'ADD_PARTICIPANT' : 'BULK_ADD_PARTICIPANTS',
+        actionLabel: addedCount === 1 ? 'Enrolled Participant' : 'Bulk Enrolled Participants',
+        targetTitle: `Test: ${testTitle}`,
+        details: {
+          testId: selectedTestId,
+          testTitle,
+          count: addedCount,
+          duplicateCount,
+        },
+      });
+    }
+
     setLoading(false);
   };
 
@@ -255,6 +282,26 @@ function ParticipantsContent() {
           ? `Successfully imported ${addedCount} unique participants (${duplicateCount} duplicate rows merged).`
           : `Successfully imported and enrolled ${addedCount} participants.`
       );
+
+      if (addedCount > 0) {
+        const testTitle = tests.find(t => t.id === selectedTestId)?.title || selectedTestId;
+        const { actorEmail, actorName, actorRole } = getAdminActor();
+        await logAuditEvent({
+          actorEmail,
+          actorName,
+          actorRole,
+          action: 'BULK_ADD_PARTICIPANTS',
+          actionLabel: 'Bulk Enrolled Participants (Spreadsheet)',
+          targetTitle: `Test: ${testTitle}`,
+          details: {
+            testId: selectedTestId,
+            testTitle,
+            count: addedCount,
+            duplicateCount,
+            fileName: csvFile?.name || 'spreadsheet.xlsx',
+          },
+        });
+      }
     } catch (err: any) {
       console.error(err);
       setError('Failed to parse file: ' + err.message);
@@ -280,6 +327,22 @@ function ParticipantsContent() {
       } else {
         await set(ref(rtdb, `participants/${key}/tests`), newTests);
       }
+
+      const testTitle = tests.find(t => t.id === selectedTestId)?.title || selectedTestId;
+      const { actorEmail, actorName, actorRole } = getAdminActor();
+      await logAuditEvent({
+        actorEmail,
+        actorName,
+        actorRole,
+        action: 'DELETE_PARTICIPANT',
+        actionLabel: 'Removed Participant from Test',
+        targetTitle: `${email} (${testTitle})`,
+        details: {
+          testId: selectedTestId,
+          testTitle,
+          participantEmail: email,
+        },
+      });
     }
 
     setLoading(false);
@@ -316,6 +379,21 @@ function ParticipantsContent() {
       email: newEmailTrimmed, 
       name: newNameTrimmed, 
       allowed: true 
+    });
+
+    const { actorEmail, actorName, actorRole } = getAdminActor();
+    await logAuditEvent({
+      actorEmail,
+      actorName,
+      actorRole,
+      action: 'ADD_PARTICIPANT',
+      actionLabel: 'Updated Participant Details',
+      targetTitle: `${newNameTrimmed} (${newEmailTrimmed})`,
+      details: {
+        participantName: newNameTrimmed,
+        participantEmail: newEmailTrimmed,
+        oldEmail,
+      },
     });
     
     setEditingEmail(null);
