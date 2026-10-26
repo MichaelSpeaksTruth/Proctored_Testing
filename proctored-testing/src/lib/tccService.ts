@@ -37,6 +37,13 @@ export interface TCCParticipant {
   lastSeen?: string;
 }
 
+export interface TCCMessageReply {
+  id: string;
+  senderName: string;
+  senderRole?: string;
+  text: string;
+}
+
 export interface TCCMessage {
   id: string;
   senderEmail: string;
@@ -47,7 +54,7 @@ export interface TCCMessage {
   timestampMs: number;
   isSystemNotice?: boolean;
   isDisputeNotice?: boolean;
-  reactions?: Record<string, Record<string, { name: string; role: string; timestamp: string }>>; // emoji -> encEmail -> user
+  replyTo?: TCCMessageReply;
 }
 
 export interface TCCDisputeDetails {
@@ -457,7 +464,7 @@ export async function raiseDisputeFromLog(params: {
     };
   });
 
-  const sessionTitle = `[DISPUTE] ${logItem.actionLabel || logItem.action}: ${logItem.targetTitle}`;
+  const sessionTitle = `${logItem.actionLabel || logItem.action}: ${logItem.targetTitle}`;
 
   // Initial System Notice + Opening Dispute Statement
   const noticeMsgId = `msg_notice_${nowMs}`;
@@ -466,9 +473,9 @@ export async function raiseDisputeFromLog(params: {
     [noticeMsgId]: {
       id: noticeMsgId,
       senderEmail: 'system@aerosoc',
-      senderName: 'TCC Dispute System',
+      senderName: 'System',
       senderRole: 'System',
-      text: `⚠️ Official Dispute Raised by ${raiser.name} (${raiser.role}) regarding log entry #${logItem.id} [${logItem.actionLabel || logItem.action} on "${logItem.targetTitle}"] initiated by ${logItem.actorName} (${logItem.actorRole}). Log initiator has been pinged and involved by default.`,
+      text: `Dispute opened by ${raiser.name} · ${logItem.actorName} auto-pinged`,
       timestamp: nowIso,
       timestampMs: nowMs,
       isSystemNotice: true,
@@ -479,7 +486,7 @@ export async function raiseDisputeFromLog(params: {
       senderEmail: raiser.email,
       senderName: raiser.name,
       senderRole: raiser.role,
-      text: `Dispute Reason (${priority.toUpperCase()} Priority):\n${disputeReason.trim()}`,
+      text: disputeReason.trim(),
       timestamp: new Date(nowMs + 1).toISOString(),
       timestampMs: nowMs + 1,
     },
@@ -557,12 +564,8 @@ export async function raiseDisputeFromLog(params: {
         sessionId,
         sessionTitle,
         type: 'dispute_ping',
-        title: isInitiator
-          ? `⚠️ URGENT: Dispute Raised on Your Activity Log`
-          : `⚠️ Dispute Session Involving You: ${logItem.targetTitle}`,
-        message: isInitiator
-          ? `${raiser.name} (${raiser.role}) raised a formal dispute regarding your action "${logItem.actionLabel || logItem.action}" on "${logItem.targetTitle}". You have been pinged to coordinate immediately.`
-          : `${raiser.name} (${raiser.role}) raised a dispute and included you in this session.`,
+        title: isInitiator ? `Dispute on Log: ${logItem.targetTitle}` : `Dispute Session: ${logItem.targetTitle}`,
+        message: `${raiser.name} pinged you regarding "${logItem.actionLabel || logItem.action}".`,
         fromEmail: raiser.email,
         fromName: raiser.name,
         fromRole: raiser.role,
@@ -594,8 +597,9 @@ export async function sendTCCMessage(params: {
   sender: ApprovedPersonnelInfo;
   text: string;
   allPersonnel?: ApprovedPersonnelInfo[];
+  replyTo?: TCCMessageReply;
 }): Promise<string> {
-  const { sessionId, sender, text, allPersonnel } = params;
+  const { sessionId, sender, text, allPersonnel, replyTo } = params;
   const now = new Date();
   const nowIso = now.toISOString();
   const nowMs = now.getTime();
@@ -611,6 +615,7 @@ export async function sendTCCMessage(params: {
     text: text.trim(),
     timestamp: nowIso,
     timestampMs: nowMs,
+    ...(replyTo ? { replyTo } : {}),
   };
 
   // Fetch session to update participants' user_sessions index

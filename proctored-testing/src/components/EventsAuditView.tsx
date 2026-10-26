@@ -577,7 +577,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
                             setDisputeTargetEvent(evt);
                             setDisputeModalOpen(true);
                           }}
-                          title="Raise dispute on this log into Team Coordination Corner (TCC)"
+                          title="Dispute this log activity"
                         >
                           <ShieldAlert size={12} color="#ff6b6b" />
                           <span>Raise Dispute</span>

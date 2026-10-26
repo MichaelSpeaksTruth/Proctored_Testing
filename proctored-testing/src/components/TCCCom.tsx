@@ -7,6 +7,7 @@ import {
   TCCSession,
   TCCUserSessionSummary,
   TCCMessage,
+  TCCMessageReply,
   TCCNotification,
   ApprovedPersonnelInfo,
   getPersonnelProfile,
@@ -16,7 +17,6 @@ import {
   resolveTCCDispute,
   markSessionAsRead,
   addParticipantToSession,
-  toggleMessageReaction,
   subscribeUserSessions,
   subscribeSession,
   subscribeUserNotifications,
@@ -41,6 +41,7 @@ import {
   Check,
   CheckCheck,
   UserPlus,
+  Reply,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -75,6 +76,7 @@ export default function TCCCom({
   // Messages state
   const [messageInput, setMessageInput] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<TCCMessageReply | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Mentions / Tagging state
@@ -206,6 +208,10 @@ export default function TCCCom({
         }
         if (mentionQuery !== null) {
           setMentionQuery(null);
+          return;
+        }
+        if (replyingTo) {
+          setReplyingTo(null);
           return;
         }
       }
@@ -360,6 +366,7 @@ export default function TCCCom({
     if (e) e.preventDefault();
     if (!messageInput.trim() || !activeSessionId || !personnelProfile || sendingMsg) return;
 
+    const currentReply = replyingTo;
     setSendingMsg(true);
     try {
       await sendTCCMessage({
@@ -367,27 +374,15 @@ export default function TCCCom({
         sender: personnelProfile,
         text: messageInput.trim(),
         allPersonnel,
+        replyTo: currentReply || undefined,
       });
       setMessageInput('');
       setMentionQuery(null);
+      setReplyingTo(null);
     } catch (err) {
       console.error('Failed to send message:', err);
     } finally {
       setSendingMsg(false);
-    }
-  };
-
-  const handleReaction = async (msgId: string, emoji: string) => {
-    if (!activeSessionId || !personnelProfile) return;
-    try {
-      await toggleMessageReaction({
-        sessionId: activeSessionId,
-        messageId: msgId,
-        emoji,
-        user: personnelProfile,
-      });
-    } catch (err) {
-      console.error('Failed to toggle reaction:', err);
     }
   };
 
@@ -1304,9 +1299,9 @@ export default function TCCCom({
                         whiteSpace: 'nowrap',
                         marginBottom: 4,
                       }}
-                      title={s.title}
+                      title={s.title.replace(/^\[DISPUTE\]\s*/i, '')}
                     >
-                      {s.title}
+                      {s.title.replace(/^\[DISPUTE\]\s*/i, '')}
                     </div>
 
                     <div
@@ -1409,9 +1404,9 @@ export default function TCCCom({
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                       }}
-                      title={activeSession.title}
+                      title={activeSession.title.replace(/^\[DISPUTE\]\s*/i, '')}
                     >
-                      {activeSession.title}
+                      {activeSession.title.replace(/^\[DISPUTE\]\s*/i, '')}
                     </h3>
                   </div>
                 </div>
@@ -1458,58 +1453,33 @@ export default function TCCCom({
                 </div>
               </div>
 
-              {/* Dispute Alert Context Banner (if dispute) */}
+              {/* Dispute Alert Context Banner (Clean & Compact) */}
               {activeSession.disputeDetails && (
                 <div
                   style={{
-                    background: 'rgba(155, 34, 38, 0.1)',
-                    borderBottom: '1px solid rgba(155, 34, 38, 0.35)',
-                    padding: '8px 16px',
-                    fontSize: '0.8125rem',
+                    background: 'rgba(155, 34, 38, 0.08)',
+                    borderBottom: '1px solid rgba(155, 34, 38, 0.25)',
+                    padding: '6px 16px',
+                    fontSize: '0.78125rem',
                     flexShrink: 0,
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <ShieldAlert size={14} color="#ff6b6b" />
-                      <strong style={{ color: '#ff6b6b' }}>Dispute on Log:</strong>
-                      <span className="badge badge-gray" style={{ fontSize: '0.6875rem' }}>
-                        {activeSession.disputeDetails.logActionLabel || activeSession.disputeDetails.logAction}
-                      </span>
-                      <span style={{ color: 'var(--white)', fontSize: '0.8125rem' }}>
-                        {activeSession.disputeDetails.logTargetTitle}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                      <ShieldAlert size={14} color="#ff6b6b" style={{ flexShrink: 0 }} />
+                      <span style={{ color: '#ff6b6b', fontWeight: 600 }}>Grounds:</span>
+                      <span style={{ color: 'var(--white)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {activeSession.disputeDetails.disputeReason}
                       </span>
                     </div>
 
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Log Initiator Auto-Pinged:{' '}
-                      <strong style={{ color: 'var(--white)' }}>
-                        {activeSession.disputeDetails.logActorName}
-                      </strong>
+                    <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      <span>Target: <strong style={{ color: 'var(--white)' }}>{activeSession.disputeDetails.logActorName}</strong></span>
+                      {activeSession.disputeDetails.resolved && (
+                        <span className="badge badge-green" style={{ fontSize: '0.625rem', padding: '1px 6px' }}>Resolved</span>
+                      )}
                     </div>
                   </div>
-
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: 4 }}>
-                    <strong>Grounds: </strong>
-                    <span>{activeSession.disputeDetails.disputeReason}</span>
-                  </div>
-
-                  {activeSession.disputeDetails.resolved && (
-                    <div
-                      style={{
-                        marginTop: 6,
-                        padding: '6px 10px',
-                        background: 'rgba(45, 106, 79, 0.15)',
-                        border: '1px solid rgba(45, 106, 79, 0.4)',
-                        borderRadius: 'var(--radius-xs)',
-                        fontSize: '0.75rem',
-                        color: 'var(--accent-green-light)',
-                      }}
-                    >
-                      <strong>Resolution: </strong>
-                      {activeSession.disputeDetails.resolutionNotes} (by {activeSession.disputeDetails.resolvedBy})
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1764,6 +1734,7 @@ export default function TCCCom({
                     return (
                       <div
                         key={msg.id}
+                        id={`msg-${msg.id}`}
                         style={{
                           display: 'flex',
                           flexDirection: 'column',
@@ -1835,77 +1806,79 @@ export default function TCCCom({
                             whiteSpace: 'pre-wrap',
                           }}
                         >
+                          {/* Quoted Reply Reference */}
+                          {msg.replyTo && (
+                            <div
+                              onClick={() => {
+                                const target = document.getElementById(`msg-${msg.replyTo?.id}`);
+                                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              }}
+                              style={{
+                                padding: '4px 8px',
+                                marginBottom: 6,
+                                background: 'rgba(0, 0, 0, 0.25)',
+                                borderLeft: '3px solid var(--accent-green-light)',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem',
+                              }}
+                              title="Click to view original message"
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--accent-green-light)', fontWeight: 600, fontSize: '0.6875rem', marginBottom: 2 }}>
+                                <Reply size={11} />
+                                <span>{msg.replyTo.senderName}</span>
+                              </div>
+                              <div style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {msg.replyTo.text}
+                              </div>
+                            </div>
+                          )}
+
                           {renderMessageContent(msg.text)}
                         </div>
 
-                        {/* Interactive Reactions and Read Receipts Row */}
+                        {/* Message Actions Row: Reply Button + Read Receipts */}
                         <div
                           style={{
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: isMine ? 'flex-end' : 'flex-start',
                             flexWrap: 'wrap',
-                            gap: 6,
+                            gap: 8,
                             marginTop: 4,
                           }}
                         >
-                          {/* Active emoji reactions */}
-                          {msg.reactions &&
-                            Object.entries(msg.reactions).map(([emoji, userMap]) => {
-                              const users = Object.values(userMap || {});
-                              if (users.length === 0) return null;
-                              const hasReacted = !!userMap[personnelProfile.encodedEmail];
-                              return (
-                                <button
-                                  key={emoji}
-                                  type="button"
-                                  onClick={() => handleReaction(msg.id, emoji)}
-                                  style={{
-                                    fontSize: '0.6875rem',
-                                    padding: '2px 6px',
-                                    borderRadius: '12px',
-                                    border: hasReacted
-                                      ? '1px solid rgba(34, 197, 94, 0.6)'
-                                      : '1px solid rgba(255, 255, 255, 0.1)',
-                                    background: hasReacted
-                                      ? 'rgba(34, 197, 94, 0.18)'
-                                      : 'rgba(255, 255, 255, 0.04)',
-                                    color: hasReacted ? '#22c55e' : 'var(--text-secondary)',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 3,
-                                    lineHeight: 1,
-                                  }}
-                                  title={users.map((u) => `${u.name} (${u.role})`).join(', ')}
-                                >
-                                  <span>{emoji}</span>
-                                  <span style={{ fontSize: '0.625rem', fontFamily: 'var(--font-mono)' }}>{users.length}</span>
-                                </button>
-                              );
-                            })}
-
-                          {/* Quick react hover icons */}
-                          <div style={{ display: 'inline-flex', gap: 2, opacity: 0.6 }}>
-                            {['👍', '✅', '👀', '⚠️'].map((emoji) => (
-                              <button
-                                key={emoji}
-                                type="button"
-                                onClick={() => handleReaction(msg.id, emoji)}
-                                style={{
-                                  fontSize: '0.6875rem',
-                                  padding: '1px 3px',
-                                  borderRadius: '3px',
-                                  background: 'transparent',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                }}
-                                title={`React ${emoji}`}
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReplyingTo({
+                                id: msg.id,
+                                senderName: msg.senderName,
+                                senderRole: msg.senderRole,
+                                text: msg.text,
+                              });
+                              textareaRef.current?.focus();
+                            }}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--text-muted)',
+                              fontSize: '0.6875rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3,
+                              padding: '2px 4px',
+                              borderRadius: 4,
+                              lineHeight: 1,
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                            title="Reply to message"
+                          >
+                            <Reply size={11} />
+                            <span>Reply</span>
+                          </button>
 
                           {/* Real-Time Read Receipts */}
                           {isMine && (() => {
@@ -2304,6 +2277,52 @@ export default function TCCCom({
                     </button>
                   ))}
                 </div>
+
+                {/* Active Reply Banner */}
+                {replyingTo && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '6px 12px',
+                      marginBottom: 8,
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      borderLeft: '3px solid var(--accent-green-light)',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, overflow: 'hidden' }}>
+                      <Reply size={13} color="var(--accent-green-light)" style={{ flexShrink: 0 }} />
+                      <span style={{ color: 'var(--accent-green-light)', fontWeight: 600, flexShrink: 0 }}>
+                        Replying to {replyingTo.senderName}:
+                      </span>
+                      <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {replyingTo.text}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReplyingTo(null)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        padding: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                      title="Cancel reply"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
 
                 <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                   <textarea

@@ -7,8 +7,9 @@ import {
   raiseDisputeFromLog,
 } from '@/lib/tccService';
 import { AuditEvent } from '@/lib/auditLogger';
-import { AlertTriangle, Users, CheckCircle, X, ShieldAlert, ArrowRight } from 'lucide-react';
+import { Users, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import BackButton from '@/components/BackButton';
 
 interface RaiseDisputeModalProps {
   isOpen: boolean;
@@ -33,9 +34,10 @@ export default function RaiseDisputeModal({
   const [loadingPersonnel, setLoadingPersonnel] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [createdSessionId, setCreatedSessionId] = useState<string | null>(null);
+  const [showPersonnelList, setShowPersonnelList] = useState(false);
   const modalCardRef = useRef<HTMLDivElement>(null);
 
+  // Outside-click & Escape dismissal
   useEffect(() => {
     if (!isOpen) return;
 
@@ -73,8 +75,8 @@ export default function RaiseDisputeModal({
       setDisputeReason('');
       setPriority('high');
       setErrorMsg(null);
-      setCreatedSessionId(null);
       setSelectedPersonnel([]);
+      setShowPersonnelList(false);
 
       setLoadingPersonnel(true);
       getApprovedPersonnelList()
@@ -95,7 +97,7 @@ export default function RaiseDisputeModal({
   const initiatorEmail = (event.actorEmail || '').trim().toLowerCase();
   const currentEmail = (currentUser?.email || '').trim().toLowerCase();
 
-  // Filter out initiator and current user from selectable additional parties list
+  // Additional personnel who aren't the initiator or current user
   const availableAdditionalPersonnel = allPersonnel.filter(
     (p) => p.email.toLowerCase() !== initiatorEmail && p.email.toLowerCase() !== currentEmail
   );
@@ -108,14 +110,6 @@ export default function RaiseDisputeModal({
     }
   };
 
-  const selectAll = () => {
-    setSelectedPersonnel(availableAdditionalPersonnel);
-  };
-
-  const deselectAll = () => {
-    setSelectedPersonnel([]);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) {
@@ -123,7 +117,7 @@ export default function RaiseDisputeModal({
       return;
     }
     if (!disputeReason.trim()) {
-      setErrorMsg('Please specify the dispute reason and requirements.');
+      setErrorMsg('Please specify the dispute reason.');
       return;
     }
 
@@ -156,48 +150,18 @@ export default function RaiseDisputeModal({
         additionalSelectedParticipants: selectedPersonnel,
       });
 
-      setCreatedSessionId(sessionId);
       if (onDisputeCreated) {
         onDisputeCreated(sessionId);
       }
+
+      onClose();
+      // Seamlessly redirect raiser directly to the new TCC session with zero AI slop
+      router.push(`/tcc?session=${sessionId}`);
     } catch (err: any) {
       console.error('Failed to raise dispute:', err);
       setErrorMsg(err?.message || 'Failed to raise dispute. Please try again.');
-    } finally {
       setSubmitting(false);
     }
-  };
-
-  const getInitials = (name?: string) => {
-    if (!name) return 'P';
-    const parts = name.trim().split(/\s+/);
-    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-    return name.slice(0, 2).toUpperCase();
-  };
-
-  const getRoleBadgeStyle = (role: string) => {
-    if (role.includes('Admin Sr.')) {
-      return {
-        background: 'rgba(155, 34, 38, 0.22)',
-        color: '#ff6b6b',
-        border: '1px solid rgba(155, 34, 38, 0.55)',
-        avatarBg: 'linear-gradient(135deg, #780000 0%, #c1121f 100%)',
-      };
-    }
-    if (role === 'Admin L1') {
-      return {
-        background: 'rgba(33, 150, 243, 0.15)',
-        color: '#64b5f6',
-        border: '1px solid rgba(33, 150, 243, 0.45)',
-        avatarBg: 'linear-gradient(135deg, #0d47a1 0%, #1976d2 100%)',
-      };
-    }
-    return {
-      background: 'rgba(45, 106, 79, 0.22)',
-      color: '#52b788',
-      border: '1px solid rgba(45, 106, 79, 0.55)',
-      avatarBg: 'linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%)',
-    };
   };
 
   return (
@@ -207,11 +171,11 @@ export default function RaiseDisputeModal({
         inset: 0,
         zIndex: 9999,
         background: 'rgba(0, 0, 0, 0.82)',
-        backdropFilter: 'blur(5px)',
+        backdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 'var(--space-md)',
+        padding: 16,
         overflowY: 'auto',
       }}
       onClick={() => {
@@ -221,478 +185,259 @@ export default function RaiseDisputeModal({
       <div
         ref={modalCardRef}
         onClick={(e) => e.stopPropagation()}
-        className="card"
         style={{
           width: '100%',
-          maxWidth: 680,
-          maxHeight: '90vh',
-          overflowY: 'auto',
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-light)',
-          borderRadius: 'var(--radius-lg)',
-          boxShadow: 'var(--shadow-lg)',
-          padding: 'var(--space-lg)',
+          maxWidth: 540,
+          background: '#0d0f12',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          borderRadius: '12px',
+          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.9)',
+          padding: '20px',
           position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 14,
         }}
       >
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          disabled={submitting}
-          style={{
-            position: 'absolute',
-            top: 18,
-            right: 18,
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-          }}
-          title="Close modal"
-        >
-          <X size={20} />
-        </button>
+        {/* Header Bar with BackButton */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <BackButton onClick={onClose} />
+            <h2 style={{ fontSize: '1.1875rem', fontWeight: 700, margin: 0, color: '#ffffff', letterSpacing: '-0.02em' }}>
+              Dispute Log Activity
+            </h2>
+          </div>
+          <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+            #{event.id.slice(-6)}
+          </span>
+        </div>
 
-        {createdSessionId ? (
-          <div style={{ textAlign: 'center', padding: 'var(--space-lg) 0' }}>
-            <div
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: '50%',
-                background: 'rgba(45, 106, 79, 0.2)',
-                border: '2px solid var(--accent-green-light)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto var(--space-md)',
-                color: 'var(--accent-green-light)',
-              }}
-            >
-              <CheckCircle size={32} />
+        {errorMsg && (
+          <div
+            style={{
+              padding: '8px 12px',
+              borderRadius: 6,
+              background: 'rgba(155, 34, 38, 0.2)',
+              border: '1px solid rgba(155, 34, 38, 0.5)',
+              color: '#ff6b6b',
+              fontSize: '0.8125rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Target Activity Summary */}
+          <div
+            style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: 8,
+              padding: '10px 14px',
+              fontSize: '0.8125rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="badge badge-gray" style={{ fontSize: '0.6875rem' }}>{event.actionLabel || event.action}</span>
+                <strong style={{ color: '#ffffff' }}>{event.targetTitle}</strong>
+              </div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
             </div>
-            <h3 style={{ fontSize: '1.25rem', marginBottom: 8, color: 'var(--white)' }}>
-              Dispute Session Created &amp; Initiator Pinged!
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: 'var(--space-lg)' }}>
-              A high-priority TCC dispute session has been generated. The log initiator (
-              <strong style={{ color: 'var(--white)' }}>{event.actorName}</strong>) has been alerted and
-              pinged directly by default, along with your selected parties.
-            </p>
-            <div className="flex gap-md justify-center">
-              <button
-                className="btn btn-outline"
-                onClick={onClose}
-              >
-                Close Window
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  onClose();
-                  router.push(`/tcc?session=${createdSessionId}`);
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  background: 'var(--accent-red)',
-                  borderColor: 'var(--accent-red-light)',
-                }}
-              >
-                <span>Open in Team Coordination Corner</span>
-                <ArrowRight size={16} />
-              </button>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+              Initiator: <strong style={{ color: '#ffffff' }}>{event.actorName || event.actorEmail}</strong> ({event.actorRole})
             </div>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-            {/* Header */}
+
+          {/* Involved Parties Indicator */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: '0.75rem',
+              color: 'var(--text-muted)',
+              padding: '4px 2px',
+            }}
+          >
             <div>
-              <div className="flex items-center gap-xs" style={{ marginBottom: 4 }}>
-                <span
-                  className="badge"
-                  style={{
-                    background: 'rgba(155, 34, 38, 0.25)',
-                    color: '#ff6b6b',
-                    border: '1px solid rgba(155, 34, 38, 0.6)',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                  }}
-                >
-                  <ShieldAlert size={12} style={{ marginRight: 4, display: 'inline' }} />
-                  AUTHORITY DISPUTE ACTION
-                </span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Log #{event.id.slice(-6)}
-                </span>
+              Auto-Pinged: <strong style={{ color: '#ff6b6b' }}>{event.actorName || event.actorEmail}</strong>
+            </div>
+            <div>
+              Raiser: <strong style={{ color: 'var(--text-primary)' }}>{currentUser?.name || 'You'}</strong>
+            </div>
+          </div>
+
+          {/* Reason / Grounds */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Dispute Grounds <span style={{ color: '#ff6b6b' }}>*</span>
+              </label>
+
+              {/* Priority Pills */}
+              <div style={{ display: 'inline-flex', gap: 4 }}>
+                {(['high', 'urgent'] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPriority(p)}
+                    style={{
+                      fontSize: '0.6875rem',
+                      fontWeight: 600,
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      border: priority === p ? '1px solid #ff6b6b' : '1px solid rgba(255, 255, 255, 0.12)',
+                      background: priority === p ? 'rgba(155, 34, 38, 0.35)' : 'transparent',
+                      color: priority === p ? '#ff6b6b' : 'var(--text-muted)',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {p}
+                  </button>
+                ))}
               </div>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--white)' }}>
-                Raise Dispute on Activity Log
-              </h2>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                This creates an official Team Coordination Corner (TCC) conversation session, pings the log initiator directly, and indexes it within the personnel&apos;s past 50 sessions.
-              </p>
             </div>
 
-            {errorMsg && (
+            <textarea
+              className="input"
+              rows={3}
+              value={disputeReason}
+              onChange={(e) => setDisputeReason(e.target.value)}
+              placeholder="State the reason or required clarification..."
+              required
+              style={{
+                width: '100%',
+                fontSize: '0.8125rem',
+                resize: 'vertical',
+                background: '#090b0e',
+                borderColor: 'rgba(255, 255, 255, 0.12)',
+                borderRadius: 6,
+                padding: '8px 10px',
+              }}
+            />
+          </div>
+
+          {/* Optional Additional Citizens */}
+          {availableAdditionalPersonnel.length > 0 && (
+            <div>
               <div
-                className="alert alert-danger"
                 style={{
-                  padding: '8px 12px',
-                  fontSize: '0.8125rem',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 8,
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  userSelect: 'none',
                 }}
+                onClick={() => setShowPersonnelList(!showPersonnelList)}
               >
-                <AlertTriangle size={16} />
-                <span>{errorMsg}</span>
-              </div>
-            )}
-
-            {/* Target Log Summary Card */}
-            <div
-              style={{
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-sm)',
-                padding: 'var(--space-sm) var(--space-md)',
-                fontSize: '0.8125rem',
-              }}
-            >
-              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-                Disputed Log Activity
-              </div>
-              <div className="flex items-center justify-between" style={{ flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
-                <div className="flex items-center gap-xs">
-                  <span className="badge badge-gray">{event.actionLabel || event.action}</span>
-                  <strong style={{ color: 'var(--white)', fontSize: '0.875rem' }}>{event.targetTitle}</strong>
-                </div>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                  {new Date(event.timestamp).toLocaleString()}
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Users size={13} />
+                  <span>
+                    Additional Citizens ({selectedPersonnel.length} added)
+                  </span>
+                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--accent-green-light)', fontWeight: 600 }}>
+                  {showPersonnelList ? 'Hide' : '+ Manage'}
                 </span>
               </div>
-              {event.details?.testTitle && (
-                <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                  Test context: <em>{event.details.testTitle}</em>
-                </div>
-              )}
-            </div>
 
-            {/* Default Involved Parties */}
-            <div
-              style={{
-                background: 'rgba(155, 34, 38, 0.08)',
-                border: '1px solid rgba(155, 34, 38, 0.3)',
-                borderRadius: 'var(--radius-sm)',
-                padding: 'var(--space-sm) var(--space-md)',
-              }}
-            >
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#ff6b6b', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <AlertTriangle size={14} />
-                <span>Default Involved Parties (Auto-Included &amp; Pinged):</span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-sm)' }}>
-                {/* Log Initiator */}
-                <div
-                  style={{
-                    background: 'var(--bg-primary)',
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-xs)',
-                    border: '1px solid rgba(155, 34, 38, 0.5)',
-                  }}
-                >
-                  <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
-                    <span style={{ fontSize: '0.6875rem', color: '#ff6b6b', fontWeight: 700 }}>
-                      LOG INITIATOR (PINGED)
-                    </span>
-                    <span className="badge" style={{ ...getRoleBadgeStyle(event.actorRole), fontSize: '0.625rem', padding: '1px 6px' }}>
-                      {event.actorRole}
-                    </span>
-                  </div>
-                  <div style={{ fontWeight: 600, color: 'var(--white)', fontSize: '0.8125rem' }}>
-                    {event.actorName || event.actorEmail}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                    {event.actorEmail}
-                  </div>
-                </div>
-
-                {/* Raiser */}
-                <div
-                  style={{
-                    background: 'var(--bg-primary)',
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-xs)',
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
-                    <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', fontWeight: 700 }}>
-                      DISPUTE RAISER (YOU)
-                    </span>
-                    <span className="badge" style={{ ...getRoleBadgeStyle(currentUser?.role || ''), fontSize: '0.625rem', padding: '1px 6px' }}>
-                      {currentUser?.role}
-                    </span>
-                  </div>
-                  <div style={{ fontWeight: 600, color: 'var(--white)', fontSize: '0.8125rem' }}>
-                    {currentUser?.name}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                    {currentUser?.email}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Select Additional Parties to Involve */}
-            <div>
-              <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Users size={14} />
-                  <span>Select Additional Parties to Involve ({selectedPersonnel.length} added):</span>
-                </label>
-                {availableAdditionalPersonnel.length > 0 && (
-                  <div className="flex gap-xs">
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={selectAll}
-                      style={{ fontSize: '0.6875rem', padding: '2px 6px' }}
-                    >
-                      Select All
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={deselectAll}
-                      style={{ fontSize: '0.6875rem', padding: '2px 6px' }}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {loadingPersonnel ? (
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '8px 0' }}>
-                  Loading eligible personnel...
-                </div>
-              ) : availableAdditionalPersonnel.length === 0 ? (
-                <div
-                  style={{
-                    fontSize: '0.75rem',
-                    color: 'var(--text-muted)',
-                    background: 'var(--bg-primary)',
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-xs)',
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  No other approved personnel registered yet. Only you and the log initiator will be enrolled.
-                </div>
-              ) : (
+              {showPersonnelList && (
                 <div
                   className="custom-scrollbar"
                   style={{
-                    maxHeight: 200,
+                    maxHeight: 140,
                     overflowY: 'auto',
-                    overflowX: 'hidden',
-                    background: 'var(--bg-primary)',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--border)',
+                    background: '#090b0e',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderRadius: 6,
                     padding: 4,
+                    marginTop: 6,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 4,
-                    width: '100%',
-                    boxSizing: 'border-box',
+                    gap: 3,
                   }}
                 >
-                  {availableAdditionalPersonnel.map((person) => {
-                    const isChecked = selectedPersonnel.some((p) => p.encodedEmail === person.encodedEmail);
-                    return (
-                      <div
-                        key={person.encodedEmail}
-                        onClick={() => toggleSelectPersonnel(person)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '9px 12px',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          background: isChecked ? 'rgba(45, 106, 79, 0.12)' : 'rgba(255, 255, 255, 0.02)',
-                          border: isChecked ? '1px solid rgba(64, 145, 108, 0.45)' : '1px solid rgba(255, 255, 255, 0.05)',
-                          transition: 'all 120ms ease',
-                          boxSizing: 'border-box',
-                          width: '100%',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1, gap: 12 }}>
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => {}} // handled by parent onClick
-                            style={{
-                              width: '16px',
-                              minWidth: '16px',
-                              maxWidth: '16px',
-                              height: '16px',
-                              minHeight: '16px',
-                              maxHeight: '16px',
-                              padding: 0,
-                              margin: 0,
-                              cursor: 'pointer',
-                              flexShrink: 0,
-                              accentColor: '#40916c',
-                            }}
-                          />
-                          <div
-                            style={{
-                              width: 32,
-                              minWidth: 32,
-                              height: 32,
-                              borderRadius: '7px',
-                              background: getRoleBadgeStyle(person.role).avatarBg,
-                              color: '#ffffff',
-                              fontSize: '0.6875rem',
-                              fontWeight: 700,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0,
-                              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.15)',
-                            }}
-                          >
-                            {getInitials(person.name)}
-                          </div>
-                          <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
-                            <div
-                              style={{
-                                fontSize: '0.84rem',
-                                fontWeight: 600,
-                                color: '#ffffff',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                lineHeight: 1.3,
-                              }}
-                            >
-                              {person.name}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: '0.71875rem',
-                                color: 'var(--text-muted)',
-                                fontFamily: 'var(--font-mono)',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                lineHeight: 1.3,
-                              }}
-                            >
-                              {person.email}
-                            </div>
-                          </div>
-                        </div>
-
-                        <span
-                          className="badge"
+                  {loadingPersonnel ? (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '6px 8px' }}>
+                      Loading citizens...
+                    </div>
+                  ) : (
+                    availableAdditionalPersonnel.map((person) => {
+                      const isSelected = selectedPersonnel.some((p) => p.encodedEmail === person.encodedEmail);
+                      return (
+                        <div
+                          key={person.encodedEmail}
+                          onClick={() => toggleSelectPersonnel(person)}
                           style={{
-                            ...getRoleBadgeStyle(person.role),
-                            fontSize: '0.625rem',
-                            padding: '2px 7px',
-                            flexShrink: 0,
-                            marginLeft: 10,
-                            fontWeight: 700,
-                            letterSpacing: '0.04em',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '6px 10px',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            background: isSelected ? 'rgba(34, 197, 94, 0.12)' : 'transparent',
+                            border: isSelected ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid transparent',
                           }}
                         >
-                          {person.role}
-                        </span>
-                      </div>
-                    );
-                  })}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              style={{ accentColor: '#22c55e', cursor: 'pointer' }}
+                            />
+                            <span style={{ fontSize: '0.8125rem', color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {person.name}
+                            </span>
+                            <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                              ({person.role})
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               )}
             </div>
+          )}
 
-            {/* Dispute Priority & Reason */}
-            <div>
-              <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Dispute Priority:
-                </label>
-                <div className="flex gap-xs">
-                  {(['normal', 'high', 'urgent'] as const).map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setPriority(p)}
-                      className={`btn btn-sm ${priority === p ? 'btn-primary' : 'btn-ghost'}`}
-                      style={{
-                        fontSize: '0.75rem',
-                        padding: '3px 8px',
-                        textTransform: 'capitalize',
-                        background:
-                          priority === p
-                            ? p === 'urgent'
-                              ? '#d90429'
-                              : p === 'high'
-                              ? 'var(--accent-red)'
-                              : 'var(--accent-amber)'
-                            : undefined,
-                      }}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>
-                Reason &amp; Demanded Rectification <span style={{ color: '#ff6b6b' }}>*</span>:
-              </label>
-              <textarea
-                className="input"
-                rows={4}
-                value={disputeReason}
-                onChange={(e) => setDisputeReason(e.target.value)}
-                placeholder="State clearly why this action is disputed, any questions or issues found, and what resolution is required..."
-                required
-                style={{ width: '100%', resize: 'vertical' }}
-              />
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-sm" style={{ marginTop: 'var(--space-xs)' }}>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={onClose}
-                disabled={submitting}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={submitting || !disputeReason.trim()}
-                style={{
-                  background: 'var(--accent-red)',
-                  borderColor: 'var(--accent-red-light)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                {submitting ? 'Creating Dispute & Pinging...' : 'Raise Dispute & Ping Parties'}
-              </button>
-            </div>
-          </form>
-        )}
+          {/* Form Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={onClose}
+              disabled={submitting}
+              style={{ fontSize: '0.8125rem', padding: '6px 14px' }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary btn-sm"
+              disabled={submitting || !disputeReason.trim()}
+              style={{
+                fontSize: '0.8125rem',
+                fontWeight: 700,
+                padding: '7px 18px',
+                background: '#d90429',
+                borderColor: '#ef233c',
+              }}
+            >
+              {submitting ? 'Creating...' : 'Open Dispute in TCC'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
