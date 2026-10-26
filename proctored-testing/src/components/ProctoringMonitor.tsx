@@ -20,7 +20,8 @@ const IDX_RIGHT_EAR = 454;
 
 // COCO-SSD verified classes for external devices
 const PHONE_CLASSES: Record<string, number> = {
-  'cell phone': 0.52,
+  'cell phone': 0.30,
+  'remote':     0.34,
 };
 
 /**
@@ -283,12 +284,6 @@ export default function ProctoringMonitor({
     // ── 2. Universal Verified AI Object Detection (COCO-SSD Lite) ──────────────
     // Runs on ALL devices (4GB RAM, low-end PCs, mobile, desktop) using the ultra-lightweight
     // quantized 'lite_mobilenet_v2' model to guarantee 100% identical rules for all candidates.
-    const DETECT_W = 320, DETECT_H = 320;
-    const detectCanvas = document.createElement('canvas');
-    detectCanvas.width = DETECT_W;
-    detectCanvas.height = DETECT_H;
-    const detectCtx = detectCanvas.getContext('2d', { willReadFrequently: true });
-
     const initCoco = async () => {
       if (!mounted) return;
       try {
@@ -316,18 +311,20 @@ export default function ProctoringMonitor({
         }
 
         let detecting = false;
+        let phoneStreak = 0;
+        let phoneClearStreak = 0;
+
         cocoTimer = setInterval(async () => {
           if (!mounted || !videoRef.current || videoRef.current.readyState !== 4 || detecting) return;
           try {
             detecting = true;
-            if (detectCtx && videoRef.current.videoWidth > 0) {
-              detectCtx.drawImage(videoRef.current, 0, 0, DETECT_W, DETECT_H);
-            }
-            let preds: import('@tensorflow-models/coco-ssd').DetectedObject[] = [];
+            const video = videoRef.current;
             
+            // Detect on native video element directly to maintain 100% native aspect ratio and resolution
+            let preds: import('@tensorflow-models/coco-ssd').DetectedObject[] = [];
             tf.engine().startScope();
             try {
-              preds = await model.detect(detectCanvas);
+              preds = await model.detect(video);
             } finally {
               tf.engine().endScope();
             }
@@ -337,18 +334,31 @@ export default function ProctoringMonitor({
               return thr !== undefined && p.score >= thr;
             });
 
-            // Report through hysteresis debouncer to prevent single-frame anomalies
-            report('PHONE_DETECTED', phoneDetected, 'critical');
+            // Dedicated fast-response streak debouncer (2 consecutive detections @ 800ms = 1.6s)
+            if (phoneDetected) {
+              phoneStreak++;
+              phoneClearStreak = 0;
+              if (phoneStreak >= 2) {
+                openInfraction('PHONE_DETECTED', 'critical');
+              }
+            } else {
+              phoneClearStreak++;
+              phoneStreak = Math.max(0, phoneStreak - 1);
+              if (phoneClearStreak >= 2) {
+                closeInfraction('PHONE_DETECTED');
+                phoneClearStreak = 0;
+              }
+            }
 
             // Draw bounding boxes on overlay canvas for active visual verification
-            if (overlayCanvasRef?.current && videoRef.current.videoWidth > 0) {
+            if (overlayCanvasRef?.current && video.videoWidth > 0) {
               const cv = overlayCanvasRef.current;
               const gx = cv.getContext('2d');
               if (gx) {
-                const sx = cv.width / DETECT_W;
-                const sy = cv.height / DETECT_H;
+                const sx = cv.width / video.videoWidth;
+                const sy = cv.height / video.videoHeight;
                 preds.forEach((p) => {
-                  if (p.score < 0.45) return;
+                  if (p.score < 0.28) return;
                   const isCheat = p.class in PHONE_CLASSES;
                   const [bx, by, bw, bh] = p.bbox;
                   gx.strokeStyle = isCheat ? '#ff2200' : 'rgba(34,255,136,0.6)';
@@ -371,7 +381,7 @@ export default function ProctoringMonitor({
           } finally {
             detecting = false;
           }
-        }, 1400);
+        }, 800);
       } catch (e) {
         console.warn('[Proctor] COCO-SSD load failed:', e);
       }
@@ -456,37 +466,31 @@ export default function ProctoringMonitor({
             };
             const headPitchDegrees = calculateHeadPitch(lm);
             
-            // Forehead and chin landmarks
+            // Forehead, nose, and chin landmarks
             const foreheadPt = lm[IDX_FOREHEAD];
-            const chinPt = lm[IDX_CHIN];
-            
-            // Head vs chin mass ratio
-            const headMass = Math.abs(foreheadPt.y - noseTip.y);
-            const lowerMass = Math.abs(chinPt.y - noseTip.y);
-            const headVsChinRatio = lowerMass > 0.001 ? headMass / lowerMass : 1.0;
-            
-            // Ducking: chin drops out of frame completely or extreme crouch
-            const isDucking = (chinPt.y > 0.98 && foreheadPt.y < 0.90) || (headVsChinRatio > 1.85);
+            const noseTipPt  = lm[IDX_NOSE_TIP];
+            const chinPt     = lm[IDX_CHIN];
+
+            // Ducking: only when the face physically sinks below the bottom of the camera frame
+            // (Eliminated headVsChinRatio which falsely fired when a phone or hand occluded the lower face)
+            const isDucking = chinPt.y > 0.97 && foreheadPt.y > 0.65;
 
             // Peeking / Looking Down Check:
             // When a student peeks down to read questions, options, or scratchpad notes,
             // their head pitches forward/down (headPitchDegrees < -14° or pitchDeg > 6°).
-            // Under NO circumstance should peeking down trigger the "Camera Alignment Required" overlay!
             const isPeekingDown = headPitchDegrees < -14 || pitchDeg > 6;
 
-            // Realistic pitch down: When looking all the way down into lap/knees
-            const PITCH_DOWN_THRESHOLD = -28;
-            const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD && pitchDeg > 12;
+            // Looking Down (Calibrated Midpoint between the tough 1-month-ago and loose variants):
+            // Catches sustained lap looking without triggering on standard upright screen viewing.
+            const isPitchDown = headPitchDegrees < -20 || (headPitchDegrees < -16 && pitchDeg > 8);
 
-            // Dynamic Shoulder Alignment (Screen Extended / Tilted Back):
-            // The SOLE purpose of shoulder tracking is catching when a candidate extends/tilts
-            // their laptop screen back so the camera points up at the ceiling to hide their torso,
-            // hands, and desk from the proctor.
-            // When the screen is tilted back:
-            // 1. The candidate is NOT peeking down (!isPeekingDown) - they are looking straight at the screen.
-            // 2. The entire face sinks into the lower frame (foreheadPt.y > 0.38, top of frame is empty ceiling).
-            // 3. The chin is pushed to the bottom border (chinPt.y > 0.86), cutting shoulders out of the frame.
-            const isShouldersOut = !isPeekingDown && (foreheadPt.y > 0.38 && chinPt.y > 0.86);
+            // Dynamic Shoulder Alignment (Screen Extended / Tilted Back at Ceiling):
+            // Only fires when the camera is physically tilted up at the ceiling:
+            // - Nose tip must be pushed into the bottom third of the frame (noseTip.y > 0.64)
+            // - Forehead is pushed down (foreheadPt.y > 0.46, top 46%+ of image is ceiling)
+            // - Chin is pushed to the bottom border (chinPt.y > 0.90)
+            // - Candidate is looking at the screen (!isPeekingDown)
+            const isShouldersOut = !isPeekingDown && noseTipPt.y > 0.64 && foreheadPt.y > 0.46 && chinPt.y > 0.90;
             
             report('HEAD_PITCH_DOWN', isPitchDown, 'medium');
             report('DUCKING_DOWN', isDucking, 'high');
