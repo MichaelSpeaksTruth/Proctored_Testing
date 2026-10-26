@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import {
@@ -24,38 +24,46 @@ import {
   MessageSquare,
   Plus,
   Search,
-  AlertTriangle,
   CheckCircle2,
   Users,
   Send,
   Bell,
   Clock,
-  Shield,
   ShieldAlert,
   ArrowLeft,
   X,
-  FileText,
   UserCheck,
+  ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface TCCComProps {
   initialSessionId?: string | null;
+  embedded?: boolean;
   onBackToDashboard?: () => void;
 }
 
-export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComProps) {
+export default function TCCCom({
+  initialSessionId,
+  embedded = false,
+  onBackToDashboard,
+}: TCCComProps) {
   // Current user & personnel profile
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [personnelProfile, setPersonnelProfile] = useState<ApprovedPersonnelInfo | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
 
-  // Sessions state (up to 50 for the user)
+  // Sessions state (strictly up to 50 for the user)
   const [sessions, setSessions] = useState<TCCUserSessionSummary[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(initialSessionId || null);
   const [activeSession, setActiveSession] = useState<TCCSession | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'dispute' | 'standard' | 'mine'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Mobile navigation state ('sidebar' = show sessions list, 'chat' = show chat room)
+  const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
 
   // Messages state
   const [messageInput, setMessageInput] = useState('');
@@ -106,8 +114,8 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
     }
     const unsub = subscribeUserSessions(personnelProfile.encodedEmail, (userSessions) => {
       setSessions(userSessions);
-      // Auto-select initial or first session if activeSessionId is not set
-      if (!activeSessionId && userSessions.length > 0) {
+      // On desktop, auto-select first session if none selected
+      if (!activeSessionId && userSessions.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 768) {
         setActiveSessionId(userSessions[0].sessionId);
       }
     });
@@ -118,6 +126,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
   useEffect(() => {
     if (initialSessionId) {
       setActiveSessionId(initialSessionId);
+      setMobileView('chat');
     }
   }, [initialSessionId]);
 
@@ -165,7 +174,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
         // Exclude current user from selectable list
         const others = list.filter((p) => p.email.toLowerCase() !== personnelProfile?.email.toLowerCase());
         setAllPersonnel(others);
-        setSelectedPersonnel(others); // Preselect all for easy collaboration
+        setSelectedPersonnel(others); // Preselect all for quick team broadcast
       });
     }
   }, [newSessionModalOpen, personnelProfile]);
@@ -197,6 +206,11 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
   }, [activeSession?.messages]);
 
   // Actions
+  const handleSelectSession = (sessionId: string) => {
+    setActiveSessionId(sessionId);
+    setMobileView('chat');
+  };
+
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!messageInput.trim() || !activeSessionId || !personnelProfile || sendingMsg) return;
@@ -219,7 +233,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSessionTitle.trim() || !personnelProfile) {
-      setCreateError('Please enter a session title / subject.');
+      setCreateError('Please enter a conversation topic or title.');
       return;
     }
 
@@ -235,6 +249,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
 
       setNewSessionModalOpen(false);
       setActiveSessionId(sessionId);
+      setMobileView('chat');
     } catch (err: any) {
       console.error('Failed to create session:', err);
       setCreateError(err?.message || 'Failed to initiate conversation session.');
@@ -277,12 +292,22 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
     }
   };
 
+  const getInitials = (name?: string) => {
+    if (!name) return 'P';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
+
   const getRoleBadgeStyle = (role: string) => {
     if (role.includes('Admin Sr.')) {
       return {
         background: 'rgba(155, 34, 38, 0.22)',
         color: '#ff6b6b',
         border: '1px solid rgba(155, 34, 38, 0.55)',
+        avatarBg: 'linear-gradient(135deg, #780000 0%, #c1121f 100%)',
       };
     }
     if (role === 'Admin L1') {
@@ -290,6 +315,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
         background: 'rgba(33, 150, 243, 0.15)',
         color: '#64b5f6',
         border: '1px solid rgba(33, 150, 243, 0.45)',
+        avatarBg: 'linear-gradient(135deg, #0d47a1 0%, #1976d2 100%)',
       };
     }
     if (role === 'Question Setter') {
@@ -297,35 +323,59 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
         background: 'rgba(45, 106, 79, 0.22)',
         color: '#52b788',
         border: '1px solid rgba(45, 106, 79, 0.55)',
+        avatarBg: 'linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%)',
       };
     }
     return {
       background: 'rgba(255, 255, 255, 0.1)',
       color: 'var(--text-secondary)',
       border: '1px solid var(--border)',
+      avatarBg: '#333333',
     };
   };
 
   if (authChecking) {
     return (
-      <div className="loading-center" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div className="spinner" style={{ marginBottom: 12 }} />
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Verifying TCC personnel credentials...</p>
+      <div
+        style={{
+          minHeight: '60vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 12,
+        }}
+      >
+        <div className="spinner" />
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+          Verifying personnel credentials...
+        </p>
       </div>
     );
   }
 
   if (!personnelProfile) {
     return (
-      <div className="card" style={{ maxWidth: 540, margin: '60px auto', textAlign: 'center', padding: 'var(--space-2xl) var(--space-xl)' }}>
-        <ShieldAlert size={48} color="#ff6b6b" style={{ margin: '0 auto var(--space-md)' }} />
+      <div
+        className="card"
+        style={{
+          maxWidth: 520,
+          margin: '60px auto',
+          textAlign: 'center',
+          padding: 'var(--space-2xl) var(--space-xl)',
+          border: '1px solid var(--border-light)',
+          background: 'var(--bg-card)',
+        }}
+      >
+        <ShieldAlert size={44} color="#ff6b6b" style={{ margin: '0 auto var(--space-md)' }} />
         <h2 style={{ fontSize: '1.25rem', marginBottom: 8, color: 'var(--white)' }}>
-          Access Restricted: TCC Personnel Only
+          Access Restricted: Approved Personnel Only
         </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: 'var(--space-lg)' }}>
-          The Team Coordination Corner (TCC) is strictly accessible to verified <strong>Admin Sr.</strong>, <strong>Admin L1</strong>, and <strong>Question Setter</strong> personnel.
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: 'var(--space-lg)', lineHeight: 1.6 }}>
+          Team Coordination Corner (TCC) is strictly accessible to verified <strong>Admin Sr.</strong>,{' '}
+          <strong>Admin L1</strong>, and <strong>Question Setter</strong> accounts.
         </p>
-        <Link href="/" className="btn btn-primary">
+        <Link href="/" className="btn btn-primary" style={{ padding: '8px 20px' }}>
           Return to Platform Home
         </Link>
       </div>
@@ -344,92 +394,170 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 80px)',
-        minHeight: 640,
+        height: embedded ? '780px' : 'calc(100vh - 16px)',
+        maxHeight: '100vh',
         background: 'var(--bg-secondary)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-md)',
         overflow: 'hidden',
+        position: 'relative',
+        boxShadow: 'var(--shadow-lg)',
       }}
     >
-      {/* Top Bar */}
+      {/* ── TOP UNIFIED HEADER BAR (Clean, no nested duplicate) ────────────────── */}
       <header
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '10px 18px',
+          padding: '8px 16px',
           background: 'var(--bg-card)',
           borderBottom: '1px solid var(--border)',
           flexShrink: 0,
+          gap: 12,
         }}
       >
-        <div className="flex items-center gap-md">
-          {onBackToDashboard && (
-            <button
-              onClick={onBackToDashboard}
-              className="btn btn-ghost btn-sm"
-              style={{ padding: '4px 8px' }}
-              title="Back to dashboard"
-            >
-              <ArrowLeft size={16} />
-            </button>
+        {/* Left Brand & Navigation */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          {!embedded && (
+            <div style={{ width: 28, height: 28, borderRadius: 'var(--radius-xs)', overflow: 'hidden', flexShrink: 0 }}>
+              <Image src="/aerosoc_logo.jpeg" alt="Logo" width={28} height={28} style={{ objectFit: 'cover' }} />
+            </div>
           )}
-          <div className="flex items-center gap-xs">
+
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span
+                style={{
+                  fontSize: '0.9375rem',
+                  fontWeight: 700,
+                  color: 'var(--white)',
+                  letterSpacing: '-0.01em',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Team Coordination Corner
+              </span>
+              <span
+                className="badge"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.625rem',
+                  padding: '2px 6px',
+                  fontWeight: 600,
+                }}
+              >
+                TCC COM
+              </span>
+            </div>
             <div
               style={{
-                width: 28,
-                height: 28,
-                borderRadius: 'var(--radius-xs)',
-                background: 'linear-gradient(135deg, rgba(45, 106, 79, 0.4), rgba(155, 34, 38, 0.4))',
-                border: '1px solid var(--border-light)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--white)',
+                fontSize: '0.6875rem',
+                color: 'var(--text-muted)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
             >
-              <MessageSquare size={16} />
-            </div>
-            <div>
-              <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--white)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>Team Coordination Corner</span>
-                <span className="badge" style={{ fontSize: '0.625rem', padding: '1px 5px', background: 'rgba(255,255,255,0.08)' }}>
-                  TCC COM
-                </span>
-              </div>
-              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-                Admin Sr. &middot; Admin L1 &middot; Question Setter Unified Room
-              </div>
+              Admin Sr. &middot; Admin L1 &middot; Question Setter Room
             </div>
           </div>
         </div>
 
-        {/* User Identity & Notification Controls */}
-        <div className="flex items-center gap-md">
-          <div className="flex items-center gap-xs" style={{ fontSize: '0.8125rem' }}>
-            <span style={{ color: 'var(--text-muted)' }}>Logged as:</span>
-            <span style={{ fontWeight: 600, color: 'var(--white)' }}>{personnelProfile.name}</span>
+        {/* Center / Right Links & User Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Quick Platform Links (Desktop only) */}
+          {!embedded && (
+            <div className="desktop-only-flex" style={{ alignItems: 'center', gap: 6 }}>
+              <Link
+                href="/admin"
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: '0.75rem', padding: '4px 8px', color: 'var(--text-secondary)' }}
+              >
+                Admin Sr.
+              </Link>
+              <Link
+                href="/admin-l1"
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: '0.75rem', padding: '4px 8px', color: 'var(--text-secondary)' }}
+              >
+                Admin L1
+              </Link>
+              <Link
+                href="/question-setter"
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: '0.75rem', padding: '4px 8px', color: 'var(--text-secondary)' }}
+              >
+                Question Setter
+              </Link>
+              <Link
+                href="/admin/logs"
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: '0.75rem', padding: '4px 8px', color: 'var(--text-secondary)' }}
+              >
+                Logs
+              </Link>
+            </div>
+          )}
+
+          {/* User Profile Pill */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '4px 10px',
+              background: 'rgba(255, 255, 255, 0.04)',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                background: getRoleBadgeStyle(personnelProfile.role).avatarBg,
+                color: '#fff',
+                fontSize: '0.6875rem',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {getInitials(personnelProfile.name)}
+            </div>
+            <div className="desktop-only" style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--white)' }}>
+              {personnelProfile.name}
+            </div>
             <span
               className="badge"
-              style={{ ...getRoleBadgeStyle(personnelProfile.role), fontSize: '0.6875rem', padding: '2px 7px' }}
+              style={{
+                ...getRoleBadgeStyle(personnelProfile.role),
+                fontSize: '0.625rem',
+                padding: '2px 6px',
+                fontWeight: 700,
+              }}
             >
               {personnelProfile.role}
             </span>
           </div>
 
-          {/* Notifications Dropdown */}
+          {/* Notification / Ping Bell */}
           <div style={{ position: 'relative' }}>
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
               style={{
                 position: 'relative',
-                padding: '6px 10px',
+                padding: '6px 8px',
+                borderRadius: 'var(--radius-sm)',
                 border: '1px solid var(--border)',
                 background: notifDropdownOpen ? 'var(--bg-primary)' : 'transparent',
               }}
-              title="Dispute pings & notifications"
+              title="Dispute Alerts & Pings"
             >
               <Bell size={16} color={unreadNotifCount > 0 ? '#ff6b6b' : 'var(--text-secondary)'} />
               {unreadNotifCount > 0 && (
@@ -444,7 +572,6 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                     fontSize: '0.625rem',
                     fontWeight: 700,
                     padding: '1px 5px',
-                    lineHeight: '1.1',
                   }}
                 >
                   {unreadNotifCount}
@@ -452,7 +579,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
               )}
             </button>
 
-            {/* Notifications Popover */}
+            {/* Notification Dropdown */}
             {notifDropdownOpen && (
               <div
                 style={{
@@ -460,10 +587,10 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                   right: 0,
                   top: '100%',
                   marginTop: 6,
-                  width: 340,
+                  width: 'min(340px, 90vw)',
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border-light)',
-                  borderRadius: 'var(--radius-sm)',
+                  borderRadius: 'var(--radius-md)',
                   boxShadow: 'var(--shadow-lg)',
                   zIndex: 9999,
                   overflow: 'hidden',
@@ -471,7 +598,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
               >
                 <div
                   style={{
-                    padding: '8px 12px',
+                    padding: '10px 14px',
                     background: 'var(--bg-primary)',
                     borderBottom: '1px solid var(--border)',
                     display: 'flex',
@@ -479,8 +606,8 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                     justifyContent: 'space-between',
                   }}
                 >
-                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--white)' }}>
-                    Pings &amp; Alert Notifications
+                  <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--white)' }}>
+                    Pings &amp; Alerts
                   </span>
                   {notifications.length > 0 && (
                     <button
@@ -493,28 +620,28 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                   )}
                 </div>
 
-                <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                <div className="custom-scrollbar" style={{ maxHeight: 280, overflowY: 'auto' }}>
                   {notifications.length === 0 ? (
-                    <div style={{ padding: 'var(--space-md)', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                      No active pings or notifications.
+                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                      No active pings or alerts.
                     </div>
                   ) : (
                     notifications.map((notif) => (
                       <div
                         key={notif.id}
                         onClick={() => {
-                          setActiveSessionId(notif.sessionId);
+                          handleSelectSession(notif.sessionId);
                           setNotifDropdownOpen(false);
                         }}
                         style={{
-                          padding: '10px 12px',
+                          padding: '10px 14px',
                           borderBottom: '1px solid var(--border)',
                           cursor: 'pointer',
-                          background: notif.type === 'dispute_ping' ? 'rgba(155, 34, 38, 0.08)' : 'transparent',
-                          transition: 'background var(--transition-fast)',
+                          background: notif.type === 'dispute_ping' ? 'rgba(155, 34, 38, 0.1)' : 'transparent',
+                          transition: 'background 150ms ease',
                         }}
                       >
-                        <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
                           <span
                             style={{
                               fontSize: '0.6875rem',
@@ -528,10 +655,10 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                             {formatTime(notif.timestamp)}
                           </span>
                         </div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--white)', marginBottom: 2 }}>
+                        <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--white)', marginBottom: 2 }}>
                           {notif.title}
                         </div>
-                        <div style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                           {notif.message}
                         </div>
                       </div>
@@ -544,21 +671,25 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
         </div>
       </header>
 
-      {/* Main Split Layout: Left Sessions Sidebar (Max 50) | Right Chat Pane */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Left Sidebar: Past 50 Conversation Sessions */}
+      {/* ── RESPONSIVE BODY: SPLIT ON DESKTOP, SWITCH ON MOBILE ─────────────────── */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {/* ── LEFT PANE: SESSIONS LIST (MAX 50 SESSIONS) ─────────────────────── */}
         <aside
           style={{
-            width: 330,
+            width: '100%',
+            maxWidth: 350,
+            minWidth: 290,
             background: 'var(--bg-primary)',
             borderRight: '1px solid var(--border)',
-            display: 'flex',
+            display: mobileView === 'sidebar' ? 'flex' : 'none',
             flexDirection: 'column',
             flexShrink: 0,
+            height: '100%',
           }}
+          className="tcc-sidebar-pane"
         >
-          {/* New Session Button & Search */}
-          <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+          {/* Top Actions: New Session + Search */}
+          <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
             <button
               onClick={() => setNewSessionModalOpen(true)}
               className="btn btn-primary"
@@ -569,7 +700,12 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                 justifyContent: 'center',
                 gap: 8,
                 fontSize: '0.8125rem',
-                padding: '8px 12px',
+                padding: '9px 14px',
+                background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
+                borderColor: 'var(--accent-green-light)',
+                borderRadius: 'var(--radius-sm)',
+                boxShadow: 'var(--shadow-sm)',
+                fontWeight: 600,
                 marginBottom: 10,
               }}
             >
@@ -577,31 +713,64 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
               <span>Initiate Conversation Session</span>
             </button>
 
-            {/* Search */}
+            {/* Inset Search */}
             <div style={{ position: 'relative' }}>
               <Search
                 size={14}
-                style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
+                style={{
+                  position: 'absolute',
+                  left: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)',
+                }}
               />
               <input
                 type="text"
                 className="input"
-                placeholder="Search past sessions..."
+                placeholder="Search sessions or topics..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: '100%', paddingLeft: 30, fontSize: '0.75rem', height: 32 }}
+                style={{
+                  width: '100%',
+                  paddingLeft: 30,
+                  paddingRight: searchQuery ? 28 : 10,
+                  fontSize: '0.75rem',
+                  height: 32,
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  borderColor: 'var(--border)',
+                  borderRadius: 'var(--radius-xs)',
+                }}
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              )}
             </div>
 
             {/* Filter Tabs */}
             <div
               style={{
                 display: 'flex',
-                gap: 4,
+                gap: 3,
                 marginTop: 8,
                 padding: 2,
                 background: 'var(--bg-card)',
                 borderRadius: 'var(--radius-xs)',
+                border: '1px solid var(--border)',
               }}
             >
               {[
@@ -617,8 +786,9 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                   style={{
                     flex: 1,
                     fontSize: '0.6875rem',
-                    padding: '3px 2px',
+                    padding: '4px 2px',
                     borderRadius: 'var(--radius-xs)',
+                    fontWeight: filterType === tab.id ? 700 : 500,
                   }}
                 >
                   {tab.label}
@@ -627,7 +797,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
             </div>
           </div>
 
-          {/* Sessions List Header info */}
+          {/* Sessions List Header Status */}
           <div
             style={{
               padding: '6px 14px',
@@ -637,20 +807,28 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
               justifyContent: 'space-between',
               alignItems: 'center',
               borderBottom: '1px solid var(--border)',
-              background: 'rgba(255,255,255,0.01)',
+              background: 'rgba(255, 255, 255, 0.01)',
+              flexShrink: 0,
             }}
           >
-            <span>Sessions History (Past 50 Limit)</span>
-            <span>{filteredSessions.length} total</span>
+            <span>Past 50 Sessions History</span>
+            <span style={{ fontFamily: 'var(--font-mono)' }}>{filteredSessions.length} total</span>
           </div>
 
           {/* Sessions Scroll List */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto' }}>
             {filteredSessions.length === 0 ? (
-              <div style={{ padding: 'var(--space-xl) var(--space-md)', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
+              <div
+                style={{
+                  padding: '40px 16px',
+                  textAlign: 'center',
+                  color: 'var(--text-muted)',
+                  fontSize: '0.8125rem',
+                }}
+              >
                 {sessions.length === 0
                   ? 'No conversation sessions yet. Click "Initiate Conversation Session" above to start one!'
-                  : 'No sessions match your filter.'}
+                  : 'No sessions match your search or filter.'}
               </div>
             ) : (
               filteredSessions.map((s) => {
@@ -658,26 +836,26 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                 return (
                   <div
                     key={s.sessionId}
-                    onClick={() => setActiveSessionId(s.sessionId)}
+                    onClick={() => handleSelectSession(s.sessionId)}
                     style={{
-                      padding: '10px 14px',
+                      padding: '12px 14px',
                       borderBottom: '1px solid var(--border)',
                       cursor: 'pointer',
                       background: isSelected
-                        ? 'var(--bg-card-hover)'
+                        ? 'rgba(255, 255, 255, 0.06)'
                         : s.unread
-                        ? 'rgba(45, 106, 79, 0.08)'
+                        ? 'rgba(45, 106, 79, 0.1)'
                         : 'transparent',
                       borderLeft: isSelected
                         ? s.type === 'dispute'
                           ? '3px solid #ff6b6b'
                           : '3px solid var(--accent-green-light)'
                         : '3px solid transparent',
-                      transition: 'background var(--transition-fast)',
+                      transition: 'all 120ms ease',
                     }}
                   >
-                    <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
-                      <div className="flex items-center gap-xs" style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
                         {s.type === 'dispute' ? (
                           <span
                             className="badge"
@@ -687,14 +865,15 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                               fontSize: '0.625rem',
                               padding: '1px 5px',
                               border: '1px solid rgba(155, 34, 38, 0.5)',
+                              fontWeight: 700,
                             }}
                           >
-                            DISPUTE
+                            ⚠️ DISPUTE
                           </span>
                         ) : (
                           <span
                             className="badge badge-gray"
-                            style={{ fontSize: '0.625rem', padding: '1px 5px' }}
+                            style={{ fontSize: '0.625rem', padding: '1px 5px', fontWeight: 600 }}
                           >
                             CHAT
                           </span>
@@ -703,7 +882,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                         {s.status === 'resolved' && (
                           <span
                             className="badge badge-green"
-                            style={{ fontSize: '0.625rem', padding: '1px 5px' }}
+                            style={{ fontSize: '0.625rem', padding: '1px 5px', fontWeight: 600 }}
                           >
                             Resolved
                           </span>
@@ -712,8 +891,8 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                         {s.unread && (
                           <span
                             style={{
-                              width: 6,
-                              height: 6,
+                              width: 7,
+                              height: 7,
                               borderRadius: '50%',
                               background: 'var(--accent-green-light)',
                               display: 'inline-block',
@@ -749,9 +928,10 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
+                        lineHeight: 1.4,
                       }}
                     >
-                      {s.lastMessageSnippet || 'No messages yet'}
+                      {s.lastMessageSnippet || 'Conversation initiated'}
                     </div>
                   </div>
                 );
@@ -760,101 +940,117 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
           </div>
         </aside>
 
-        {/* Right Area: Active Conversation / Chat Window */}
+        {/* ── RIGHT PANE: ACTIVE CHAT ROOM ──────────────────────────────────── */}
         <main
           style={{
             flex: 1,
-            display: 'flex',
+            display: mobileView === 'chat' || typeof window === 'undefined' ? 'flex' : 'none',
             flexDirection: 'column',
             background: 'var(--bg-secondary)',
             position: 'relative',
             overflow: 'hidden',
+            height: '100%',
           }}
+          className="tcc-chat-pane"
         >
           {activeSession ? (
             <>
-              {/* Session Header */}
+              {/* Active Room Header */}
               <div
                 style={{
-                  padding: '12px 18px',
+                  padding: '10px 16px',
                   background: 'var(--bg-card)',
                   borderBottom: '1px solid var(--border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 'var(--space-md)',
+                  gap: 12,
                   flexShrink: 0,
                 }}
               >
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div className="flex items-center gap-xs" style={{ marginBottom: 3 }}>
-                    <span
-                      className="badge"
-                      style={{
-                        ...(activeSession.type === 'dispute'
-                          ? {
-                              background: 'rgba(155, 34, 38, 0.25)',
-                              color: '#ff6b6b',
-                              border: '1px solid rgba(155, 34, 38, 0.5)',
-                            }
-                          : {
-                              background: 'rgba(45, 106, 79, 0.2)',
-                              color: '#52b788',
-                              border: '1px solid rgba(45, 106, 79, 0.5)',
-                            }),
-                        fontSize: '0.6875rem',
-                        fontWeight: 700,
-                      }}
-                    >
-                      {activeSession.type === 'dispute' ? '⚠️ DISPUTE CASE' : 'DISCUSSION SESSION'}
-                    </span>
-
-                    {activeSession.status === 'resolved' && (
-                      <span className="badge badge-green" style={{ fontSize: '0.6875rem' }}>
-                        <CheckCircle2 size={12} style={{ display: 'inline', marginRight: 4 }} />
-                        Resolved
-                      </span>
-                    )}
-
-                    <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-                      Started by {activeSession.createdBy.name} ({activeSession.createdBy.role})
-                    </span>
-                  </div>
-
-                  <h3
-                    style={{
-                      fontSize: '1rem',
-                      fontWeight: 700,
-                      margin: 0,
-                      color: 'var(--white)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                  {/* Back button for mobile view */}
+                  <button
+                    onClick={() => setMobileView('sidebar')}
+                    className="btn btn-ghost btn-sm tcc-mobile-back-btn"
+                    style={{ padding: '6px 8px', borderRadius: 'var(--radius-xs)' }}
+                    title="Back to Sessions list"
                   >
-                    {activeSession.title}
-                  </h3>
+                    <ArrowLeft size={16} />
+                  </button>
+
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
+                      <span
+                        className="badge"
+                        style={{
+                          ...(activeSession.type === 'dispute'
+                            ? {
+                                background: 'rgba(155, 34, 38, 0.25)',
+                                color: '#ff6b6b',
+                                border: '1px solid rgba(155, 34, 38, 0.5)',
+                              }
+                            : {
+                                background: 'rgba(45, 106, 79, 0.2)',
+                                color: '#52b788',
+                                border: '1px solid rgba(45, 106, 79, 0.5)',
+                              }),
+                          fontSize: '0.6875rem',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {activeSession.type === 'dispute' ? '⚠️ DISPUTE CASE' : 'DISCUSSION SESSION'}
+                      </span>
+
+                      {activeSession.status === 'resolved' && (
+                        <span className="badge badge-green" style={{ fontSize: '0.6875rem', fontWeight: 600 }}>
+                          <CheckCircle2 size={12} style={{ display: 'inline', marginRight: 4 }} />
+                          Resolved
+                        </span>
+                      )}
+
+                      <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                        Started by {activeSession.createdBy.name} ({activeSession.createdBy.role})
+                      </span>
+                    </div>
+
+                    <h3
+                      style={{
+                        fontSize: '0.9375rem',
+                        fontWeight: 700,
+                        margin: 0,
+                        color: 'var(--white)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={activeSession.title}
+                    >
+                      {activeSession.title}
+                    </h3>
+                  </div>
                 </div>
 
-                {/* Session Actions */}
-                <div className="flex items-center gap-sm">
+                {/* Right controls in chat header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   {canResolveActiveDispute && (
                     <button
                       onClick={() => setResolveModalOpen(true)}
                       className="btn btn-sm"
                       style={{
-                        background: 'rgba(45, 106, 79, 0.3)',
+                        background: 'rgba(45, 106, 79, 0.25)',
                         color: 'var(--accent-green-light)',
                         border: '1px solid var(--accent-green-light)',
                         fontSize: '0.75rem',
-                        padding: '4px 10px',
+                        padding: '4px 8px',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 6,
+                        whiteSpace: 'nowrap',
                       }}
                     >
-                      <CheckCircle2 size={14} />
-                      <span>Resolve Dispute</span>
+                      <CheckCircle2 size={13} />
+                      <span className="desktop-only">Resolve Dispute</span>
                     </button>
                   )}
 
@@ -863,52 +1059,51 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                     className="btn btn-outline btn-sm"
                     style={{
                       fontSize: '0.75rem',
-                      padding: '4px 10px',
+                      padding: '4px 8px',
                       display: 'flex',
                       alignItems: 'center',
                       gap: 6,
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     <Users size={14} />
-                    <span>{Object.keys(activeSession.participants || {}).length} Participants</span>
+                    <span>{Object.keys(activeSession.participants || {}).length}</span>
                   </button>
                 </div>
               </div>
 
-              {/* Dispute Context Alert Box (if session is dispute) */}
+              {/* Dispute Alert Context Banner (if dispute) */}
               {activeSession.disputeDetails && (
                 <div
                   style={{
                     background: 'rgba(155, 34, 38, 0.1)',
                     borderBottom: '1px solid rgba(155, 34, 38, 0.35)',
-                    padding: '10px 18px',
+                    padding: '8px 16px',
                     fontSize: '0.8125rem',
                     flexShrink: 0,
                   }}
                 >
-                  <div className="flex items-center justify-between" style={{ marginBottom: 4, flexWrap: 'wrap', gap: 6 }}>
-                    <div className="flex items-center gap-xs">
-                      <ShieldAlert size={15} color="#ff6b6b" />
-                      <strong style={{ color: '#ff6b6b' }}>Dispute Details:</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <ShieldAlert size={14} color="#ff6b6b" />
+                      <strong style={{ color: '#ff6b6b' }}>Dispute on Log:</strong>
                       <span className="badge badge-gray" style={{ fontSize: '0.6875rem' }}>
                         {activeSession.disputeDetails.logActionLabel || activeSession.disputeDetails.logAction}
                       </span>
-                      <span style={{ color: 'var(--white)' }}>
-                        Target: <em>{activeSession.disputeDetails.logTargetTitle}</em>
+                      <span style={{ color: 'var(--white)', fontSize: '0.8125rem' }}>
+                        {activeSession.disputeDetails.logTargetTitle}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-xs">
-                      <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-                        Initiator Pinged:
-                      </span>
-                      <strong style={{ color: 'var(--white)', fontSize: '0.75rem' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Log Initiator Auto-Pinged:{' '}
+                      <strong style={{ color: 'var(--white)' }}>
                         {activeSession.disputeDetails.logActorName}
                       </strong>
                     </div>
                   </div>
 
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: 2 }}>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: 4 }}>
                     <strong>Grounds: </strong>
                     <span>{activeSession.disputeDetails.disputeReason}</span>
                   </div>
@@ -935,19 +1130,22 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
               {/* Participants Drawer (Collapsible) */}
               {showParticipantsDrawer && (
                 <div
+                  className="custom-scrollbar"
                   style={{
                     background: 'var(--bg-primary)',
                     borderBottom: '1px solid var(--border)',
-                    padding: '10px 18px',
+                    padding: '8px 16px',
                     display: 'flex',
                     flexWrap: 'wrap',
-                    gap: 8,
+                    gap: 6,
                     alignItems: 'center',
                     flexShrink: 0,
+                    maxHeight: 120,
+                    overflowY: 'auto',
                   }}
                 >
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: 4 }}>
-                    Active Personnel in this Room:
+                    Active Personnel:
                   </span>
                   {Object.values(activeSession.participants || {}).map((p) => (
                     <div
@@ -963,6 +1161,22 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                         fontSize: '0.75rem',
                       }}
                     >
+                      <div
+                        style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: '50%',
+                          background: getRoleBadgeStyle(p.role).avatarBg,
+                          color: '#fff',
+                          fontSize: '0.5625rem',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {getInitials(p.name)}
+                      </div>
                       <span style={{ color: 'var(--white)', fontWeight: 500 }}>{p.name}</span>
                       <span
                         className="badge"
@@ -990,18 +1204,19 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
 
               {/* Messages Feed */}
               <div
+                className="custom-scrollbar"
                 style={{
                   flex: 1,
                   overflowY: 'auto',
-                  padding: '16px 20px',
+                  padding: '14px 16px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 12,
+                  gap: 10,
                 }}
               >
                 {messagesList.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: 'var(--space-2xl) 0', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                    No messages yet in this session. Start the coordination by sending a message below!
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                    No messages in this session yet. Type below to coordinate.
                   </div>
                 ) : (
                   messagesList.map((msg) => {
@@ -1011,7 +1226,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                           key={msg.id}
                           style={{
                             alignSelf: 'center',
-                            maxWidth: '85%',
+                            maxWidth: '90%',
                             padding: '8px 14px',
                             background: msg.isDisputeNotice ? 'rgba(155, 34, 38, 0.12)' : 'rgba(45, 106, 79, 0.12)',
                             border: msg.isDisputeNotice
@@ -1021,6 +1236,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                             textAlign: 'center',
                             fontSize: '0.75rem',
                             color: msg.isDisputeNotice ? '#ff6b6b' : 'var(--accent-green-light)',
+                            lineHeight: 1.4,
                           }}
                         >
                           {msg.text}
@@ -1040,16 +1256,37 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                           display: 'flex',
                           flexDirection: 'column',
                           alignSelf: isMine ? 'flex-end' : 'flex-start',
-                          maxWidth: '75%',
+                          maxWidth: 'min(82%, 620px)',
                         }}
                       >
                         <div
-                          className="flex items-center gap-xs"
                           style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
                             marginBottom: 3,
                             justifyContent: isMine ? 'flex-end' : 'flex-start',
                           }}
                         >
+                          {!isMine && (
+                            <div
+                              style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: '50%',
+                                background: getRoleBadgeStyle(msg.senderRole).avatarBg,
+                                color: '#fff',
+                                fontSize: '0.5625rem',
+                                fontWeight: 700,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifySelf: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {getInitials(msg.senderName)}
+                            </div>
+                          )}
                           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--white)' }}>
                             {isMine ? 'You' : msg.senderName}
                           </span>
@@ -1068,9 +1305,11 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                           style={{
                             padding: '10px 14px',
                             borderRadius: 'var(--radius-md)',
-                            background: isMine ? 'rgba(45, 106, 79, 0.28)' : 'var(--bg-card)',
+                            background: isMine
+                              ? 'linear-gradient(135deg, rgba(45, 106, 79, 0.35) 0%, rgba(27, 67, 50, 0.45) 100%)'
+                              : 'rgba(255, 255, 255, 0.04)',
                             border: isMine
-                              ? '1px solid rgba(45, 106, 79, 0.6)'
+                              ? '1px solid rgba(64, 145, 108, 0.5)'
                               : '1px solid var(--border)',
                             color: 'var(--text-primary)',
                             fontSize: '0.875rem',
@@ -1091,27 +1330,44 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
               {/* Message Composer Area */}
               <div
                 style={{
-                  padding: '12px 18px',
+                  padding: '10px 16px',
                   background: 'var(--bg-card)',
                   borderTop: '1px solid var(--border)',
                   flexShrink: 0,
                 }}
               >
-                {/* Quick Response Chips */}
-                <div className="flex gap-xs" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
+                {/* Horizontal scrollable quick response pills */}
+                <div
+                  className="no-scrollbar"
+                  style={{
+                    display: 'flex',
+                    gap: 6,
+                    marginBottom: 8,
+                    overflowX: 'auto',
+                    whiteSpace: 'nowrap',
+                    paddingBottom: 2,
+                  }}
+                >
                   {[
-                    'Under Investigation',
+                    'Under Review',
                     'Acknowledged',
-                    'Test verified and rectified',
-                    'Question updated',
-                    'Requesting Sr. Review',
+                    'Question verified and updated',
+                    'Test configuration checked',
+                    'Requesting Sr. Admin confirmation',
                   ].map((chip) => (
                     <button
                       key={chip}
                       type="button"
                       className="btn btn-ghost btn-sm"
                       onClick={() => setMessageInput((prev) => (prev ? `${prev} - ${chip}` : chip))}
-                      style={{ fontSize: '0.6875rem', padding: '2px 8px', borderRadius: 'var(--radius-xs)' }}
+                      style={{
+                        fontSize: '0.6875rem',
+                        padding: '3px 8px',
+                        borderRadius: 'var(--radius-xs)',
+                        border: '1px solid var(--border)',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        flexShrink: 0,
+                      }}
                     >
                       + {chip}
                     </button>
@@ -1130,8 +1386,16 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                         handleSendMessage();
                       }
                     }}
-                    placeholder={`Type response as ${personnelProfile.name} (${personnelProfile.role})... [Enter to send]`}
-                    style={{ flex: 1, resize: 'none', padding: '8px 12px', fontSize: '0.875rem' }}
+                    placeholder={`Write message as ${personnelProfile.name} (${personnelProfile.role})...`}
+                    style={{
+                      flex: 1,
+                      resize: 'none',
+                      padding: '8px 12px',
+                      fontSize: '0.875rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      borderColor: 'var(--border)',
+                    }}
                   />
                   <button
                     type="submit"
@@ -1139,10 +1403,13 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                     disabled={sendingMsg || !messageInput.trim()}
                     style={{
                       height: 48,
-                      padding: '0 16px',
+                      padding: '0 18px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
+                      background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
+                      borderColor: 'var(--accent-green-light)',
+                      borderRadius: 'var(--radius-sm)',
                     }}
                   >
                     <Send size={16} />
@@ -1151,6 +1418,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
               </div>
             </>
           ) : (
+            /* Empty State when no session is selected */
             <div
               style={{
                 flex: 1,
@@ -1158,36 +1426,53 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: 'var(--space-2xl)',
+                padding: '32px 20px',
                 textAlign: 'center',
               }}
             >
               <div
                 style={{
-                  width: 64,
-                  height: 64,
+                  width: 56,
+                  height: 56,
                   borderRadius: '50%',
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid var(--border)',
+                  background: 'rgba(45, 106, 79, 0.15)',
+                  border: '1px solid rgba(45, 106, 79, 0.4)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: 'var(--space-md)',
-                  color: 'var(--text-muted)',
+                  color: 'var(--accent-green-light)',
                 }}
               >
-                <MessageSquare size={32} />
+                <MessageSquare size={26} />
               </div>
-              <h3 style={{ fontSize: '1.25rem', marginBottom: 8, color: 'var(--white)' }}>
-                Team Coordination Corner (TCC)
+              <h3 style={{ fontSize: '1.25rem', marginBottom: 8, color: 'var(--white)', fontWeight: 700 }}>
+                Team Coordination Corner
               </h3>
-              <p style={{ maxWidth: 440, color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: 'var(--space-lg)' }}>
-                Select an existing session from your past 50 conversation history on the left, or initiate a new coordination session with fellow personnel.
+              <p
+                style={{
+                  maxWidth: 420,
+                  color: 'var(--text-muted)',
+                  fontSize: '0.875rem',
+                  marginBottom: 'var(--space-lg)',
+                  lineHeight: 1.6,
+                }}
+              >
+                Select a conversation from your past 50 sessions on the left, or initiate a new coordination session with fellow personnel.
               </p>
               <button
                 onClick={() => setNewSessionModalOpen(true)}
                 className="btn btn-primary"
-                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '9px 18px',
+                  background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
+                  borderColor: 'var(--accent-green-light)',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                }}
               >
                 <Plus size={16} />
                 <span>Initiate New Session</span>
@@ -1197,62 +1482,94 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
         </main>
       </div>
 
-      {/* Modal: Initiate New Conversation Session */}
+      {/* ── MODAL: INITIATE NEW CONVERSATION SESSION (HIGHLY POLISHED) ───────────── */}
       {newSessionModalOpen && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
             zIndex: 9999,
-            background: 'rgba(0,0,0,0.8)',
-            backdropFilter: 'blur(4px)',
+            background: 'rgba(0, 0, 0, 0.84)',
+            backdropFilter: 'blur(5px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: 'var(--space-md)',
+            padding: 16,
           }}
         >
           <div
             className="card"
             style={{
               width: '100%',
-              maxWidth: 580,
+              maxWidth: 560,
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
               background: 'var(--bg-card)',
               border: '1px solid var(--border-light)',
               borderRadius: 'var(--radius-lg)',
-              padding: 'var(--space-lg)',
+              boxShadow: 'var(--shadow-lg)',
+              padding: '20px 24px',
               position: 'relative',
+              boxSizing: 'border-box',
             }}
           >
             <button
               onClick={() => setNewSessionModalOpen(false)}
               style={{
                 position: 'absolute',
-                top: 16,
-                right: 16,
+                top: 18,
+                right: 18,
                 background: 'transparent',
                 border: 'none',
                 color: 'var(--text-muted)',
                 cursor: 'pointer',
               }}
+              title="Close modal"
             >
               <X size={20} />
             </button>
 
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 6px 0', color: 'var(--white)' }}>
-              Initiate TCC Conversation Session
-            </h3>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 'var(--space-md)' }}>
-              Any approved personnel (Admin Sr., Admin L1, Question Setter) can initiate a coordination session. This will be added to everyone&apos;s past 50 sessions index.
-            </p>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span
+                  className="badge"
+                  style={{
+                    background: 'rgba(45, 106, 79, 0.25)',
+                    color: '#52b788',
+                    border: '1px solid rgba(45, 106, 79, 0.5)',
+                    fontSize: '0.6875rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  TCC COM
+                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Unified Personnel Room
+                </span>
+              </div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--white)' }}>
+                Initiate Conversation Session
+              </h2>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>
+                Start a real-time coordination topic with fellow personnel. Retained within each member&apos;s past 50 sessions index.
+              </p>
+            </div>
 
             {createError && (
-              <div className="alert alert-danger" style={{ marginBottom: 12, padding: '8px 12px', fontSize: '0.8125rem' }}>
+              <div
+                className="alert alert-danger"
+                style={{ marginBottom: 12, padding: '8px 12px', fontSize: '0.8125rem' }}
+              >
                 {createError}
               </div>
             )}
 
-            <form onSubmit={handleCreateSession} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <form
+              onSubmit={handleCreateSession}
+              style={{ display: 'flex', flexDirection: 'column', gap: 14, overflow: 'hidden' }}
+            >
+              {/* Session Title Input */}
               <div>
                 <label style={{ fontSize: '0.8125rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>
                   Session Title / Subject <span style={{ color: '#ff6b6b' }}>*</span>
@@ -1260,26 +1577,27 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                 <input
                   type="text"
                   className="input"
-                  placeholder="e.g. Physics Section Question #104 Clarification"
+                  placeholder="e.g. Physics Section Question #104 Review"
                   value={newSessionTitle}
                   onChange={(e) => setNewSessionTitle(e.target.value)}
                   required
-                  style={{ width: '100%' }}
+                  style={{ width: '100%', height: 38 }}
                 />
               </div>
 
-              {/* Select Personnel to Invite */}
+              {/* Involved Personnel Selection (Clean, Fixed Layout) */}
               <div>
-                <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
-                  <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>
-                    Involved Personnel ({selectedPersonnel.length} invited)
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Users size={14} />
+                    <span>Involved Personnel ({selectedPersonnel.length} invited)</span>
                   </label>
-                  <div className="flex gap-xs">
+                  <div style={{ display: 'flex', gap: 4 }}>
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
                       onClick={() => setSelectedPersonnel(allPersonnel)}
-                      style={{ fontSize: '0.6875rem', padding: '2px 6px' }}
+                      style={{ fontSize: '0.6875rem', padding: '2px 8px' }}
                     >
                       Select All
                     </button>
@@ -1287,81 +1605,134 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                       type="button"
                       className="btn btn-ghost btn-sm"
                       onClick={() => setSelectedPersonnel([])}
-                      style={{ fontSize: '0.6875rem', padding: '2px 6px' }}
+                      style={{ fontSize: '0.6875rem', padding: '2px 8px' }}
                     >
                       Clear
                     </button>
                   </div>
                 </div>
 
+                {/* Personnel Card Scroll List */}
                 <div
+                  className="custom-scrollbar"
                   style={{
-                    maxHeight: 140,
+                    maxHeight: 200,
                     overflowY: 'auto',
+                    overflowX: 'hidden',
                     background: 'var(--bg-primary)',
-                    borderRadius: 'var(--radius-xs)',
+                    borderRadius: 'var(--radius-sm)',
                     border: '1px solid var(--border)',
                     padding: 4,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 3,
+                    gap: 4,
+                    width: '100%',
+                    boxSizing: 'border-box',
                   }}
                 >
                   {allPersonnel.length === 0 ? (
-                    <div style={{ padding: 8, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      No other approved personnel found.
+                    <div style={{ padding: 12, fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                      No other approved personnel registered yet.
                     </div>
                   ) : (
                     allPersonnel.map((person) => {
-                      const isSelected = selectedPersonnel.some((p) => p.encodedEmail === person.encodedEmail);
+                      const isChecked = selectedPersonnel.some((p) => p.encodedEmail === person.encodedEmail);
                       return (
-                        <label
+                        <div
                           key={person.encodedEmail}
+                          onClick={() => {
+                            if (isChecked) {
+                              setSelectedPersonnel((prev) => prev.filter((p) => p.encodedEmail !== person.encodedEmail));
+                            } else {
+                              setSelectedPersonnel((prev) => [...prev, person]);
+                            }
+                          }}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 10,
-                            padding: '5px 8px',
+                            justifyContent: 'space-between',
+                            padding: '8px 12px',
                             borderRadius: 'var(--radius-xs)',
                             cursor: 'pointer',
-                            background: isSelected ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
+                            background: isChecked ? 'rgba(45, 106, 79, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                            border: isChecked ? '1px solid rgba(64, 145, 108, 0.5)' : '1px solid var(--border)',
+                            transition: 'all 120ms ease',
+                            boxSizing: 'border-box',
+                            width: '100%',
                           }}
                         >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {
-                              if (isSelected) {
-                                setSelectedPersonnel((prev) => prev.filter((p) => p.encodedEmail !== person.encodedEmail));
-                              } else {
-                                setSelectedPersonnel((prev) => [...prev, person]);
-                              }
-                            }}
-                          />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div className="flex items-center gap-xs">
-                              <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--white)' }}>
-                                {person.name}
-                              </span>
-                              <span
-                                className="badge"
-                                style={{ ...getRoleBadgeStyle(person.role), fontSize: '0.625rem', padding: '1px 5px' }}
-                              >
-                                {person.role}
-                              </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {}} // handled by parent onClick
+                              style={{ cursor: 'pointer', flexShrink: 0 }}
+                            />
+                            <div
+                              style={{
+                                width: 26,
+                                height: 26,
+                                borderRadius: '50%',
+                                background: getRoleBadgeStyle(person.role).avatarBg,
+                                color: '#fff',
+                                fontSize: '0.625rem',
+                                fontWeight: 700,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {getInitials(person.name)}
                             </div>
-                            <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                              {person.email}
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div
+                                style={{
+                                  fontSize: '0.8125rem',
+                                  fontWeight: 600,
+                                  color: 'var(--white)',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {person.name}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: '0.6875rem',
+                                  color: 'var(--text-muted)',
+                                  fontFamily: 'var(--font-mono)',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {person.email}
+                              </div>
                             </div>
                           </div>
-                        </label>
+
+                          <span
+                            className="badge"
+                            style={{
+                              ...getRoleBadgeStyle(person.role),
+                              fontSize: '0.625rem',
+                              padding: '2px 6px',
+                              flexShrink: 0,
+                              marginLeft: 8,
+                            }}
+                          >
+                            {person.role}
+                          </span>
+                        </div>
                       );
                     })
                   )}
                 </div>
               </div>
 
-              {/* Initial message */}
+              {/* Opening Message */}
               <div>
                 <label style={{ fontSize: '0.8125rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>
                   Opening Message / Briefing
@@ -1372,11 +1743,11 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                   placeholder="Introduce the purpose of this conversation session..."
                   value={newSessionInitialMsg}
                   onChange={(e) => setNewSessionInitialMsg(e.target.value)}
-                  style={{ width: '100%', resize: 'vertical' }}
+                  style={{ width: '100%', resize: 'none', padding: '8px 12px' }}
                 />
               </div>
 
-              <div className="flex justify-end gap-sm" style={{ marginTop: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
                 <button
                   type="button"
                   className="btn btn-ghost"
@@ -1389,8 +1760,14 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                   type="submit"
                   className="btn btn-primary"
                   disabled={creatingSession || !newSessionTitle.trim()}
+                  style={{
+                    background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
+                    borderColor: 'var(--accent-green-light)',
+                    fontWeight: 600,
+                    padding: '8px 18px',
+                  }}
                 >
-                  {creatingSession ? 'Creating Session...' : 'Create Session'}
+                  {creatingSession ? 'Creating...' : 'Create Session'}
                 </button>
               </div>
             </form>
@@ -1398,19 +1775,19 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
         </div>
       )}
 
-      {/* Modal: Resolve Dispute */}
+      {/* ── MODAL: RESOLVE DISPUTE ────────────────────────────────────────────── */}
       {resolveModalOpen && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
             zIndex: 9999,
-            background: 'rgba(0,0,0,0.8)',
-            backdropFilter: 'blur(4px)',
+            background: 'rgba(0,0,0,0.84)',
+            backdropFilter: 'blur(5px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: 'var(--space-md)',
+            padding: 16,
           }}
         >
           <div
@@ -1421,7 +1798,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
               background: 'var(--bg-card)',
               border: '1px solid var(--border-light)',
               borderRadius: 'var(--radius-lg)',
-              padding: 'var(--space-lg)',
+              padding: '20px 24px',
               position: 'relative',
             }}
           >
@@ -1443,7 +1820,7 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
             <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 6px 0', color: 'var(--white)' }}>
               Resolve Dispute
             </h3>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 'var(--space-md)' }}>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.4 }}>
               Mark this dispute as formally resolved. Please provide the resolution summary for the audit trail.
             </p>
 
@@ -1459,11 +1836,11 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                   value={resolutionNotes}
                   onChange={(e) => setResolutionNotes(e.target.value)}
                   required
-                  style={{ width: '100%' }}
+                  style={{ width: '100%', resize: 'none' }}
                 />
               </div>
 
-              <div className="flex justify-end gap-sm" style={{ marginTop: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
                 <button
                   type="button"
                   className="btn btn-ghost"
@@ -1476,7 +1853,10 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
                   type="submit"
                   className="btn btn-primary"
                   disabled={resolving || !resolutionNotes.trim()}
-                  style={{ background: 'var(--accent-green)', borderColor: 'var(--accent-green-light)' }}
+                  style={{
+                    background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
+                    borderColor: 'var(--accent-green-light)',
+                  }}
                 >
                   {resolving ? 'Resolving...' : 'Confirm Resolution'}
                 </button>
@@ -1485,6 +1865,21 @@ export default function TCCCom({ initialSessionId, onBackToDashboard }: TCCComPr
           </div>
         </div>
       )}
+
+      {/* Global CSS for Desktop Split View & Mobile View */}
+      <style jsx>{`
+        @media (min-width: 768px) {
+          .tcc-sidebar-pane {
+            display: flex !important;
+          }
+          .tcc-chat-pane {
+            display: flex !important;
+          }
+          .tcc-mobile-back-btn {
+            display: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

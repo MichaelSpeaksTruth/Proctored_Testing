@@ -135,25 +135,35 @@ export default function RaiseDisputeModal({
     }
   };
 
+  const getInitials = (name?: string) => {
+    if (!name) return 'P';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  };
+
   const getRoleBadgeStyle = (role: string) => {
     if (role.includes('Admin Sr.')) {
       return {
-        background: 'rgba(155, 34, 38, 0.2)',
+        background: 'rgba(155, 34, 38, 0.22)',
         color: '#ff6b6b',
-        border: '1px solid rgba(155, 34, 38, 0.5)',
+        border: '1px solid rgba(155, 34, 38, 0.55)',
+        avatarBg: 'linear-gradient(135deg, #780000 0%, #c1121f 100%)',
       };
     }
     if (role === 'Admin L1') {
       return {
         background: 'rgba(33, 150, 243, 0.15)',
         color: '#64b5f6',
-        border: '1px solid rgba(33, 150, 243, 0.4)',
+        border: '1px solid rgba(33, 150, 243, 0.45)',
+        avatarBg: 'linear-gradient(135deg, #0d47a1 0%, #1976d2 100%)',
       };
     }
     return {
-      background: 'rgba(45, 106, 79, 0.2)',
+      background: 'rgba(45, 106, 79, 0.22)',
       color: '#52b788',
-      border: '1px solid rgba(45, 106, 79, 0.5)',
+      border: '1px solid rgba(45, 106, 79, 0.55)',
+      avatarBg: 'linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%)',
     };
   };
 
@@ -445,57 +455,107 @@ export default function RaiseDisputeModal({
                 </div>
               ) : (
                 <div
+                  className="custom-scrollbar"
                   style={{
-                    maxHeight: 140,
+                    maxHeight: 200,
                     overflowY: 'auto',
+                    overflowX: 'hidden',
                     background: 'var(--bg-primary)',
-                    borderRadius: 'var(--radius-xs)',
+                    borderRadius: 'var(--radius-sm)',
                     border: '1px solid var(--border)',
-                    padding: '4px',
+                    padding: 4,
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 4,
+                    width: '100%',
+                    boxSizing: 'border-box',
                   }}
                 >
                   {availableAdditionalPersonnel.map((person) => {
                     const isChecked = selectedPersonnel.some((p) => p.encodedEmail === person.encodedEmail);
                     return (
-                      <label
+                      <div
                         key={person.encodedEmail}
+                        onClick={() => toggleSelectPersonnel(person)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 10,
-                          padding: '6px 10px',
+                          justifyContent: 'space-between',
+                          padding: '8px 12px',
                           borderRadius: 'var(--radius-xs)',
                           cursor: 'pointer',
-                          background: isChecked ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
-                          transition: 'background var(--transition-fast)',
+                          background: isChecked ? 'rgba(45, 106, 79, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                          border: isChecked ? '1px solid rgba(64, 145, 108, 0.5)' : '1px solid var(--border)',
+                          transition: 'all 120ms ease',
+                          boxSizing: 'border-box',
+                          width: '100%',
                         }}
                       >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => toggleSelectPersonnel(person)}
-                          style={{ cursor: 'pointer' }}
-                        />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div className="flex items-center gap-xs">
-                            <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--white)' }}>
-                              {person.name}
-                            </span>
-                            <span
-                              className="badge"
-                              style={{ ...getRoleBadgeStyle(person.role), fontSize: '0.625rem', padding: '1px 6px' }}
-                            >
-                              {person.role}
-                            </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {}} // handled by parent onClick
+                            style={{ cursor: 'pointer', flexShrink: 0 }}
+                          />
+                          <div
+                            style={{
+                              width: 26,
+                              height: 26,
+                              borderRadius: '50%',
+                              background: getRoleBadgeStyle(person.role).avatarBg,
+                              color: '#fff',
+                              fontSize: '0.625rem',
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {getInitials(person.name)}
                           </div>
-                          <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                            {person.email}
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div
+                              style={{
+                                fontSize: '0.8125rem',
+                                fontWeight: 600,
+                                color: 'var(--white)',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {person.name}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: '0.6875rem',
+                                color: 'var(--text-muted)',
+                                fontFamily: 'var(--font-mono)',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {person.email}
+                            </div>
                           </div>
                         </div>
-                      </label>
+
+                        <span
+                          className="badge"
+                          style={{
+                            ...getRoleBadgeStyle(person.role),
+                            fontSize: '0.625rem',
+                            padding: '2px 6px',
+                            flexShrink: 0,
+                            marginLeft: 8,
+                          }}
+                        >
+                          {person.role}
+                        </span>
+                      </div>
                     );
                   })}
                 </div>
