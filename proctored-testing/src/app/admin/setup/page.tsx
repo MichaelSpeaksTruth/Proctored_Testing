@@ -49,10 +49,11 @@ function Modal({ title, onClose, maxWidth = 560, children }: { title: string; on
         background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(5px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12,
       }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={onClose}
     >
       <div
         className="card"
+        onClick={e => e.stopPropagation()}
         style={{
           width: '100%', maxWidth, maxHeight: '92vh', overflowY: 'auto',
           border: '1px solid var(--border-light)',

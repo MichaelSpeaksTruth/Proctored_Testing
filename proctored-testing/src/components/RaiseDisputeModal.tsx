@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ApprovedPersonnelInfo,
   getApprovedPersonnelList,
@@ -34,6 +34,39 @@ export default function RaiseDisputeModal({
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [createdSessionId, setCreatedSessionId] = useState<string | null>(null);
+  const modalCardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node | null;
+      if (
+        !submitting &&
+        modalCardRef.current &&
+        target &&
+        !modalCardRef.current.contains(target)
+      ) {
+        onClose();
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !submitting) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, submitting, onClose]);
 
   useEffect(() => {
     if (isOpen) {
@@ -181,8 +214,13 @@ export default function RaiseDisputeModal({
         padding: 'var(--space-md)',
         overflowY: 'auto',
       }}
+      onClick={() => {
+        if (!submitting) onClose();
+      }}
     >
       <div
+        ref={modalCardRef}
+        onClick={(e) => e.stopPropagation()}
         className="card"
         style={{
           width: '100%',

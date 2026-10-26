@@ -104,6 +104,133 @@ export default function TCCCom({
   const [showParticipantsDrawer, setShowParticipantsDrawer] = useState(false);
   const [addMemberDropdownOpen, setAddMemberDropdownOpen] = useState(false);
 
+  // Refs for outside-click dismissals across all TCC popups
+  const newSessionModalCardRef = useRef<HTMLDivElement>(null);
+  const resolveModalCardRef = useRef<HTMLDivElement>(null);
+  const notifDropdownRef = useRef<HTMLDivElement>(null);
+  const notifTriggerBtnRef = useRef<HTMLButtonElement>(null);
+  const addMemberRef = useRef<HTMLDivElement>(null);
+  const addMemberTriggerBtnRef = useRef<HTMLButtonElement>(null);
+  const participantsDrawerRef = useRef<HTMLDivElement>(null);
+  const participantsBtnRef = useRef<HTMLButtonElement>(null);
+  const mentionDropdownRef = useRef<HTMLDivElement>(null);
+
+  // ── UNIVERSAL OUTSIDE-CLICK & ESCAPE KEY HANDLER FOR ALL TCC POPUPS ────────
+  useEffect(() => {
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+
+      // 1. Notification Dropdown
+      if (
+        notifDropdownOpen &&
+        notifDropdownRef.current &&
+        !notifDropdownRef.current.contains(target) &&
+        (!notifTriggerBtnRef.current || !notifTriggerBtnRef.current.contains(target))
+      ) {
+        setNotifDropdownOpen(false);
+      }
+
+      // 2. Add Member / Invite Citizen Dropdown
+      if (
+        addMemberDropdownOpen &&
+        addMemberRef.current &&
+        !addMemberRef.current.contains(target) &&
+        (!addMemberTriggerBtnRef.current || !addMemberTriggerBtnRef.current.contains(target))
+      ) {
+        setAddMemberDropdownOpen(false);
+      }
+
+      // 3. Participants Drawer
+      if (
+        showParticipantsDrawer &&
+        participantsDrawerRef.current &&
+        !participantsDrawerRef.current.contains(target) &&
+        (!participantsBtnRef.current || !participantsBtnRef.current.contains(target))
+      ) {
+        setShowParticipantsDrawer(false);
+      }
+
+      // 4. Mention Autocomplete Suggestions
+      if (
+        mentionQuery !== null &&
+        mentionDropdownRef.current &&
+        !mentionDropdownRef.current.contains(target) &&
+        (!textareaRef.current || !textareaRef.current.contains(target))
+      ) {
+        setMentionQuery(null);
+      }
+
+      // 5. New Session Modal
+      if (
+        newSessionModalOpen &&
+        !creatingSession &&
+        newSessionModalCardRef.current &&
+        !newSessionModalCardRef.current.contains(target)
+      ) {
+        setNewSessionModalOpen(false);
+      }
+
+      // 6. Resolve Dispute Modal
+      if (
+        resolveModalOpen &&
+        !resolving &&
+        resolveModalCardRef.current &&
+        !resolveModalCardRef.current.contains(target)
+      ) {
+        setResolveModalOpen(false);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (newSessionModalOpen && !creatingSession) {
+          setNewSessionModalOpen(false);
+          return;
+        }
+        if (resolveModalOpen && !resolving) {
+          setResolveModalOpen(false);
+          return;
+        }
+        if (addMemberDropdownOpen) {
+          setAddMemberDropdownOpen(false);
+          return;
+        }
+        if (notifDropdownOpen) {
+          setNotifDropdownOpen(false);
+          return;
+        }
+        if (showParticipantsDrawer) {
+          setShowParticipantsDrawer(false);
+          return;
+        }
+        if (mentionQuery !== null) {
+          setMentionQuery(null);
+          return;
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [
+    newSessionModalOpen,
+    creatingSession,
+    resolveModalOpen,
+    resolving,
+    notifDropdownOpen,
+    addMemberDropdownOpen,
+    showParticipantsDrawer,
+    mentionQuery,
+  ]);
+
   // 1. Auth & Profile Detection
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -799,6 +926,7 @@ export default function TCCCom({
           {/* Notification / Ping Bell */}
           <div style={{ position: 'relative' }}>
             <button
+              ref={notifTriggerBtnRef}
               className="btn btn-ghost btn-sm"
               onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
               style={{
@@ -833,6 +961,7 @@ export default function TCCCom({
             {/* Notification Dropdown */}
             {notifDropdownOpen && (
               <div
+                ref={notifDropdownRef}
                 style={{
                   position: 'absolute',
                   right: 0,
@@ -1311,6 +1440,7 @@ export default function TCCCom({
                   )}
 
                   <button
+                    ref={participantsBtnRef}
                     onClick={() => setShowParticipantsDrawer(!showParticipantsDrawer)}
                     className="btn btn-outline btn-sm"
                     style={{
@@ -1386,6 +1516,7 @@ export default function TCCCom({
               {/* Participants Drawer (Collapsible & Interactive with Add Member) */}
               {showParticipantsDrawer && (
                 <div
+                  ref={participantsDrawerRef}
                   className="custom-scrollbar"
                   style={{
                     background: 'var(--bg-primary)',
@@ -1409,6 +1540,7 @@ export default function TCCCom({
 
                     {outsidePersonnel.length > 0 && (
                       <button
+                        ref={addMemberTriggerBtnRef}
                         type="button"
                         onClick={() => setAddMemberDropdownOpen(!addMemberDropdownOpen)}
                         className="btn btn-ghost btn-sm"
@@ -1434,6 +1566,7 @@ export default function TCCCom({
                   {/* Add Personnel Dropdown Panel */}
                   {addMemberDropdownOpen && outsidePersonnel.length > 0 && (
                     <div
+                      ref={addMemberRef}
                       style={{
                         padding: '8px 10px',
                         background: '#0a0d10',
@@ -1862,6 +1995,7 @@ export default function TCCCom({
                 {/* Floating Autocomplete Mention Suggestions Dropdown */}
                 {mentionQuery !== null && mentionCandidates.length > 0 && (
                   <div
+                    ref={mentionDropdownRef}
                     className="custom-scrollbar"
                     style={{
                       position: 'absolute',
@@ -2322,13 +2456,15 @@ export default function TCCCom({
             padding: 16,
             overflowY: 'auto',
           }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !creatingSession) {
+          onClick={() => {
+            if (!creatingSession) {
               setNewSessionModalOpen(false);
             }
           }}
         >
           <div
+            ref={newSessionModalCardRef}
+            onClick={(e) => e.stopPropagation()}
             style={{
               width: '100%',
               maxWidth: 560,
@@ -2345,7 +2481,6 @@ export default function TCCCom({
               overflow: 'hidden',
               margin: 'auto',
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             <form
               onSubmit={handleCreateSession}
@@ -2739,8 +2874,15 @@ export default function TCCCom({
             padding: 16,
             overflowY: 'auto',
           }}
+          onClick={() => {
+            if (!resolving) {
+              setResolveModalOpen(false);
+            }
+          }}
         >
           <div
+            ref={resolveModalCardRef}
+            onClick={(e) => e.stopPropagation()}
             className="card"
             style={{
               width: '100%',

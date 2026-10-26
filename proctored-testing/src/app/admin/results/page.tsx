@@ -530,8 +530,11 @@ function ResultsContent() {
             />
 
             {editingDetailsFor && (
-              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div className="card" style={{ width: 400, maxWidth: '90%' }}>
+              <div 
+                style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                onClick={() => setEditingDetailsFor(null)}
+              >
+                <div className="card" style={{ width: 400, maxWidth: '90%' }} onClick={e => e.stopPropagation()}>
                   <h3 style={{ marginBottom: 'var(--space-md)' }}>Upcoming Info</h3>
                   <div className="form-group">
                     <label>
