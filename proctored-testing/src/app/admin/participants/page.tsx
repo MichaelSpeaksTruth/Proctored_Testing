@@ -106,24 +106,39 @@ function ParticipantsContent() {
 
     const lines = emailInput.split('\n');
     let addedCount = 0;
+    let duplicateCount = 0;
+    const seenEmails = new Set<string>();
 
     for (const line of lines) {
       const parts = line.split(',');
+      let name = '';
+      let email = '';
+
       if (parts.length >= 2) {
-        const name = parts[0];
-        const email = parts.slice(1).join(',');
-        const ok = await addParticipant(name, email);
-        if (ok) addedCount++;
+        name = parts[0];
+        email = parts.slice(1).join(',').trim().toLowerCase();
       } else if (parts.length === 1 && parts[0].includes('@')) {
-        const email = parts[0];
-        const name = email.split('@')[0];
+        email = parts[0].trim().toLowerCase();
+        name = email.split('@')[0];
+      }
+
+      if (email && email.includes('@')) {
+        const isDuplicate = seenEmails.has(email);
+        seenEmails.add(email);
         const ok = await addParticipant(name, email);
-        if (ok) addedCount++;
+        if (ok) {
+          if (!isDuplicate) addedCount++;
+          else duplicateCount++;
+        }
       }
     }
 
     setEmailInput('');
-    setMsg(`Successfully registered ${addedCount} participants for this test.`);
+    setMsg(
+      duplicateCount > 0
+        ? `Successfully registered ${addedCount} unique participants (${duplicateCount} duplicate entries merged).`
+        : `Successfully registered ${addedCount} participants for this test.`
+    );
     setLoading(false);
   };
 
@@ -196,12 +211,14 @@ function ParticipantsContent() {
       }
 
       let addedCount = 0;
+      let duplicateCount = 0;
+      const seenEmails = new Set<string>();
 
       for (let i = startIdx; i < rawRows.length; i++) {
         const row = rawRows[i];
         if (!row || row.length === 0) continue;
 
-        let email = emailColIdx >= 0 ? String(row[emailColIdx] || '').trim() : '';
+        let email = emailColIdx >= 0 ? String(row[emailColIdx] || '').trim().toLowerCase() : '';
         let name = nameColIdx >= 0 ? String(row[nameColIdx] || '').trim() : '';
 
         // Dynamic fallback: scan cells in the row if email column wasn't detected
@@ -209,7 +226,7 @@ function ParticipantsContent() {
           for (let c = 0; c < row.length; c++) {
             const str = String(row[c] || '').trim();
             if (str.includes('@') && str.includes('.')) {
-              email = str;
+              email = str.toLowerCase();
               if (c === nameColIdx) name = '';
               break;
             }
@@ -218,13 +235,26 @@ function ParticipantsContent() {
 
         if (email && email.includes('@')) {
           if (!name) name = email.split('@')[0];
+          const isDuplicate = seenEmails.has(email);
+          seenEmails.add(email);
+
           const ok = await addParticipant(name, email);
-          if (ok) addedCount++;
+          if (ok) {
+            if (!isDuplicate) {
+              addedCount++;
+            } else {
+              duplicateCount++;
+            }
+          }
         }
       }
 
       setCsvFile(null);
-      setMsg(`Successfully imported and enrolled ${addedCount} participants.`);
+      setMsg(
+        duplicateCount > 0
+          ? `Successfully imported ${addedCount} unique participants (${duplicateCount} duplicate rows merged).`
+          : `Successfully imported and enrolled ${addedCount} participants.`
+      );
     } catch (err: any) {
       console.error(err);
       setError('Failed to parse file: ' + err.message);
