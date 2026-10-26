@@ -1489,8 +1489,8 @@ export default function TCCCom({
             position: 'fixed',
             inset: 0,
             zIndex: 9999,
-            background: 'rgba(0, 0, 0, 0.84)',
-            backdropFilter: 'blur(5px)',
+            background: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(8px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -1498,18 +1498,17 @@ export default function TCCCom({
           }}
         >
           <div
-            className="card"
             style={{
               width: '100%',
-              maxWidth: 560,
-              maxHeight: '90vh',
+              maxWidth: 580,
+              maxHeight: '92vh',
               display: 'flex',
               flexDirection: 'column',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-light)',
-              borderRadius: 'var(--radius-lg)',
-              boxShadow: 'var(--shadow-lg)',
-              padding: '20px 24px',
+              background: '#0d0d10',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              borderRadius: '12px',
+              boxShadow: '0 24px 64px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.06)',
+              padding: '24px 26px',
               position: 'relative',
               boxSizing: 'border-box',
             }}
@@ -1520,46 +1519,55 @@ export default function TCCCom({
                 position: 'absolute',
                 top: 18,
                 right: 18,
-                background: 'transparent',
-                border: 'none',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '6px',
+                width: 32,
+                height: 32,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 color: 'var(--text-muted)',
                 cursor: 'pointer',
+                transition: 'all 120ms ease',
               }}
-              title="Close modal"
+              title="Close"
             >
-              <X size={20} />
+              <X size={16} />
             </button>
 
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span
-                  className="badge"
-                  style={{
-                    background: 'rgba(45, 106, 79, 0.25)',
-                    color: '#52b788',
-                    border: '1px solid rgba(45, 106, 79, 0.5)',
-                    fontSize: '0.6875rem',
-                    fontWeight: 700,
-                  }}
-                >
-                  TCC COM
-                </span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Unified Personnel Room
-                </span>
+            {/* Modal Header */}
+            <div style={{ marginBottom: 18 }}>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '3px 10px',
+                  borderRadius: '20px',
+                  background: 'rgba(45, 106, 79, 0.18)',
+                  border: '1px solid rgba(64, 145, 108, 0.45)',
+                  color: 'var(--accent-green-light)',
+                  fontSize: '0.6875rem',
+                  fontWeight: 600,
+                  marginBottom: 8,
+                }}
+              >
+                <Sparkles size={12} />
+                <span>TEAM COORDINATION CORNER</span>
               </div>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--white)' }}>
-                Initiate Conversation Session
+              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0, color: '#ffffff', letterSpacing: '-0.02em' }}>
+                Start a Conversation Session
               </h2>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>
-                Start a real-time coordination topic with fellow personnel. Retained within each member&apos;s past 50 sessions index.
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.45 }}>
+                Initiate a live discussion with approved administrators and setters. Indexed in your past 50 sessions.
               </p>
             </div>
 
             {createError && (
               <div
                 className="alert alert-danger"
-                style={{ marginBottom: 12, padding: '8px 12px', fontSize: '0.8125rem' }}
+                style={{ marginBottom: 14, padding: '10px 14px', fontSize: '0.8125rem', borderRadius: '6px' }}
               >
                 {createError}
               </div>
@@ -1567,37 +1575,60 @@ export default function TCCCom({
 
             <form
               onSubmit={handleCreateSession}
-              style={{ display: 'flex', flexDirection: 'column', gap: 14, overflow: 'hidden' }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 16, overflow: 'hidden' }}
             >
               {/* Session Title Input */}
               <div>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>
-                  Session Title / Subject <span style={{ color: '#ff6b6b' }}>*</span>
+                <label style={{ fontSize: '0.8125rem', fontWeight: 600, display: 'block', marginBottom: 6, color: 'var(--text-secondary)' }}>
+                  Conversation Topic / Subject <span style={{ color: '#ff6b6b' }}>*</span>
                 </label>
                 <input
                   type="text"
-                  className="input"
                   placeholder="e.g. Physics Section Question #104 Review"
                   value={newSessionTitle}
                   onChange={(e) => setNewSessionTitle(e.target.value)}
                   required
-                  style={{ width: '100%', height: 38 }}
+                  style={{
+                    width: '100%',
+                    height: 40,
+                    padding: '0 14px',
+                    borderRadius: '6px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    color: '#ffffff',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
                 />
               </div>
 
-              {/* Involved Personnel Selection (Clean, Fixed Layout) */}
+              {/* Involved Personnel Selection (Clean Card Layout) */}
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Users size={14} />
-                    <span>Involved Personnel ({selectedPersonnel.length} invited)</span>
-                  </label>
-                  <div style={{ display: 'flex', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      Involved Personnel
+                    </label>
+                    <span
+                      style={{
+                        fontSize: '0.6875rem',
+                        padding: '1px 7px',
+                        borderRadius: '10px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        color: 'var(--text-primary)',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    >
+                      {selectedPersonnel.length} of {allPersonnel.length} invited
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
                       onClick={() => setSelectedPersonnel(allPersonnel)}
-                      style={{ fontSize: '0.6875rem', padding: '2px 8px' }}
+                      style={{ fontSize: '0.6875rem', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.08)' }}
                     >
                       Select All
                     </button>
@@ -1605,7 +1636,7 @@ export default function TCCCom({
                       type="button"
                       className="btn btn-ghost btn-sm"
                       onClick={() => setSelectedPersonnel([])}
-                      style={{ fontSize: '0.6875rem', padding: '2px 8px' }}
+                      style={{ fontSize: '0.6875rem', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.08)' }}
                     >
                       Clear
                     </button>
@@ -1616,22 +1647,22 @@ export default function TCCCom({
                 <div
                   className="custom-scrollbar"
                   style={{
-                    maxHeight: 200,
+                    maxHeight: 210,
                     overflowY: 'auto',
                     overflowX: 'hidden',
-                    background: 'var(--bg-primary)',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--border)',
-                    padding: 4,
+                    background: '#070709',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    padding: 6,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 4,
+                    gap: 6,
                     width: '100%',
                     boxSizing: 'border-box',
                   }}
                 >
                   {allPersonnel.length === 0 ? (
-                    <div style={{ padding: 12, fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                    <div style={{ padding: '24px 16px', fontSize: '0.8125rem', color: 'var(--text-muted)', textAlign: 'center' }}>
                       No other approved personnel registered yet.
                     </div>
                   ) : (
@@ -1651,61 +1682,83 @@ export default function TCCCom({
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            padding: '8px 12px',
-                            borderRadius: 'var(--radius-xs)',
+                            padding: '9px 12px',
+                            borderRadius: '6px',
                             cursor: 'pointer',
-                            background: isChecked ? 'rgba(45, 106, 79, 0.15)' : 'rgba(255, 255, 255, 0.02)',
-                            border: isChecked ? '1px solid rgba(64, 145, 108, 0.5)' : '1px solid var(--border)',
+                            background: isChecked ? 'rgba(45, 106, 79, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                            border: isChecked ? '1px solid rgba(64, 145, 108, 0.45)' : '1px solid rgba(255, 255, 255, 0.05)',
                             transition: 'all 120ms ease',
                             boxSizing: 'border-box',
                             width: '100%',
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                          {/* Left: Checkbox + Avatar + Name/Email */}
+                          <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1, gap: 12 }}>
+                            {/* Checkbox with strict size override */}
                             <input
                               type="checkbox"
                               checked={isChecked}
                               onChange={() => {}} // handled by parent onClick
-                              style={{ cursor: 'pointer', flexShrink: 0 }}
+                              style={{
+                                width: '16px',
+                                minWidth: '16px',
+                                maxWidth: '16px',
+                                height: '16px',
+                                minHeight: '16px',
+                                maxHeight: '16px',
+                                padding: 0,
+                                margin: 0,
+                                cursor: 'pointer',
+                                flexShrink: 0,
+                                accentColor: '#40916c',
+                              }}
                             />
+
+                            {/* Avatar with Initials */}
                             <div
                               style={{
-                                width: 26,
-                                height: 26,
-                                borderRadius: '50%',
+                                width: 32,
+                                minWidth: 32,
+                                height: 32,
+                                borderRadius: '7px',
                                 background: getRoleBadgeStyle(person.role).avatarBg,
-                                color: '#fff',
-                                fontSize: '0.625rem',
+                                color: '#ffffff',
+                                fontSize: '0.6875rem',
                                 fontWeight: 700,
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 flexShrink: 0,
+                                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.15)',
                               }}
                             >
                               {getInitials(person.name)}
                             </div>
-                            <div style={{ minWidth: 0, flex: 1 }}>
+
+                            {/* Personnel Name and Email */}
+                            <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
                               <div
                                 style={{
-                                  fontSize: '0.8125rem',
+                                  fontSize: '0.84rem',
                                   fontWeight: 600,
-                                  color: 'var(--white)',
+                                  color: '#ffffff',
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
                                   whiteSpace: 'nowrap',
+                                  lineHeight: 1.3,
                                 }}
                               >
                                 {person.name}
                               </div>
                               <div
                                 style={{
-                                  fontSize: '0.6875rem',
+                                  fontSize: '0.71875rem',
                                   color: 'var(--text-muted)',
                                   fontFamily: 'var(--font-mono)',
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
                                   whiteSpace: 'nowrap',
+                                  lineHeight: 1.3,
                                 }}
                               >
                                 {person.email}
@@ -1713,14 +1766,17 @@ export default function TCCCom({
                             </div>
                           </div>
 
+                          {/* Right: Role Badge */}
                           <span
                             className="badge"
                             style={{
                               ...getRoleBadgeStyle(person.role),
                               fontSize: '0.625rem',
-                              padding: '2px 6px',
+                              padding: '2px 7px',
                               flexShrink: 0,
-                              marginLeft: 8,
+                              marginLeft: 10,
+                              fontWeight: 700,
+                              letterSpacing: '0.04em',
                             }}
                           >
                             {person.role}
@@ -1734,25 +1790,50 @@ export default function TCCCom({
 
               {/* Opening Message */}
               <div>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>
-                  Opening Message / Briefing
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    Opening Message / Briefing
+                  </label>
+                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>Optional</span>
+                </div>
                 <textarea
-                  className="input"
                   rows={3}
                   placeholder="Introduce the purpose of this conversation session..."
                   value={newSessionInitialMsg}
                   onChange={(e) => setNewSessionInitialMsg(e.target.value)}
-                  style={{ width: '100%', resize: 'none', padding: '8px 12px' }}
+                  style={{
+                    width: '100%',
+                    resize: 'none',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    color: '#ffffff',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+              {/* Modal Actions */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  alignItems: 'center',
+                  gap: 10,
+                  marginTop: 6,
+                  paddingTop: 14,
+                  borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                }}
+              >
                 <button
                   type="button"
                   className="btn btn-ghost"
                   onClick={() => setNewSessionModalOpen(false)}
                   disabled={creatingSession}
+                  style={{ padding: '8px 16px', fontSize: '0.8125rem' }}
                 >
                   Cancel
                 </button>
@@ -1764,10 +1845,17 @@ export default function TCCCom({
                     background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
                     borderColor: 'var(--accent-green-light)',
                     fontWeight: 600,
-                    padding: '8px 18px',
+                    padding: '8px 20px',
+                    fontSize: '0.8125rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    borderRadius: '6px',
+                    boxShadow: '0 2px 10px rgba(45, 106, 79, 0.3)',
                   }}
                 >
-                  {creatingSession ? 'Creating...' : 'Create Session'}
+                  <Send size={14} />
+                  <span>{creatingSession ? 'Starting Session...' : 'Start Session'}</span>
                 </button>
               </div>
             </form>

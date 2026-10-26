@@ -481,61 +481,77 @@ export default function RaiseDisputeModal({
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          padding: '8px 12px',
-                          borderRadius: 'var(--radius-xs)',
+                          padding: '9px 12px',
+                          borderRadius: '6px',
                           cursor: 'pointer',
-                          background: isChecked ? 'rgba(45, 106, 79, 0.15)' : 'rgba(255, 255, 255, 0.02)',
-                          border: isChecked ? '1px solid rgba(64, 145, 108, 0.5)' : '1px solid var(--border)',
+                          background: isChecked ? 'rgba(45, 106, 79, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                          border: isChecked ? '1px solid rgba(64, 145, 108, 0.45)' : '1px solid rgba(255, 255, 255, 0.05)',
                           transition: 'all 120ms ease',
                           boxSizing: 'border-box',
                           width: '100%',
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1, gap: 12 }}>
                           <input
                             type="checkbox"
                             checked={isChecked}
                             onChange={() => {}} // handled by parent onClick
-                            style={{ cursor: 'pointer', flexShrink: 0 }}
+                            style={{
+                              width: '16px',
+                              minWidth: '16px',
+                              maxWidth: '16px',
+                              height: '16px',
+                              minHeight: '16px',
+                              maxHeight: '16px',
+                              padding: 0,
+                              margin: 0,
+                              cursor: 'pointer',
+                              flexShrink: 0,
+                              accentColor: '#40916c',
+                            }}
                           />
                           <div
                             style={{
-                              width: 26,
-                              height: 26,
-                              borderRadius: '50%',
+                              width: 32,
+                              minWidth: 32,
+                              height: 32,
+                              borderRadius: '7px',
                               background: getRoleBadgeStyle(person.role).avatarBg,
-                              color: '#fff',
-                              fontSize: '0.625rem',
+                              color: '#ffffff',
+                              fontSize: '0.6875rem',
                               fontWeight: 700,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               flexShrink: 0,
+                              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.15)',
                             }}
                           >
                             {getInitials(person.name)}
                           </div>
-                          <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
                             <div
                               style={{
-                                fontSize: '0.8125rem',
+                                fontSize: '0.84rem',
                                 fontWeight: 600,
-                                color: 'var(--white)',
+                                color: '#ffffff',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
+                                lineHeight: 1.3,
                               }}
                             >
                               {person.name}
                             </div>
                             <div
                               style={{
-                                fontSize: '0.6875rem',
+                                fontSize: '0.71875rem',
                                 color: 'var(--text-muted)',
                                 fontFamily: 'var(--font-mono)',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
+                                lineHeight: 1.3,
                               }}
                             >
                               {person.email}
@@ -548,9 +564,11 @@ export default function RaiseDisputeModal({
                           style={{
                             ...getRoleBadgeStyle(person.role),
                             fontSize: '0.625rem',
-                            padding: '2px 6px',
+                            padding: '2px 7px',
                             flexShrink: 0,
-                            marginLeft: 8,
+                            marginLeft: 10,
+                            fontWeight: 700,
+                            letterSpacing: '0.04em',
                           }}
                         >
                           {person.role}
