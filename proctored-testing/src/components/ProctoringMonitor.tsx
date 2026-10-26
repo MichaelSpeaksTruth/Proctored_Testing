@@ -187,14 +187,19 @@ export default function ProctoringMonitor({
   const report = useCallback(
     (event: ProctoringEvent, violating: boolean, severity: Severity) => {
       const h = getHys(event);
+      // For SHOULDERS_OUT_OF_FRAME, require sustained violation (~2.5s) before triggering the blocking modal
+      // and clear quickly (~0.8s) once corrected
+      const framesToStart = event === 'SHOULDERS_OUT_OF_FRAME' ? 30 : FRAMES_TO_START;
+      const framesToClear = event === 'SHOULDERS_OUT_OF_FRAME' ? 10 : FRAMES_TO_CLEAR;
+
       if (violating) {
         h.v++;
         h.c = 0;
-        if (h.v === FRAMES_TO_START) openInfraction(event, severity);
+        if (h.v === framesToStart) openInfraction(event, severity);
       } else {
         h.c++;
         h.v = Math.max(0, h.v - 2);
-        if (h.c >= FRAMES_TO_CLEAR) {
+        if (h.c >= framesToClear) {
           closeInfraction(event);
           h.v = 0;
           h.c = 0;
@@ -462,12 +467,25 @@ export default function ProctoringMonitor({
             // Ducking: chin drops out of frame completely or extreme crouch
             const isDucking = (chinPt.y > 0.98 && foreheadPt.y < 0.90) || (headVsChinRatio > 1.85);
 
-            // Shoulder proxy alignment
-            const isShouldersOut = chinPt.y > 0.88;
+            // Peeking / Looking Down Check:
+            // When a student peeks down to read questions, options, or scratchpad notes,
+            // their head pitches forward/down (headPitchDegrees < -14° or pitchDeg > 6°).
+            // Under NO circumstance should peeking down trigger the "Camera Alignment Required" overlay!
+            const isPeekingDown = headPitchDegrees < -14 || pitchDeg > 6;
 
-            // Realistic pitch down: When looking at lap/knees, pitch angle is steep (< -28°) and pitchDeg is pronounced
+            // Realistic pitch down: When looking all the way down into lap/knees
             const PITCH_DOWN_THRESHOLD = -28;
             const isPitchDown = headPitchDegrees < PITCH_DOWN_THRESHOLD && pitchDeg > 12;
+
+            // Dynamic Shoulder Alignment (Screen Extended / Tilted Back):
+            // The SOLE purpose of shoulder tracking is catching when a candidate extends/tilts
+            // their laptop screen back so the camera points up at the ceiling to hide their torso,
+            // hands, and desk from the proctor.
+            // When the screen is tilted back:
+            // 1. The candidate is NOT peeking down (!isPeekingDown) - they are looking straight at the screen.
+            // 2. The entire face sinks into the lower frame (foreheadPt.y > 0.38, top of frame is empty ceiling).
+            // 3. The chin is pushed to the bottom border (chinPt.y > 0.86), cutting shoulders out of the frame.
+            const isShouldersOut = !isPeekingDown && (foreheadPt.y > 0.38 && chinPt.y > 0.86);
             
             report('HEAD_PITCH_DOWN', isPitchDown, 'medium');
             report('DUCKING_DOWN', isDucking, 'high');
@@ -514,6 +532,11 @@ export default function ProctoringMonitor({
                 if (isDucking) {
                   gx.fillStyle = '#ff0000';
                   gx.fillText(`FACE CROUCHED`, 6, H - 40);
+                }
+
+                if (isShouldersOut) {
+                  gx.fillStyle = '#ff8800';
+                  gx.fillText(`SCREEN TILTED BACK (ALIGN REQUIRED)`, 6, H - 56);
                 }
                 
                 // ── Calibration Geometric Centering ──
