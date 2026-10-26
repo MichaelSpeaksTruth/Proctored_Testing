@@ -21,6 +21,7 @@ import {
   subscribeSession,
   subscribeUserNotifications,
   clearUserNotifications,
+  deleteTCCSession,
 } from '@/lib/tccService';
 import {
   MessageSquare,
@@ -42,6 +43,7 @@ import {
   CheckCheck,
   UserPlus,
   Reply,
+  Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -98,6 +100,10 @@ export default function TCCCom({
   const [resolutionNotes, setResolutionNotes] = useState('');
   const [resolving, setResolving] = useState(false);
 
+  // Delete session modal (Admin Sr. ONLY)
+  const [sessionToDelete, setSessionToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [deletingSession, setDeletingSession] = useState(false);
+
   // Notifications
   const [notifications, setNotifications] = useState<TCCNotification[]>([]);
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
@@ -109,6 +115,7 @@ export default function TCCCom({
   // Refs for outside-click dismissals across all TCC popups
   const newSessionModalCardRef = useRef<HTMLDivElement>(null);
   const resolveModalCardRef = useRef<HTMLDivElement>(null);
+  const deleteModalCardRef = useRef<HTMLDivElement>(null);
   const notifDropdownRef = useRef<HTMLDivElement>(null);
   const notifTriggerBtnRef = useRef<HTMLButtonElement>(null);
   const addMemberRef = useRef<HTMLDivElement>(null);
@@ -182,10 +189,24 @@ export default function TCCCom({
       ) {
         setResolveModalOpen(false);
       }
+
+      // 7. Delete Session Modal (Admin Sr. only)
+      if (
+        sessionToDelete &&
+        !deletingSession &&
+        deleteModalCardRef.current &&
+        !deleteModalCardRef.current.contains(target)
+      ) {
+        setSessionToDelete(null);
+      }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (sessionToDelete && !deletingSession) {
+          setSessionToDelete(null);
+          return;
+        }
         if (newSessionModalOpen && !creatingSession) {
           setNewSessionModalOpen(false);
           return;
@@ -231,10 +252,13 @@ export default function TCCCom({
     creatingSession,
     resolveModalOpen,
     resolving,
+    sessionToDelete,
+    deletingSession,
     notifDropdownOpen,
     addMemberDropdownOpen,
     showParticipantsDrawer,
     mentionQuery,
+    replyingTo,
   ]);
 
   // 1. Auth & Profile Detection
@@ -397,6 +421,29 @@ export default function TCCCom({
       setAddMemberDropdownOpen(false);
     } catch (err) {
       console.error('Failed to add participant:', err);
+    }
+  };
+
+  const handleConfirmDeleteSession = async () => {
+    if (!sessionToDelete || !personnelProfile || personnelProfile.role !== 'Admin Sr.') return;
+    setDeletingSession(true);
+    try {
+      const deletedId = sessionToDelete.id;
+      await deleteTCCSession({
+        sessionId: deletedId,
+        adminProfile: personnelProfile,
+      });
+      if (activeSessionId === deletedId) {
+        setActiveSessionId(null);
+        if (mobileView === 'chat') {
+          setMobileView('sidebar');
+        }
+      }
+      setSessionToDelete(null);
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+    } finally {
+      setDeletingSession(false);
     }
   };
 
@@ -1284,9 +1331,36 @@ export default function TCCCom({
                         )}
                       </div>
 
-                      <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', flexShrink: 0 }}>
-                        {formatTime(s.lastActivity)}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                          {formatTime(s.lastActivity)}
+                        </span>
+                        {personnelProfile?.role === 'Admin Sr.' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSessionToDelete({ id: s.sessionId, title: s.title });
+                            }}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                              padding: 2,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: 4,
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = '#ff6b6b')}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                            title="Delete this session entirely (Admin Sr. only)"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div
@@ -1431,6 +1505,30 @@ export default function TCCCom({
                     >
                       <CheckCircle2 size={13} />
                       <span className="desktop-only">Resolve Dispute</span>
+                    </button>
+                  )}
+
+                  {/* Delete Session (Admin Sr. ONLY) */}
+                  {personnelProfile?.role === 'Admin Sr.' && (
+                    <button
+                      type="button"
+                      onClick={() => setSessionToDelete({ id: activeSession.id, title: activeSession.title })}
+                      className="btn btn-sm"
+                      style={{
+                        background: 'rgba(155, 34, 38, 0.2)',
+                        color: '#ff6b6b',
+                        border: '1px solid rgba(155, 34, 38, 0.45)',
+                        fontSize: '0.75rem',
+                        padding: '4px 8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        whiteSpace: 'nowrap',
+                      }}
+                      title="Permanently delete this session and its messages (Admin Sr. only)"
+                    >
+                      <Trash2 size={13} color="#ff6b6b" />
+                      <span className="desktop-only">Delete</span>
                     </button>
                   )}
 
@@ -2973,6 +3071,103 @@ export default function TCCCom({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: DELETE SESSION ENTIRELY (ADMIN SR. ONLY) ────────────────── */}
+      {sessionToDelete && personnelProfile?.role === 'Admin Sr.' && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(0, 0, 0, 0.82)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            overflowY: 'auto',
+          }}
+          onClick={() => {
+            if (!deletingSession) setSessionToDelete(null);
+          }}
+        >
+          <div
+            ref={deleteModalCardRef}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: 440,
+              background: '#0d0f12',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              borderRadius: '12px',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.9)',
+              padding: 20,
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <BackButton onClick={() => setSessionToDelete(null)} />
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 700, margin: 0, color: '#ffffff', letterSpacing: '-0.02em' }}>
+                  Delete Session
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSessionToDelete(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: 4,
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem', margin: 0, lineHeight: 1.5 }}>
+              Are you sure you want to permanently delete <strong style={{ color: '#ffffff' }}>"{sessionToDelete.title.replace(/^\[DISPUTE\]\s*/i, '')}"</strong>?
+              This session, all its messages, and participant records will be entirely deleted.
+            </p>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setSessionToDelete(null)}
+                disabled={deletingSession}
+                style={{ fontSize: '0.8125rem', padding: '6px 14px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteSession}
+                disabled={deletingSession}
+                className="btn btn-primary btn-sm"
+                style={{
+                  fontSize: '0.8125rem',
+                  fontWeight: 700,
+                  padding: '7px 18px',
+                  background: '#d90429',
+                  borderColor: '#ef233c',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <Trash2 size={13} />
+                <span>{deletingSession ? 'Deleting...' : 'Delete Session Entirely'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

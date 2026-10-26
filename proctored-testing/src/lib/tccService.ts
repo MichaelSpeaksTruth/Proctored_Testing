@@ -14,6 +14,7 @@ import {
 } from 'firebase/database';
 import { isAdmin, encodeEmail, decodeEmail } from '@/lib/adminUtils';
 import { User } from 'firebase/auth';
+import { logAuditEvent } from '@/lib/auditLogger';
 
 export type TCCRole = 'Admin Sr.' | 'Admin L1' | 'Question Setter';
 
@@ -1022,3 +1023,77 @@ export async function clearUserNotifications(encodedEmail: string): Promise<void
     console.error('Failed to clear notifications:', err);
   }
 }
+
+/**
+ * Permanently delete a TCC session and all its messages.
+ * Authority: Admin Sr. ONLY.
+ * Completely removes the session from tcc_sessions, cleans up every participant's
+ * user_sessions index, and clears session notifications.
+ */
+export async function deleteTCCSession(params: {
+  sessionId: string;
+  adminProfile: ApprovedPersonnelInfo;
+}): Promise<void> {
+  const { sessionId, adminProfile } = params;
+
+  if (adminProfile.role !== 'Admin Sr.') {
+    throw new Error('Unauthorized: Only Admin Sr. can delete TCC sessions.');
+  }
+
+  // Fetch session data first to find all enrolled participants
+  const sessionSnap = await get(ref(rtdb, `tcc_sessions/${sessionId}`));
+  if (!sessionSnap.exists()) {
+    return;
+  }
+
+  const session = sessionSnap.val() as TCCSession;
+  const participants = session.participants || {};
+  const updates: Record<string, any> = {};
+
+  // 1. Entirely remove the session document (messages, disputeDetails, participants)
+  updates[`tcc_sessions/${sessionId}`] = null;
+
+  // 2. Remove from each participant's user_sessions index
+  for (const [encEmail] of Object.entries(participants)) {
+    updates[`tcc_user_sessions/${encEmail}/${sessionId}`] = null;
+  }
+
+  // 3. Clean up notifications referencing this session
+  for (const [encEmail] of Object.entries(participants)) {
+    try {
+      const notifsSnap = await get(ref(rtdb, `tcc_notifications/${encEmail}`));
+      if (notifsSnap.exists()) {
+        const notifs = notifsSnap.val();
+        for (const [nid, notif] of Object.entries(notifs)) {
+          if ((notif as any)?.sessionId === sessionId) {
+            updates[`tcc_notifications/${encEmail}/${nid}`] = null;
+          }
+        }
+      }
+    } catch (e) {
+      console.error(`Error checking notifications for ${encEmail}:`, e);
+    }
+  }
+
+  // Apply batch atomic deletion
+  await update(ref(rtdb), updates);
+
+  // Log audit event
+  try {
+    await logAuditEvent({
+      actorEmail: adminProfile.email,
+      actorName: adminProfile.name,
+      actorRole: 'Admin Sr.',
+      action: 'DELETE_TCC_SESSION' as any,
+      actionLabel: 'Deleted TCC Session',
+      targetTitle: session.title,
+      details: {
+        sessionId,
+        type: session.type,
+      },
+    });
+  } catch (e) {
+    console.error('Failed to log session deletion audit event:', e);
+  }
+}
+
