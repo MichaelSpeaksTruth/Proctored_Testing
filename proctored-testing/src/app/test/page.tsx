@@ -239,7 +239,7 @@ function TestContent() {
   // Persist lives to localStorage whenever they change
   // ── Central section timer logic ──
   useEffect(() => {
-    if (!examStarted || submitted || !timesLoaded || penaltyRemaining > 0 || !proctoringAgreementAccepted || isShouldersMisaligned) {
+    if (!examStarted || submitted || !timesLoaded || penaltyRemaining > 0 || !proctoringAgreementAccepted) {
       lastTickRef.current = Date.now();
       return;
     }
@@ -269,7 +269,7 @@ function TestContent() {
     }, 200);
 
     return () => clearInterval(interval);
-  }, [examStarted, submitted, timesLoaded, currentSectionIdx, testId, uid, penaltyRemaining, proctoringAgreementAccepted, isShouldersMisaligned]);
+  }, [examStarted, submitted, timesLoaded, currentSectionIdx, testId, uid, penaltyRemaining, proctoringAgreementAccepted]);
   useEffect(() => {
     if (!testId || !uid) return;
     const livesKey = `pt_lives_${testId}_${uid}`;
@@ -1064,13 +1064,7 @@ function TestContent() {
                 document.documentElement.requestFullscreen().catch(console.error);
               }}>Resume Fullscreen</button>
             )}
-            <button
-              className="btn btn-outline"
-              style={{ marginTop: 12, width: '100%', borderColor: 'rgba(255, 255, 255, 0.25)', color: 'var(--text-primary)' }}
-              onClick={() => setIsShouldersMisaligned(false)}
-            >
-              I Have Adjusted My Screen (Continue Exam)
-            </button>
+
           </div>
         </div>
       )}
