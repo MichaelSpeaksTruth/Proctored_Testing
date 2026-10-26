@@ -35,6 +35,7 @@ import {
   UserCheck,
   ChevronRight,
   Sparkles,
+  AtSign,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -69,6 +70,11 @@ export default function TCCCom({
   const [messageInput, setMessageInput] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Mentions / Tagging state
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // New session modal
   const [newSessionModalOpen, setNewSessionModalOpen] = useState(false);
@@ -332,6 +338,150 @@ export default function TCCCom({
       border: '1px solid var(--border)',
       avatarBg: '#333333',
     };
+  };
+
+  // Available mention candidates (roles, everyone, session participants)
+  const mentionCandidates = useMemo(() => {
+    const list: {
+      id: string;
+      label: string;
+      insertText: string;
+      role?: string;
+      isSpecial?: boolean;
+      avatar?: string;
+      email?: string;
+    }[] = [
+      { id: 'all', label: '@all', insertText: '@all ', role: 'Everyone in Room', isSpecial: true },
+      { id: 'sr', label: '@Admin Sr.', insertText: '@Admin Sr. ', role: 'Admin Sr.', isSpecial: true },
+      { id: 'l1', label: '@Admin L1', insertText: '@Admin L1 ', role: 'Admin L1', isSpecial: true },
+      { id: 'qs', label: '@Question Setter', insertText: '@Question Setter ', role: 'Question Setter', isSpecial: true },
+    ];
+
+    if (activeSession?.participants) {
+      Object.values(activeSession.participants).forEach((p) => {
+        list.push({
+          id: p.email,
+          label: `@${p.name}`,
+          insertText: `@${p.name} `,
+          role: p.role,
+          avatar: getInitials(p.name),
+          email: p.email,
+        });
+      });
+    }
+
+    if (mentionQuery === null) return list;
+    const q = mentionQuery.toLowerCase().trim();
+    if (!q) return list;
+    return list.filter(
+      (c) =>
+        c.label.toLowerCase().includes(q) ||
+        c.insertText.toLowerCase().includes(q) ||
+        (c.role && c.role.toLowerCase().includes(q)) ||
+        (c.email && c.email.toLowerCase().includes(q))
+    );
+  }, [activeSession?.participants, mentionQuery]);
+
+  const insertMention = (tag: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      setMessageInput((prev) => (prev ? `${prev} ${tag}` : tag));
+      setMentionQuery(null);
+      return;
+    }
+
+    const cursorPos = textarea.selectionStart || messageInput.length;
+    const textBefore = messageInput.slice(0, cursorPos);
+    const textAfter = messageInput.slice(cursorPos);
+
+    const atIndex = textBefore.lastIndexOf('@');
+    if (atIndex !== -1 && mentionQuery !== null) {
+      const newText = textBefore.slice(0, atIndex) + tag + textAfter;
+      setMessageInput(newText);
+      setMentionQuery(null);
+      setTimeout(() => {
+        textarea.focus();
+        const newPos = atIndex + tag.length;
+        textarea.setSelectionRange(newPos, newPos);
+      }, 10);
+    } else {
+      const spacePrefix = textBefore.length > 0 && !textBefore.endsWith(' ') ? ' ' : '';
+      const newText = textBefore + spacePrefix + tag + textAfter;
+      setMessageInput(newText);
+      setMentionQuery(null);
+      setTimeout(() => {
+        textarea.focus();
+        const newPos = cursorPos + spacePrefix.length + tag.length;
+        textarea.setSelectionRange(newPos, newPos);
+      }, 10);
+    }
+  };
+
+  const handleComposerChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setMessageInput(val);
+
+    const cursorPos = e.target.selectionStart || val.length;
+    const textBefore = val.slice(0, cursorPos);
+    const lastAt = textBefore.lastIndexOf('@');
+
+    if (lastAt !== -1) {
+      const queryPart = textBefore.slice(lastAt + 1);
+      // Valid query: no newline and length under 25 chars
+      if (!queryPart.includes('\n') && queryPart.length <= 25) {
+        setMentionQuery(queryPart);
+        setMentionSelectedIndex(0);
+        return;
+      }
+    }
+    setMentionQuery(null);
+  };
+
+  const renderMessageContent = (text: string) => {
+    // Regex splits on @all, @everyone, role tags, or @Name / @email
+    const regex = /(@all\b|@everyone\b|@Admin\s+Sr\.|@Admin\s+L1|@Question\s+Setter|@[\w.-]+(?:\s+[\w.-]+)?)/gi;
+    const parts = text.split(regex);
+
+    const myName = (personnelProfile?.name || '').toLowerCase();
+    const myFirstName = myName.includes(' ') ? myName.split(' ')[0] : myName;
+    const myEmail = (personnelProfile?.email || '').toLowerCase();
+    const myRole = (personnelProfile?.role || '').toLowerCase();
+
+    return parts.map((part, idx) => {
+      if (!part) return null;
+      if (part.startsWith('@')) {
+        const lowerPart = part.toLowerCase();
+        const isTaggingMe =
+          lowerPart === '@all' ||
+          lowerPart === '@everyone' ||
+          lowerPart === `@${myName}` ||
+          lowerPart === `@${myFirstName}` ||
+          lowerPart === `@${myEmail}` ||
+          lowerPart === `@${myRole}`;
+
+        return (
+          <span
+            key={idx}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '1px 6px',
+              borderRadius: '4px',
+              fontSize: '0.84rem',
+              fontWeight: 700,
+              margin: '0 2px',
+              background: isTaggingMe ? 'rgba(244, 162, 97, 0.22)' : 'rgba(33, 150, 243, 0.18)',
+              color: isTaggingMe ? '#f4a261' : '#64b5f6',
+              border: isTaggingMe ? '1px solid rgba(244, 162, 97, 0.45)' : '1px solid rgba(33, 150, 243, 0.35)',
+              boxShadow: isTaggingMe ? '0 0 8px rgba(244, 162, 97, 0.2)' : undefined,
+            }}
+          >
+            {part}
+          </span>
+        );
+      }
+      return <span key={idx}>{part}</span>;
+    });
   };
 
   if (authChecking) {
@@ -646,10 +796,19 @@ export default function TCCCom({
                             style={{
                               fontSize: '0.6875rem',
                               fontWeight: 700,
-                              color: notif.type === 'dispute_ping' ? '#ff6b6b' : 'var(--accent-green-light)',
+                              color:
+                                notif.type === 'dispute_ping'
+                                  ? '#ff6b6b'
+                                  : notif.type === 'mention'
+                                  ? '#f4a261'
+                                  : 'var(--accent-green-light)',
                             }}
                           >
-                            {notif.type === 'dispute_ping' ? '⚠️ DISPUTE PING' : 'SESSION INVITE'}
+                            {notif.type === 'dispute_ping'
+                              ? '⚠️ DISPUTE PING'
+                              : notif.type === 'mention'
+                              ? '@ TAG MENTION'
+                              : 'SESSION INVITE'}
                           </span>
                           <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }}>
                             {formatTime(notif.timestamp)}
@@ -1248,6 +1407,14 @@ export default function TCCCom({
                     }
 
                     const isMine = msg.senderEmail.toLowerCase() === personnelProfile.email.toLowerCase();
+                    const isUserTagged =
+                      !isMine &&
+                      (msg.text.toLowerCase().includes('@all') ||
+                        msg.text.toLowerCase().includes('@everyone') ||
+                        msg.text.toLowerCase().includes(`@${(personnelProfile?.name || '').toLowerCase()}`) ||
+                        msg.text.toLowerCase().includes(`@${(personnelProfile?.role || '').toLowerCase()}`) ||
+                        (personnelProfile?.name.includes(' ') &&
+                          msg.text.toLowerCase().includes(`@${personnelProfile.name.split(' ')[0].toLowerCase()}`)));
 
                     return (
                       <div
@@ -1307,10 +1474,15 @@ export default function TCCCom({
                             borderRadius: 'var(--radius-md)',
                             background: isMine
                               ? 'linear-gradient(135deg, rgba(45, 106, 79, 0.35) 0%, rgba(27, 67, 50, 0.45) 100%)'
+                              : isUserTagged
+                              ? 'rgba(244, 162, 97, 0.08)'
                               : 'rgba(255, 255, 255, 0.04)',
                             border: isMine
                               ? '1px solid rgba(64, 145, 108, 0.5)'
+                              : isUserTagged
+                              ? '1px solid rgba(244, 162, 97, 0.4)'
                               : '1px solid var(--border)',
+                            borderLeft: isUserTagged ? '3px solid #f4a261' : undefined,
                             color: 'var(--text-primary)',
                             fontSize: '0.875rem',
                             lineHeight: '1.5',
@@ -1318,7 +1490,7 @@ export default function TCCCom({
                             whiteSpace: 'pre-wrap',
                           }}
                         >
-                          {msg.text}
+                          {renderMessageContent(msg.text)}
                         </div>
                       </div>
                     );
@@ -1334,8 +1506,230 @@ export default function TCCCom({
                   background: 'var(--bg-card)',
                   borderTop: '1px solid var(--border)',
                   flexShrink: 0,
+                  position: 'relative',
                 }}
               >
+                {/* Floating Autocomplete Mention Suggestions Dropdown */}
+                {mentionQuery !== null && mentionCandidates.length > 0 && (
+                  <div
+                    className="custom-scrollbar"
+                    style={{
+                      position: 'absolute',
+                      bottom: '100%',
+                      left: 16,
+                      right: 16,
+                      marginBottom: 6,
+                      maxHeight: 220,
+                      overflowY: 'auto',
+                      background: '#0d0d10',
+                      border: '1px solid rgba(255, 255, 255, 0.16)',
+                      borderRadius: '8px',
+                      boxShadow: '0 -10px 30px rgba(0, 0, 0, 0.85)',
+                      padding: 5,
+                      zIndex: 50,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 3,
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '0.6875rem',
+                        color: 'var(--text-muted)',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <AtSign size={12} color="#64b5f6" />
+                        <span>Mention Member or Role</span>
+                      </span>
+                      <span style={{ fontSize: '0.625rem', fontFamily: 'var(--font-mono)' }}>Enter / Tab to pick</span>
+                    </div>
+
+                    {mentionCandidates.map((c, idx) => {
+                      const isSelected = idx === mentionSelectedIndex;
+                      return (
+                        <div
+                          key={c.insertText}
+                          onClick={() => insertMention(c.insertText)}
+                          onMouseEnter={() => setMentionSelectedIndex(idx)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '7px 10px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            background: isSelected ? 'rgba(33, 150, 243, 0.18)' : 'rgba(255, 255, 255, 0.02)',
+                            border: isSelected ? '1px solid rgba(33, 150, 243, 0.45)' : '1px solid transparent',
+                            transition: 'all 100ms ease',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                            {c.avatar ? (
+                              <div
+                                style={{
+                                  width: 24,
+                                  height: 24,
+                                  borderRadius: '50%',
+                                  background: getRoleBadgeStyle(c.role || '').avatarBg,
+                                  color: '#fff',
+                                  fontSize: '0.625rem',
+                                  fontWeight: 700,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {c.avatar}
+                              </div>
+                            ) : (
+                              <div
+                                style={{
+                                  width: 24,
+                                  height: 24,
+                                  borderRadius: '50%',
+                                  background: 'rgba(244, 162, 97, 0.25)',
+                                  color: '#f4a261',
+                                  fontSize: '0.6875rem',
+                                  fontWeight: 700,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                @
+                              </div>
+                            )}
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div
+                                style={{
+                                  fontSize: '0.8125rem',
+                                  fontWeight: 600,
+                                  color: '#ffffff',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {c.label}
+                              </div>
+                              {c.email && (
+                                <div
+                                  style={{
+                                    fontSize: '0.6875rem',
+                                    color: 'var(--text-muted)',
+                                    fontFamily: 'var(--font-mono)',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {c.email}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {c.role && (
+                            <span
+                              className="badge"
+                              style={{
+                                ...getRoleBadgeStyle(c.role),
+                                fontSize: '0.625rem',
+                                padding: '2px 6px',
+                                flexShrink: 0,
+                                marginLeft: 8,
+                              }}
+                            >
+                              {c.role}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Quick Tagging Toolbar */}
+                <div
+                  className="no-scrollbar"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginBottom: 8,
+                    overflowX: 'auto',
+                    whiteSpace: 'nowrap',
+                    paddingBottom: 2,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: '0.71875rem',
+                      color: 'var(--text-muted)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      fontWeight: 600,
+                      flexShrink: 0,
+                      marginRight: 2,
+                    }}
+                  >
+                    <AtSign size={13} color="#64b5f6" />
+                    <span>Tag:</span>
+                  </span>
+
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => insertMention('@all ')}
+                    style={{
+                      fontSize: '0.6875rem',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      border: '1px solid rgba(244, 162, 97, 0.4)',
+                      color: '#f4a261',
+                      background: 'rgba(244, 162, 97, 0.1)',
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}
+                  >
+                    @all
+                  </button>
+
+                  {Object.values(activeSession.participants || {}).map((p) => {
+                    if (p.email.toLowerCase() === personnelProfile?.email.toLowerCase()) return null;
+                    const shortName = p.name.includes(' ') ? p.name.split(' ')[0] : p.name;
+                    return (
+                      <button
+                        key={p.email}
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => insertMention(`@${p.name} `)}
+                        style={{
+                          fontSize: '0.6875rem',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(33, 150, 243, 0.35)',
+                          color: '#64b5f6',
+                          background: 'rgba(33, 150, 243, 0.08)',
+                          fontWeight: 600,
+                          flexShrink: 0,
+                        }}
+                      >
+                        @{shortName}
+                      </button>
+                    );
+                  })}
+                </div>
+
                 {/* Horizontal scrollable quick response pills */}
                 <div
                   className="no-scrollbar"
@@ -1376,17 +1770,44 @@ export default function TCCCom({
 
                 <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                   <textarea
+                    ref={textareaRef}
                     className="input"
                     rows={2}
                     value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
+                    onChange={handleComposerChange}
                     onKeyDown={(e) => {
+                      if (mentionQuery !== null && mentionCandidates.length > 0) {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setMentionSelectedIndex((prev) => (prev + 1) % mentionCandidates.length);
+                          return;
+                        }
+                        if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setMentionSelectedIndex((prev) => (prev - 1 + mentionCandidates.length) % mentionCandidates.length);
+                          return;
+                        }
+                        if (e.key === 'Enter' || e.key === 'Tab') {
+                          e.preventDefault();
+                          const candidate = mentionCandidates[mentionSelectedIndex];
+                          if (candidate) {
+                            insertMention(candidate.insertText);
+                            return;
+                          }
+                        }
+                        if (e.key === 'Escape') {
+                          e.preventDefault();
+                          setMentionQuery(null);
+                          return;
+                        }
+                      }
+
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         handleSendMessage();
                       }
                     }}
-                    placeholder={`Write message as ${personnelProfile.name} (${personnelProfile.role})...`}
+                    placeholder={`Type message or use @ to tag personnel (${personnelProfile.name})...`}
                     style={{
                       flex: 1,
                       resize: 'none',

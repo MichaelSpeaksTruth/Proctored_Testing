@@ -128,7 +128,12 @@ The platform includes a dedicated, unified communication ecosystem—the **Team 
   - **Automatic Initiator Ping & Default Inclusion:** When raising a dispute on any audit log entry, the initiator of that action is automatically extracted, badged, and involved by default, triggering an immediate high-priority ping notification.
   - **Dynamic Party Selection:** The dispute raiser can dynamically select which additional personnel (Admin Sr., Admin L1s, Question Setters) need to be included in the room.
   - **Audit Tracking & Formal Resolution:** Disputes record priority (`Normal`, `High`, `Urgent`), grounds for dispute, and reference the disputed log entry. The raiser or Admin Sr. can conclude disputes with formal resolution notes stamped directly into the session timeline.
-- **Real-Time Notification & In-App Pings:** Real-time listeners (`tcc_notifications`) alert personnel immediately when they are pinged in a dispute or invited to a session.
+- **Real-Time Notification & In-App Pings:** Real-time listeners (`tcc_notifications`) alert personnel immediately when they are pinged in a dispute, invited to a session, or tagged in chat.
+- **Smart @Mention & Tagging Engine:**
+  - **Context-Aware Autocomplete:** Typing `@` in the message composer triggers an interactive autocomplete popup with keyboard navigation (Up/Down arrows, Enter/Tab to select, Esc to dismiss).
+  - **One-Tap Quick Tag Chips:** Quick pills (`@all`, `@Admin Sr.`, `@Admin L1`, `@Question Setter`, and participant names) allow rapid 1-tap tagging on mobile and desktop without manual typing.
+  - **Rich Highlighting & Amber Mentions:** Tagged tokens are rendered as distinct glowing pills; messages mentioning the current user are highlighted with an amber accent border and background.
+  - **Instant Mention Notifications:** Tagging a member or `@all` triggers dedicated real-time `mention` notifications with snippet previews directly to the tagged recipients.
 - **Omnipresent Access:** Accessible directly via `/tcc`, with embedded tabs and quick shortcuts in the Admin Sr. console (`/admin`), Admin L1 dashboard (`/admin-l1`), Question Setter portal (`/question-setter`), and Global Audit Logs (`/admin/logs`).
 
 ## 9. Precision Proctoring & Candidate Protection

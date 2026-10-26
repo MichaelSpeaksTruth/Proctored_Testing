@@ -109,7 +109,7 @@ export interface TCCNotification {
   id: string;
   sessionId: string;
   sessionTitle: string;
-  type: 'dispute_ping' | 'session_invite' | 'message_ping';
+  type: 'dispute_ping' | 'session_invite' | 'message_ping' | 'mention';
   title: string;
   message: string;
   fromEmail: string;
@@ -626,12 +626,45 @@ export async function sendTCCMessage(params: {
   };
 
   const participantKeys = Object.keys(participants);
+  const lowerText = text.toLowerCase();
+  const isMentionAll = lowerText.includes('@all') || lowerText.includes('@everyone');
+
   for (const encKey of participantKeys) {
     updates[`tcc_user_sessions/${encKey}/${sessionId}/lastActivityTimestamp`] = nowMs;
     updates[`tcc_user_sessions/${encKey}/${sessionId}/lastActivity`] = nowIso;
     updates[`tcc_user_sessions/${encKey}/${sessionId}/lastMessageSnippet`] = text.trim();
     if (encKey !== sender.encodedEmail) {
       updates[`tcc_user_sessions/${encKey}/${sessionId}/unread`] = true;
+
+      // Check if participant was tagged/mentioned in message
+      const p = participants[encKey];
+      if (p) {
+        const isTagged =
+          isMentionAll ||
+          lowerText.includes(`@${p.name.toLowerCase()}`) ||
+          lowerText.includes(`@${p.email.toLowerCase()}`) ||
+          lowerText.includes(`@${p.role.toLowerCase()}`) ||
+          // Also match first name if available (e.g. @Anurag)
+          (p.name.includes(' ') && lowerText.includes(`@${p.name.split(' ')[0].toLowerCase()}`));
+
+        if (isTagged) {
+          const notifRef = push(ref(rtdb, `tcc_notifications/${encKey}`));
+          updates[`tcc_notifications/${encKey}/${notifRef.key}`] = {
+            id: notifRef.key,
+            sessionId,
+            sessionTitle: session.title,
+            type: 'mention',
+            title: `@Mention from ${sender.name}`,
+            message: `${sender.name} (${sender.role}) tagged you in "${session.title}": "${text.trim().slice(0, 90)}"`,
+            fromEmail: sender.email,
+            fromName: sender.name,
+            fromRole: sender.role,
+            timestamp: nowIso,
+            timestampMs: nowMs,
+            read: false,
+          };
+        }
+      }
     }
   }
 
