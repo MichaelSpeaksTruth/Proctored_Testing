@@ -117,6 +117,20 @@ The platform features a multi-tiered Role-Based Access Control (RBAC) system for
 
 Users authenticate via Google Auth and submit applications via the **"Seek Permission: Club Personnel Only"** portal selecting their requested role (`Question Setter`, `Spectator's View`, or `Admin L1`). Supreme Admins review and approve/reject applications within the Personnel Management console.
 
+### 8.4 Team Coordination Corner (TCC) Com & Direct Log Dispute System
+
+The platform includes a dedicated, unified communication ecosystem—the **Team Coordination Corner (TCC)**—connecting **Admin Sr.**, **Admin L1**, and **Question Setters**.
+
+- **Session-Based Collaboration:** Any approved personnel can initiate coordination sessions for question drafting, exam guidelines, technical issues, or moderation.
+- **Strict 50-Session Archival Cap:** To maintain peak database performance and streamline communications, each personnel maintains strictly their **past 50 conversation sessions** (`tcc_user_sessions/{encodedEmail}`). The system automatically prunes older sessions beyond this limit upon new activity.
+- **Direct Log Dispute Authority:**
+  - **Authorized Roles:** **Admin Sr.** and **Admin L1** hold dedicated dispute authority embedded directly into the Activity Audit View (`EventsAuditView.tsx`).
+  - **Automatic Initiator Ping & Default Inclusion:** When raising a dispute on any audit log entry, the initiator of that action is automatically extracted, badged, and involved by default, triggering an immediate high-priority ping notification.
+  - **Dynamic Party Selection:** The dispute raiser can dynamically select which additional personnel (Admin Sr., Admin L1s, Question Setters) need to be included in the room.
+  - **Audit Tracking & Formal Resolution:** Disputes record priority (`Normal`, `High`, `Urgent`), grounds for dispute, and reference the disputed log entry. The raiser or Admin Sr. can conclude disputes with formal resolution notes stamped directly into the session timeline.
+- **Real-Time Notification & In-App Pings:** Real-time listeners (`tcc_notifications`) alert personnel immediately when they are pinged in a dispute or invited to a session.
+- **Omnipresent Access:** Accessible directly via `/tcc`, with embedded tabs and quick shortcuts in the Admin Sr. console (`/admin`), Admin L1 dashboard (`/admin-l1`), Question Setter portal (`/question-setter`), and Global Audit Logs (`/admin/logs`).
+
 ## 9. Precision Proctoring & Candidate Protection
 
 - **Separation of Hard Violations vs Soft Telemetry:** Natural actions like glancing down at rough paper, blinking, or screen corner reading (`HEAD_PITCH_DOWN`, `GAZE_AWAY`) are logged silently for review but **do not deduct student lives** or disrupt their exam.

@@ -82,6 +82,22 @@
     "answerKeys": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "tcc_sessions": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "tcc_user_sessions": {
+      ".read": "auth != null",
+      "$encodedEmail": {
+        ".write": "auth != null"
+      }
+    },
+    "tcc_notifications": {
+      ".read": "auth != null",
+      "$encodedEmail": {
+        ".write": "auth != null"
+      }
     }
   }
 }

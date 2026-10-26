@@ -6,6 +6,10 @@ import { ref, get, remove, update } from 'firebase/database';
 import { onAuthStateChanged } from 'firebase/auth';
 import { AuditEvent } from '@/lib/auditLogger';
 import { isAdmin } from '@/lib/adminUtils';
+import { ApprovedPersonnelInfo, getPersonnelProfile } from '@/lib/tccService';
+import RaiseDisputeModal from '@/components/RaiseDisputeModal';
+import Link from 'next/link';
+import { MessageSquareQuote, ShieldAlert } from 'lucide-react';
 
 interface EventsAuditViewProps {
   embeddedInAdmin?: boolean;
@@ -19,15 +23,28 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
   const [actionCategory, setActionCategory] = useState<string>('ALL');
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [isSrAdmin, setIsSrAdmin] = useState(false);
+  const [currentUserProfile, setCurrentUserProfile] = useState<ApprovedPersonnelInfo | null>(null);
+  const [disputeModalOpen, setDisputeModalOpen] = useState(false);
+  const [disputeTargetEvent, setDisputeTargetEvent] = useState<AuditEvent | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, u => {
+    const unsub = onAuthStateChanged(auth, async u => {
       setIsSrAdmin(isAdmin(u?.email));
+      if (u) {
+        const prof = await getPersonnelProfile(u);
+        setCurrentUserProfile(prof);
+      } else {
+        setCurrentUserProfile(null);
+      }
     });
     return () => unsub();
   }, []);
+
+  const canRaiseDispute = Boolean(
+    isSrAdmin || currentUserProfile?.role === 'Admin Sr.' || currentUserProfile?.role === 'Admin L1'
+  );
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -262,6 +279,21 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
             </p>
           </div>
           <div className="flex items-center gap-sm" style={{ flexWrap: 'wrap' }}>
+            <Link
+              href="/tcc"
+              className="btn btn-sm"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'rgba(255, 255, 255, 0.08)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border-light)',
+              }}
+            >
+              <MessageSquareQuote size={15} color="#52b788" />
+              <span>Team Coordination Corner (TCC)</span>
+            </Link>
             <button
               className="btn btn-outline btn-sm"
               onClick={fetchEvents}
@@ -528,6 +560,30 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
                     </div>
 
                     <div className="flex items-center gap-xs" style={{ marginTop: 2, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      {canRaiseDispute && (
+                        <button
+                          className="btn btn-sm"
+                          style={{
+                            fontSize: '0.75rem',
+                            padding: '2px 8px',
+                            background: 'rgba(155, 34, 38, 0.22)',
+                            color: '#ff6b6b',
+                            border: '1px solid rgba(155, 34, 38, 0.55)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                          onClick={() => {
+                            setDisputeTargetEvent(evt);
+                            setDisputeModalOpen(true);
+                          }}
+                          title="Raise dispute on this log into Team Coordination Corner (TCC)"
+                        >
+                          <ShieldAlert size={12} color="#ff6b6b" />
+                          <span>Raise Dispute</span>
+                        </button>
+                      )}
+
                       {evt.details && Object.keys(evt.details).length > 0 && (
                         <button
                           className="btn btn-ghost btn-sm"
@@ -625,6 +681,21 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
           })}
         </div>
       )}
+
+      {/* Raise Dispute Modal */}
+      <RaiseDisputeModal
+        isOpen={disputeModalOpen}
+        onClose={() => {
+          setDisputeModalOpen(false);
+          setDisputeTargetEvent(null);
+        }}
+        event={disputeTargetEvent}
+        currentUser={currentUserProfile}
+        onDisputeCreated={(sessionId) => {
+          setActionMsg(`Dispute session opened in Team Coordination Corner. Log initiator has been pinged.`);
+          setTimeout(() => setActionMsg(null), 5000);
+        }}
+      />
     </div>
   );
 }

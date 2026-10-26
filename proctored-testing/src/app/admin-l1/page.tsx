@@ -10,6 +10,8 @@ import LeaderboardTable, { LeaderboardEntry } from '@/components/LeaderboardTabl
 import ExcelExport from '@/components/ExcelExport';
 import { Question } from '@/components/QuestionPanel';
 import Image from 'next/image';
+import TCCCom from '@/components/TCCCom';
+import { MessageSquareQuote } from 'lucide-react';
 
 interface Section {
   id: string;
@@ -39,7 +41,7 @@ interface TestOption {
 
 function AdminL1Content() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'events' | 'tests' | 'spectator' | 'participants'>('events');
+  const [activeTab, setActiveTab] = useState<'events' | 'tests' | 'spectator' | 'participants' | 'tcc'>('events');
 
   // Tests & Questions state
   const [tests, setTests] = useState<TestDraft[]>([]);
@@ -347,7 +349,30 @@ function AdminL1Content() {
           >
             Participants (View Only)
           </button>
+          <button
+            className={`btn btn-sm ${activeTab === 'tcc' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setActiveTab('tcc')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              whiteSpace: 'nowrap',
+              background: activeTab === 'tcc' ? undefined : 'rgba(45, 106, 79, 0.15)',
+              color: activeTab === 'tcc' ? undefined : '#52b788',
+              border: activeTab === 'tcc' ? undefined : '1px solid rgba(45, 106, 79, 0.35)',
+            }}
+          >
+            <MessageSquareQuote size={14} />
+            <span>Team Coordination Corner (TCC)</span>
+          </button>
         </div>
+
+        {/* TAB 0: TCC (TEAM COORDINATION CORNER) */}
+        {activeTab === 'tcc' && (
+          <div style={{ marginBottom: 'var(--space-xl)' }}>
+            <TCCCom />
+          </div>
+        )}
 
         {/* TAB 1: EVENTS VIEW (AUDIT ACTIVITY LOG) */}
         {activeTab === 'events' && (

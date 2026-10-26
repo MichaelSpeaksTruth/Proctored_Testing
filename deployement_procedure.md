@@ -29,7 +29,7 @@ This document provides a comprehensive, step-by-step guide to deploying the Aero
 1. Navigate to **Build > Realtime Database** and click **Create Database**.
 2. Choose a location (e.g., Singapore/Asia-Southeast1) and start in **Locked Mode**.
 3. Once created, go to the **Rules** tab.
-4. Copy the entire contents of `database.rules.json` from this repository and paste it into the Rules editor. Click **Publish**.
+4. Copy the entire contents of `database.rules.json` from this repository and paste it into the Rules editor. Click **Publish**. *(Alternatively, deploy directly via the Firebase CLI using `firebase deploy --only database`)*.
 
 ### 2.5 Generate Admin SDK Service Account Key
 1. Click the **Gear icon** next to Project Overview and select **Project settings**.

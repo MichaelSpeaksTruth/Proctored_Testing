@@ -7,6 +7,8 @@ import RoleGuard from '@/components/RoleGuard';
 import { Question } from '@/components/QuestionPanel';
 import { generateQuestionTag } from '@/lib/adminUtils';
 import { logAuditEvent } from '@/lib/auditLogger';
+import Link from 'next/link';
+import { MessageSquareQuote } from 'lucide-react';
 
 interface Section {
   id: string;
@@ -366,12 +368,31 @@ function QuestionSetterContent() {
             </div>
           </div>
 
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={() => auth.signOut()}
-          >
-            Sign Out
-          </button>
+          <div className="flex items-center gap-sm">
+            <Link
+              href="/tcc"
+              className="btn btn-sm"
+              style={{
+                background: 'rgba(45, 106, 79, 0.25)',
+                color: '#52b788',
+                border: '1px solid rgba(45, 106, 79, 0.55)',
+                fontSize: '0.75rem',
+                padding: '4px 10px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <MessageSquareQuote size={14} />
+              <span>Team Coordination Corner (TCC)</span>
+            </Link>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => auth.signOut()}
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
         
         {msg && <div className="alert alert-success" style={{ marginBottom: 'var(--space-md)' }}>{msg}</div>}

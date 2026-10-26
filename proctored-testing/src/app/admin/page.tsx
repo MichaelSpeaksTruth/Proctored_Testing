@@ -15,6 +15,7 @@ import {
   Shield,
   FileText,
   ChevronRight,
+  MessageSquareQuote,
 } from 'lucide-react';
 
 interface TabItem {
@@ -25,6 +26,12 @@ interface TabItem {
 }
 
 const ADMIN_TABS: TabItem[] = [
+  {
+    label: 'Team Coordination Corner (TCC)',
+    href: '/tcc',
+    icon: <MessageSquareQuote size={18} color="#52b788" />,
+    desc: 'Communicate with Admin L1 & Setters, raise and resolve dispute sessions',
+  },
   {
     label: 'Test Setup',
     href: '/admin/setup',
@@ -107,6 +114,23 @@ function AdminHomeContent() {
           </div>
 
           <div className="flex items-center gap-md navbar-actions">
+            <Link
+              href="/tcc"
+              className="btn btn-sm"
+              style={{
+                background: 'rgba(45, 106, 79, 0.25)',
+                color: '#52b788',
+                border: '1px solid rgba(45, 106, 79, 0.55)',
+                fontSize: '0.75rem',
+                padding: '3px 9px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+            >
+              <MessageSquareQuote size={13} />
+              <span>TCC Com</span>
+            </Link>
             <span
               className="badge"
               style={{
