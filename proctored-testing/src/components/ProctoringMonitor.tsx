@@ -280,8 +280,10 @@ export default function ProctoringMonitor({
     };
     window.addEventListener('unhandledrejection', onUnhandledRejection);
 
-    // ── 2. Verified AI Object Detection (COCO-SSD) ───────────────────────────
-    const DETECT_W = 384, DETECT_H = 384;
+    // ── 2. Universal Verified AI Object Detection (COCO-SSD Lite) ──────────────
+    // Runs on ALL devices (4GB RAM, low-end PCs, mobile, desktop) using the ultra-lightweight
+    // quantized 'lite_mobilenet_v2' model to guarantee 100% identical rules for all candidates.
+    const DETECT_W = 320, DETECT_H = 320;
     const detectCanvas = document.createElement('canvas');
     detectCanvas.width = DETECT_W;
     detectCanvas.height = DETECT_H;
@@ -306,7 +308,8 @@ export default function ProctoringMonitor({
         if (!backendReady) throw new Error('No TF backend available');
 
         const cocoSsd = await import('@tensorflow-models/coco-ssd');
-        const model = await cocoSsd.load({ base: 'mobilenet_v2' });
+        // 'lite_mobilenet_v2' is quantized and ultra-lean (~3MB weight payload, ~20MB RAM)
+        const model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
 
         if (mounted && videoRef.current && videoRef.current.readyState === 4) {
           try { await model.detect(videoRef.current); } catch { /* ok */ }
@@ -368,21 +371,14 @@ export default function ProctoringMonitor({
           } finally {
             detecting = false;
           }
-        }, 1200);
+        }, 1400);
       } catch (e) {
         console.warn('[Proctor] COCO-SSD load failed:', e);
       }
     };
 
-    // Skip heavy secondary ML models on mobile OR low-RAM/low-core devices (<= 4GB RAM or <= 4 CPU cores)
-    // to prevent browser tab crashes (OOM) and guarantee smooth 60fps UI performance.
-    const isLowEndHardware =
-      typeof navigator !== 'undefined' &&
-      (navigator.hardwareConcurrency <= 4 ||
-        Boolean((navigator as any).deviceMemory && (navigator as any).deviceMemory <= 4));
-    if (!isMobileRef.current && !isLowEndHardware) {
-      initCoco();
-    }
+    // Initialize for ALL candidates on ALL devices equally
+    initCoco();
 
     // ── 3. FaceMesh + Head Pose + Gaze ────────────────────────────────────────
     const initFace = async () => {
