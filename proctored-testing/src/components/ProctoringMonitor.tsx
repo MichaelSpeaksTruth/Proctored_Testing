@@ -45,6 +45,204 @@ function captureSnapshot(videoEl: HTMLVideoElement | null): string | undefined {
   }
 }
 
+
+interface RectResult {
+  detected: boolean;
+  score: number;
+  bbox?: { x: number; y: number; w: number; h: number };
+  overlapFacePercent?: number;
+  reason?: string;
+}
+
+/**
+ * Geometric Rectangular Obstruction Detector
+ * Analyzes whether an external rectangular object (phone/slate/card) is obscuring or occluding
+ * any portion of the candidate's facial bounding region.
+ * Uses Sobel edge detection & line projection on a downscaled canvas (160x120) for 0ms ML overhead.
+ */
+function detectRectangularObstruction(
+  videoEl: HTMLVideoElement,
+  workCanvas: HTMLCanvasElement,
+  faceBox: { minX: number; minY: number; maxX: number; maxY: number } | null
+): RectResult {
+  const W = 160, H = 120;
+  workCanvas.width = W;
+  workCanvas.height = H;
+  const ctx = workCanvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx || videoEl.readyState < 2 || videoEl.videoWidth === 0) {
+    return { detected: false, score: 0 };
+  }
+
+  ctx.drawImage(videoEl, 0, 0, W, H);
+  const { data } = ctx.getImageData(0, 0, W, H);
+
+  // 1. Grayscale
+  const gray = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    gray[i] = (data[i * 4] * 77 + data[i * 4 + 1] * 150 + data[i * 4 + 2] * 29) >> 8;
+  }
+
+  // 2. Sobel Edge Detection
+  const edges = new Uint8Array(W * H);
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      const i = y * W + x;
+      const gx =
+        -gray[i - W - 1] - 2 * gray[i - 1] - gray[i + W - 1] +
+         gray[i - W + 1] + 2 * gray[i + 1] + gray[i + W + 1];
+      const gy =
+        -gray[i - W - 1] - 2 * gray[i - W] - gray[i - W + 1] +
+         gray[i + W - 1] + 2 * gray[i + W] + gray[i + W + 1];
+      edges[i] = Math.sqrt(gx * gx + gy * gy) > 36 ? 1 : 0;
+    }
+  }
+
+  // 3. Line Projections
+  const rowE = new Int32Array(H);
+  const colE = new Int32Array(W);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (edges[y * W + x]) {
+        rowE[y]++; colE[x]++;
+      }
+    }
+  }
+
+  const smoothRow = new Int32Array(H);
+  const smoothCol = new Int32Array(W);
+  for (let y = 2; y < H - 2; y++) smoothRow[y] = rowE[y-2] + rowE[y-1] + rowE[y] + rowE[y+1] + rowE[y+2];
+  for (let x = 2; x < W - 2; x++) smoothCol[x] = colE[x-2] + colE[x-1] + colE[x] + colE[x+1] + colE[x+2];
+
+  // 4. Candidate line coordinates
+  const hLines: number[] = [];
+  const vLines: number[] = [];
+  for (let y = 4; y < H - 4; y++) {
+    if (smoothRow[y] >= W * 0.14 && (hLines.length === 0 || y - hLines[hLines.length - 1] > 3)) {
+      hLines.push(y);
+    }
+  }
+  for (let x = 4; x < W - 4; x++) {
+    if (smoothCol[x] >= H * 0.14 && (vLines.length === 0 || x - vLines[vLines.length - 1] > 3)) {
+      vLines.push(x);
+    }
+  }
+
+  if (hLines.length < 2 || vLines.length < 2) return { detected: false, score: 0 };
+
+  // Face bounding box converted to WxH coordinates
+  const fb = faceBox ? {
+    minX: Math.floor(faceBox.minX * W),
+    minY: Math.floor(faceBox.minY * H),
+    maxX: Math.ceil(faceBox.maxX * W),
+    maxY: Math.ceil(faceBox.maxY * H)
+  } : null;
+  const faceArea = fb ? Math.max(1, (fb.maxX - fb.minX) * (fb.maxY - fb.minY)) : 1;
+
+  let bestScore = 0;
+  let bestRect: {
+    top: number; bottom: number; left: number; right: number;
+    baseScore: number; areaFraction: number; aspect: number; overlapPercent: number;
+  } | null = null;
+
+  for (let i = 0; i < hLines.length - 1; i++) {
+    for (let j = i + 1; j < hLines.length; j++) {
+      for (let k = 0; k < vLines.length - 1; k++) {
+        for (let l = k + 1; l < vLines.length; l++) {
+          const top = hLines[i], bottom = hLines[j];
+          const left = vLines[k], right = vLines[l];
+          const rectH = bottom - top;
+          const rectW = right - left;
+
+          if (rectW < 12 || rectH < 12) continue;
+
+          const areaFraction = (rectH / H) * (rectW / W);
+          const aspect = rectW / rectH;
+          // Typical phone dimensions in hand (portrait 0.28-0.90, landscape 1.10-3.2)
+          const isPhoneAspect = (aspect >= 0.28 && aspect <= 0.90) || (aspect >= 1.10 && aspect <= 3.2);
+          if (!isPhoneAspect || areaFraction < 0.04) continue;
+
+          // Check intersection / overlap with candidate's face region
+          let overlapFaceArea = 0;
+          if (fb) {
+            const ox = Math.max(0, Math.min(right, fb.maxX) - Math.max(left, fb.minX));
+            const oy = Math.max(0, Math.min(bottom, fb.maxY) - Math.max(top, fb.minY));
+            overlapFaceArea = ox * oy;
+          }
+
+          const overlapPercent = fb ? (overlapFaceArea / faceArea) * 100 : 0;
+          const isTouchingFace = fb ? (
+            left <= fb.maxX + 4 && right >= fb.minX - 4 &&
+            top <= fb.maxY + 4 && bottom >= fb.minY - 4
+          ) : true;
+
+          // When candidate face is visible, require the rectangle to obstruct/intersect or touch the face
+          if (fb && !isTouchingFace && overlapPercent < 2) continue;
+
+          let sumL = 0, sumSq = 0, n = 0;
+          for (let sy = top + 2; sy < bottom - 2; sy += 3) {
+            for (let sx = left + 2; sx < right - 2; sx += 3) {
+              const lum = gray[sy * W + sx];
+              sumL += lum; sumSq += lum * lum; n++;
+            }
+          }
+          if (n === 0) continue;
+
+          const meanL = sumL / n;
+          const variance = (sumSq / n) - (meanL * meanL);
+          const uniformityScore = Math.max(0, 1 - variance / 2800);
+          const darknessScore = Math.max(0, 1 - meanL / 175);
+          const baseScore = uniformityScore * 0.65 + darknessScore * 0.35;
+
+          // Score boost if it is directly obscuring the face
+          const obstructionBoost = Math.min(0.35, (overlapPercent / 20) * 0.35);
+          const totalCandidateScore = baseScore + obstructionBoost;
+
+          if (totalCandidateScore > bestScore) {
+            bestScore = totalCandidateScore;
+            bestRect = { top, bottom, left, right, baseScore, areaFraction, aspect, overlapPercent };
+          }
+        }
+      }
+    }
+  }
+
+  if (!bestRect) return { detected: false, score: 0 };
+
+  // Perimeter edge continuity check
+  let borderEdges = 0;
+  for (let x = bestRect.left; x <= bestRect.right; x++) {
+    if (edges[bestRect.top * W + x]) borderEdges++;
+    if (edges[bestRect.bottom * W + x]) borderEdges++;
+  }
+  for (let y = bestRect.top; y <= bestRect.bottom; y++) {
+    if (edges[y * W + bestRect.left]) borderEdges++;
+    if (edges[y * W + bestRect.right]) borderEdges++;
+  }
+  const expectedBorder = (bestRect.right - bestRect.left) * 2 + (bestRect.bottom - bestRect.top) * 2;
+  const borderDensity = borderEdges / expectedBorder;
+
+  // Final score: edge borders + uniformity
+  const finalScore = (bestRect.baseScore * 0.5) + (Math.min(1, borderDensity / 0.28) * 0.5);
+
+  // Detected if:
+  // 1. Any rectangular object obscuring any portion (>= 3%) of the face region (score >= 0.38)
+  // 2. OR a strong rectangular object held near face (score >= 0.48, borderDensity >= 0.08)
+  const isObstructing = (bestRect.overlapPercent >= 3 && finalScore >= 0.38) || (finalScore >= 0.48 && borderDensity >= 0.08);
+
+  return {
+    detected: isObstructing,
+    score: finalScore,
+    overlapFacePercent: bestRect.overlapPercent,
+    bbox: {
+      x: bestRect.left / W,
+      y: bestRect.top / H,
+      w: (bestRect.right - bestRect.left) / W,
+      h: (bestRect.bottom - bestRect.top) / H,
+    },
+    reason: `Obstruction=${bestRect.overlapPercent.toFixed(1)}% Score=${finalScore.toFixed(2)}`,
+  };
+}
+
 export interface MonitorStatus {
   faceDetected: boolean;
   cameraCovered: boolean;
@@ -93,6 +291,7 @@ export default function ProctoringMonitor({
     evidenceSnapshot?: string; 
   }>>(new Map());
   
+  const faceBoxRef = useRef<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null);
   const lastAlignment = useRef(false);
   const isSubmittingRef = useRef(isSubmitting);
   useEffect(() => {
@@ -313,6 +512,7 @@ export default function ProctoringMonitor({
         let detecting = false;
         let phoneStreak = 0;
         let phoneClearStreak = 0;
+        const workCanvas = document.createElement('canvas');
 
         cocoTimer = setInterval(async () => {
           if (!mounted || !videoRef.current || videoRef.current.readyState !== 4 || detecting) return;
@@ -329,10 +529,16 @@ export default function ProctoringMonitor({
               tf.engine().endScope();
             }
 
-            const phoneDetected = preds.some((p) => {
+            const cocoPhone = preds.some((p) => {
               const thr = PHONE_CLASSES[p.class];
               return thr !== undefined && p.score >= thr;
             });
+
+            // Fast geometric rectangular obstruction detection (any rectangular object occluding face)
+            const rectResult = detectRectangularObstruction(video, workCanvas, faceBoxRef.current);
+            const rectObstructing = rectResult.detected;
+
+            const phoneDetected = cocoPhone || rectObstructing;
 
             // Dedicated fast-response streak debouncer (2 consecutive detections @ 800ms = 1.6s)
             if (phoneDetected) {
@@ -374,6 +580,28 @@ export default function ProctoringMonitor({
                     );
                   }
                 });
+
+                if (rectResult.bbox && (rectResult.detected || (rectResult.score > 0.35 && (rectResult.overlapFacePercent || 0) > 0))) {
+                  const rb = rectResult.bbox;
+                  const rx = rb.x * cv.width;
+                  const ry = rb.y * cv.height;
+                  const rw = rb.w * cv.width;
+                  const rh = rb.h * cv.height;
+                  gx.strokeStyle = rectResult.detected ? '#ff0055' : 'rgba(255,160,0,0.6)';
+                  gx.lineWidth = rectResult.detected ? 2.5 : 1.2;
+                  gx.setLineDash(rectResult.detected ? [] : [4, 4]);
+                  gx.strokeRect(rx, ry, rw, rh);
+                  gx.setLineDash([]);
+                  if (rectResult.detected) {
+                    gx.fillStyle = 'rgba(255,0,85,0.9)';
+                    gx.font = 'bold 12px monospace';
+                    gx.fillText(
+                      `RECT OBSTRUCTION ${(rectResult.overlapFacePercent || 0).toFixed(0)}% FACE`,
+                      rx + 2,
+                      ry > 16 ? ry - 4 : ry + rh + 14
+                    );
+                  }
+                }
               }
             }
           } catch {
@@ -419,6 +647,14 @@ export default function ProctoringMonitor({
           report('NO_FACE', count === 0, 'medium');
           report('MULTIPLE_FACES', count > 1, 'critical');
           pushStatus({ faceDetected: count === 1 });
+          if (count === 0) {
+            // If face suddenly drops out, retain faceBox briefly so an obstruction held right over the face is flagged
+            setTimeout(() => {
+              if (mounted && activeInfractions.current.has('NO_FACE')) {
+                faceBoxRef.current = null;
+              }
+            }, 1500);
+          }
 
           if (overlayCanvasRef?.current) {
             const cv = overlayCanvasRef.current;
@@ -440,6 +676,16 @@ export default function ProctoringMonitor({
 
           if (count === 1) {
             const lm = validFaces[0];
+
+            // Compute facial bounding box for obstruction tracking
+            let minX = 1, minY = 1, maxX = 0, maxY = 0;
+            for (let i = 0; i < lm.length; i++) {
+              if (lm[i].x < minX) minX = lm[i].x;
+              if (lm[i].x > maxX) maxX = lm[i].x;
+              if (lm[i].y < minY) minY = lm[i].y;
+              if (lm[i].y > maxY) maxY = lm[i].y;
+            }
+            faceBoxRef.current = { minX, minY, maxX, maxY };
             const noseTip  = lm[IDX_NOSE_TIP];
             const leftEar  = lm[IDX_LEFT_EAR];
             const rightEar = lm[IDX_RIGHT_EAR];
