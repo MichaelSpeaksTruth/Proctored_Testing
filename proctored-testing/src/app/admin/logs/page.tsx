@@ -2,7 +2,7 @@
 
 import AdminGuard from '@/components/AdminGuard';
 import EventsAuditView from '@/components/EventsAuditView';
-import Link from 'next/link';
+import BackButton from '@/components/BackButton';
 
 function AdminLogsContent() {
   return (
@@ -10,9 +10,7 @@ function AdminLogsContent() {
       <div className="container">
         {/* Navigation & Title */}
         <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-xl)' }}>
-          <Link href="/admin" className="btn btn-ghost btn-sm">
-            &larr; Back
-          </Link>
+          <BackButton fallbackUrl="/admin" />
           <div>
             <h1 style={{ fontSize: '1.75rem', margin: 0 }}>Global Audit Logs</h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: 4 }}>

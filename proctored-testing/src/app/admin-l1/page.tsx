@@ -11,6 +11,7 @@ import ExcelExport from '@/components/ExcelExport';
 import { Question } from '@/components/QuestionPanel';
 import Image from 'next/image';
 import TCCCom from '@/components/TCCCom';
+import BackButton from '@/components/BackButton';
 import { MessageSquareQuote } from 'lucide-react';
 
 interface Section {
@@ -271,13 +272,16 @@ function AdminL1Content() {
             borderRadius: 'var(--radius-lg)',
           }}
         >
-          <div className="brand">
-            <div style={{ width: 32, height: 32, borderRadius: '4px', overflow: 'hidden' }}>
-              <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={32} height={32} style={{ objectFit: 'cover' }} />
-            </div>
-            <div>
-              <div className="brand-name">AeroSoc Admin L1</div>
-              <div className="brand-sub">BIT Mesra · Examination Supervisory Portal</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <BackButton fallbackUrl="/" />
+            <div className="brand">
+              <div style={{ width: 32, height: 32, borderRadius: '4px', overflow: 'hidden' }}>
+                <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={32} height={32} style={{ objectFit: 'cover' }} />
+              </div>
+              <div>
+                <div className="brand-name">AeroSoc Admin L1</div>
+                <div className="brand-sub">BIT Mesra · Examination Supervisory Portal</div>
+              </div>
             </div>
           </div>
 

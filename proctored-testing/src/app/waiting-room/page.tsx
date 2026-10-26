@@ -6,6 +6,7 @@ import { auth, rtdb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue } from 'firebase/database';
 import StudentGuard from '@/components/StudentGuard';
+import BackButton from '@/components/BackButton';
 import { Clock, CheckCircle, XCircle, Check } from 'lucide-react';
 import Image from 'next/image';
 
@@ -84,6 +85,9 @@ function WaitingRoomContent() {
           
           {/* Left Column - Status */}
           <div className="waiting-status-col">
+            <div style={{ marginBottom: 'var(--space-sm)' }}>
+              <BackButton fallbackUrl="/select-test" />
+            </div>
             <div style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--border-light)' }} className="waiting-logo">
               <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={72} height={72} style={{ objectFit: 'cover' }} />
             </div>
@@ -208,7 +212,7 @@ function WaitingRoomContent() {
                 onClick={() => auth.signOut()}
                 style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}
               >
-                ← Sign out and return home
+                Sign Out
               </button>
             </div>
           </div>

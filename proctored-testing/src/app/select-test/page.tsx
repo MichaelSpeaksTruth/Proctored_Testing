@@ -6,6 +6,7 @@ import { auth, rtdb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, get } from 'firebase/database';
 import StudentGuard from '@/components/StudentGuard';
+import BackButton from '@/components/BackButton';
 
 interface EnrolledTest {
   id: string;
@@ -85,6 +86,9 @@ function SelectTestContent() {
   return (
     <main style={{ minHeight: '100vh', padding: 'var(--space-xl)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       <div className="card" style={{ maxWidth: 600, width: '100%' }}>
+        <div style={{ marginBottom: 'var(--space-md)' }}>
+          <BackButton fallbackUrl="/" />
+        </div>
         <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-sm)' }}>Select Examination</h1>
         {enrolledTests.length === 0 ? (
           <>

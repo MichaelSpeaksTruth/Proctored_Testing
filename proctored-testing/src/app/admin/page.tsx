@@ -6,6 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 import Image from 'next/image';
+import BackButton from '@/components/BackButton';
 import {
   Settings,
   Users,
@@ -103,16 +104,19 @@ function AdminHomeContent() {
             gap: 10,
           }}
         >
-          <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 'var(--radius-xs)', overflow: 'hidden', flexShrink: 0 }}>
-              <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={28} height={28} style={{ objectFit: 'cover' }} />
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <div className="brand-name" style={{ fontSize: '0.9375rem', fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-                AeroSoc Admin
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <BackButton fallbackUrl="/" />
+            <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 'var(--radius-xs)', overflow: 'hidden', flexShrink: 0 }}>
+                <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={28} height={28} style={{ objectFit: 'cover' }} />
               </div>
-              <div className="brand-sub desktop-only" style={{ fontSize: '0.625rem', letterSpacing: '0.08em' }}>
-                BIT Mesra &middot; Examination Control
+              <div style={{ minWidth: 0 }}>
+                <div className="brand-name" style={{ fontSize: '0.9375rem', fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
+                  AeroSoc Admin
+                </div>
+                <div className="brand-sub desktop-only" style={{ fontSize: '0.625rem', letterSpacing: '0.08em' }}>
+                  BIT Mesra &middot; Examination Control
+                </div>
               </div>
             </div>
           </div>

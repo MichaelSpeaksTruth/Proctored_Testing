@@ -5,6 +5,7 @@ import { auth, rtdb } from '@/lib/firebase';
 import { ref, push, get, update, set } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
+import BackButton from '@/components/BackButton';
 import { Question } from '@/components/QuestionPanel';
 import { logAuditEvent } from '@/lib/auditLogger';
 import { generateQuestionTag } from '@/lib/adminUtils';
@@ -555,9 +556,7 @@ function SetupContent() {
         {/* Top Header Bar */}
         <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
           <div className="flex items-center gap-md">
-            <Link href="/admin" className="btn btn-ghost btn-sm">
-              &larr; Back to Dashboard
-            </Link>
+            <BackButton fallbackUrl="/admin" />
             <div>
               <h1 style={{ fontSize: '1.75rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>Test Setup</h1>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>

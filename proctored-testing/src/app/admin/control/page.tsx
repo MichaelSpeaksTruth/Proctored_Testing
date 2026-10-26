@@ -5,6 +5,7 @@ import { rtdb, auth } from '@/lib/firebase';
 import { ref, set, get, update, onValue } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
+import BackButton from '@/components/BackButton';
 
 interface TestOption { id: string; title: string; }
 
@@ -133,7 +134,7 @@ function ControlContent() {
     <main style={{ minHeight: '100vh', padding: '16px 0 var(--space-xl)' }}>
       <div className="container" style={{ maxWidth: 1200 }}>
         <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap' }}>
-          <Link href="/admin" className="btn btn-ghost btn-sm">&larr; Back</Link>
+          <BackButton fallbackUrl="/admin" />
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>Control Panel</h1>
         </div>
 

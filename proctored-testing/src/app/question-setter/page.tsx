@@ -8,6 +8,7 @@ import { Question } from '@/components/QuestionPanel';
 import { generateQuestionTag } from '@/lib/adminUtils';
 import { logAuditEvent } from '@/lib/auditLogger';
 import Link from 'next/link';
+import BackButton from '@/components/BackButton';
 import { MessageSquareQuote } from 'lucide-react';
 
 interface Section {
@@ -359,12 +360,15 @@ function QuestionSetterContent() {
           className="flex justify-between items-center"
           style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 10 }}
         >
-          <div>
-            <h1 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
-              Question Setter Dashboard
-            </h1>
-            <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
-              {userEmail}
+          <div className="flex items-center gap-md">
+            <BackButton fallbackUrl="/" />
+            <div>
+              <h1 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
+                Question Setter Dashboard
+              </h1>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                {userEmail}
+              </div>
             </div>
           </div>
 

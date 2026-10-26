@@ -6,6 +6,7 @@ import { ref, get } from 'firebase/database';
 import RoleGuard from '@/components/RoleGuard';
 import ExcelExport from '@/components/ExcelExport';
 import LeaderboardTable, { LeaderboardEntry } from '@/components/LeaderboardTable';
+import BackButton from '@/components/BackButton';
 
 interface TestOption { id: string; title: string; }
 
@@ -127,13 +128,16 @@ function SpectatorContent() {
       <div className="container" style={{ maxWidth: 1200 }}>
         {/* Header Bar */}
         <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 10 }}>
-          <div>
-            <h1 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
-              Spectator Dashboard
-            </h1>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
-              Live leaderboard, evaluations, and proctoring inspection
-            </p>
+          <div className="flex items-center gap-md">
+            <BackButton fallbackUrl="/" />
+            <div>
+              <h1 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
+                Spectator Dashboard
+              </h1>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+                Live leaderboard, evaluations, and proctoring inspection
+              </p>
+            </div>
           </div>
           <button
             className="btn btn-outline btn-sm"

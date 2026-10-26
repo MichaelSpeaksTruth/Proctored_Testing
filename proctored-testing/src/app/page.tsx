@@ -7,6 +7,7 @@ import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User } from 'f
 import { ref, get, update, set } from 'firebase/database';
 import { isAdmin, isQuestionSetter, isSpectator, isAdminL1 } from '@/lib/adminUtils';
 import Image from 'next/image';
+import BackButton from '@/components/BackButton';
 
 type Mode = 'candidate' | 'personnel' | 'apply';
 
@@ -312,9 +313,9 @@ export default function LoginPage() {
               </button>
 
               <div className="divider" style={{ margin: 'var(--space-xl) 0 var(--space-md)' }} />
-              <button className="btn btn-ghost" onClick={() => { setError(null); setMode('candidate'); }}>
-                ← Back to Candidate Login
-              </button>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <BackButton onClick={() => { setError(null); setMode('candidate'); }} />
+              </div>
             </>
           )}
 
@@ -324,8 +325,8 @@ export default function LoginPage() {
               {applySuccess ? (
                 <div className="alert alert-success" style={{ textAlign: 'left' }}>
                   Application submitted successfully. Please wait for admin approval.
-                  <div style={{ marginTop: 'var(--space-md)', textAlign: 'center' }}>
-                    <button className="btn btn-ghost" onClick={() => { setApplySuccess(false); setMode('candidate'); }}>Return to Login</button>
+                  <div style={{ marginTop: 'var(--space-md)', display: 'flex', justifyContent: 'center' }}>
+                    <BackButton onClick={() => { setApplySuccess(false); setMode('candidate'); }} />
                   </div>
                 </div>
               ) : (
@@ -395,9 +396,9 @@ export default function LoginPage() {
                     </form>
                   )}
                   <div className="divider" style={{ margin: 'var(--space-xl) 0 var(--space-md)' }} />
-                  <button className="btn btn-ghost" onClick={() => { setError(null); setMode('candidate'); setApplyUser(null); }} style={{ width: '100%' }}>
-                    ← Back to Candidate Login
-                  </button>
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <BackButton onClick={() => { setError(null); setMode('candidate'); setApplyUser(null); }} />
+                  </div>
                 </>
               )}
             </>

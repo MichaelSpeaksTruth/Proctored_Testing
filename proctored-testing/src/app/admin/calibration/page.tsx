@@ -7,6 +7,7 @@ import ProctoringMonitor from '@/components/ProctoringMonitor';
 import { Monitor } from 'lucide-react';
 import { ProctoringEvent, DurationFlag } from '@/lib/proctoring';
 import Link from 'next/link';
+import BackButton from '@/components/BackButton';
 
 const EVENT_META: Record<ProctoringEvent, { label: string; color: string }> = {
   NO_FACE:            { label: 'No Face', color: '#f4a261' },
@@ -93,9 +94,7 @@ function CalibrationContent() {
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>System Calibration</h1>
             <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Test all AI proctoring models locally - no flags are written to the database in this mode.</p>
           </div>
-          <Link href="/admin">
-            <button className="btn btn-outline btn-sm">&larr; Dashboard</button>
-          </Link>
+          <BackButton fallbackUrl="/admin" />
         </div>
 
         {!permissionsGranted ? (

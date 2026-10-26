@@ -7,6 +7,7 @@ import { ref, get } from 'firebase/database';
 import StudentGuard from '@/components/StudentGuard';
 import { Trophy } from 'lucide-react';
 import ShootingStars from '@/components/ShootingStars';
+import BackButton from '@/components/BackButton';
 
 interface Result {
   score: number;
@@ -71,6 +72,9 @@ function StudentDashboardContent() {
       <ShootingStars />
       
       <div className="container-narrow dashboard-container" style={{ position: 'relative', zIndex: 1 }}>
+        <div style={{ marginBottom: 'var(--space-md)' }}>
+          <BackButton fallbackUrl="/select-test" />
+        </div>
         {/* Header */}
         <div className="dashboard-header" style={{ textAlign: 'center', animation: 'fadeInDown 0.6s ease-out' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 80, height: 80, borderRadius: '8px', background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(245, 158, 11, 0.05) 100%)', border: '1px solid rgba(251, 191, 36, 0.3)', marginBottom: 'var(--space-lg)' }}>

@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import BackButton from '@/components/BackButton';
 
 interface TCCComProps {
   initialSessionId?: string | null;
@@ -641,7 +642,20 @@ export default function TCCCom({
         }}
       >
         {/* Left Brand & Navigation */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <BackButton
+            fallbackUrl={
+              personnelProfile?.role === 'Admin Sr.'
+                ? '/admin'
+                : personnelProfile?.role === 'Admin L1'
+                ? '/admin-l1'
+                : personnelProfile?.role === 'Question Setter'
+                ? '/question-setter'
+                : '/'
+            }
+            onClick={onBackToDashboard}
+          />
+
           {!embedded && (
             <div style={{ width: 28, height: 28, borderRadius: 'var(--radius-xs)', overflow: 'hidden', flexShrink: 0 }}>
               <Image src="/aerosoc_logo.jpeg" alt="Logo" width={28} height={28} style={{ objectFit: 'cover' }} />
@@ -1215,14 +1229,11 @@ export default function TCCCom({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
                   {/* Back button for mobile view */}
-                  <button
+                  <BackButton
+                    className="tcc-mobile-back-btn"
                     onClick={() => setMobileView('sidebar')}
-                    className="btn btn-ghost btn-sm tcc-mobile-back-btn"
-                    style={{ padding: '6px 8px', borderRadius: 'var(--radius-xs)' }}
-                    title="Back to Sessions list"
-                  >
-                    <ArrowLeft size={16} />
-                  </button>
+                    style={{ padding: '5px 10px', fontSize: '0.75rem' }}
+                  />
 
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>

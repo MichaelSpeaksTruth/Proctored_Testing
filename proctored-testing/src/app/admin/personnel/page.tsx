@@ -5,6 +5,7 @@ import { auth, rtdb } from '@/lib/firebase';
 import { ref, get, set, remove } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
+import BackButton from '@/components/BackButton';
 import EventsAuditView from '@/components/EventsAuditView';
 import { logAuditEvent } from '@/lib/auditLogger';
 
@@ -257,9 +258,7 @@ function PersonnelManagement() {
       <div className="container" style={{ maxWidth: 1200 }}>
         {/* Navigation & Title */}
         <div className="flex items-center gap-md" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap' }}>
-          <Link href="/admin" className="btn btn-ghost btn-sm">
-            &larr; Back
-          </Link>
+          <BackButton fallbackUrl="/admin" />
           <div>
             <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
               Personnel &amp; RBAC Management
