@@ -576,8 +576,9 @@ export default function TCCCom({
           )}
 
           <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span
+                className="desktop-only"
                 style={{
                   fontSize: '0.9375rem',
                   fontWeight: 700,
@@ -589,7 +590,19 @@ export default function TCCCom({
                 Team Coordination Corner
               </span>
               <span
-                className="badge"
+                className="mobile-only"
+                style={{
+                  fontSize: '0.875rem',
+                  fontWeight: 700,
+                  color: 'var(--white)',
+                  letterSpacing: '-0.01em',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                TCC Room
+              </span>
+              <span
+                className="badge desktop-only"
                 style={{
                   background: 'rgba(255, 255, 255, 0.08)',
                   color: 'var(--text-secondary)',
@@ -598,10 +611,11 @@ export default function TCCCom({
                   fontWeight: 600,
                 }}
               >
-                TCC COM
+                COM
               </span>
             </div>
             <div
+              className="desktop-only"
               style={{
                 fontSize: '0.6875rem',
                 color: 'var(--text-muted)',
@@ -683,7 +697,7 @@ export default function TCCCom({
               {personnelProfile.name}
             </div>
             <span
-              className="badge"
+              className="badge desktop-only"
               style={{
                 ...getRoleBadgeStyle(personnelProfile.role),
                 fontSize: '0.625rem',
@@ -1167,7 +1181,7 @@ export default function TCCCom({
                         </span>
                       )}
 
-                      <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                      <span className="desktop-only" style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
                         Started by {activeSession.createdBy.name} ({activeSession.createdBy.role})
                       </span>
                     </div>
@@ -1729,11 +1743,10 @@ export default function TCCCom({
                   })}
                 </div>
 
-                {/* Horizontal scrollable quick response pills */}
+                {/* Horizontal scrollable quick response pills (Desktop only) */}
                 <div
-                  className="no-scrollbar"
+                  className="desktop-only-flex no-scrollbar"
                   style={{
-                    display: 'flex',
                     gap: 6,
                     marginBottom: 8,
                     overflowX: 'auto',
@@ -1806,7 +1819,7 @@ export default function TCCCom({
                         handleSendMessage();
                       }
                     }}
-                    placeholder={`Type message or use @ to tag personnel (${personnelProfile.name})...`}
+                    placeholder="Type a message or use @ to tag..."
                     style={{
                       flex: 1,
                       resize: 'none',
@@ -1827,8 +1840,8 @@ export default function TCCCom({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
-                      borderColor: 'var(--accent-green-light)',
+                      background: '#15803d',
+                      borderColor: '#22c55e',
                       borderRadius: 'var(--radius-sm)',
                     }}
                   >

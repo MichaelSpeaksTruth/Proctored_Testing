@@ -27,10 +27,10 @@ interface TabItem {
 
 const ADMIN_TABS: TabItem[] = [
   {
-    label: 'Team Coordination Corner (TCC)',
+    label: 'Team Coordination Corner',
     href: '/tcc',
     icon: <MessageSquareQuote size={18} color="#52b788" />,
-    desc: 'Communicate with Admin L1 & Setters, raise and resolve dispute sessions',
+    desc: 'Admin & setter live room, dispute resolution',
   },
   {
     label: 'Test Setup',
@@ -91,46 +91,33 @@ function AdminHomeContent() {
       <div className="container" style={{ maxWidth: 1200 }}>
         {/* Compact Navbar */}
         <nav
-          className="navbar"
           style={{
-            marginBottom: 'var(--space-lg)',
+            marginBottom: 'var(--space-md)',
             borderRadius: 'var(--radius-md)',
-            padding: '10px 18px',
+            padding: '10px 16px',
             border: '1px solid var(--border)',
+            background: 'var(--bg-card)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
           }}
         >
-          <div className="brand">
-            <div style={{ width: 28, height: 28, borderRadius: 'var(--radius-xs)', overflow: 'hidden' }}>
+          <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 'var(--radius-xs)', overflow: 'hidden', flexShrink: 0 }}>
               <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={28} height={28} style={{ objectFit: 'cover' }} />
             </div>
-            <div>
-              <div className="brand-name" style={{ fontSize: '0.9375rem', fontWeight: 700, letterSpacing: '-0.01em' }}>
+            <div style={{ minWidth: 0 }}>
+              <div className="brand-name" style={{ fontSize: '0.9375rem', fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
                 AeroSoc Admin
               </div>
-              <div className="brand-sub" style={{ fontSize: '0.625rem', letterSpacing: '0.08em' }}>
+              <div className="brand-sub desktop-only" style={{ fontSize: '0.625rem', letterSpacing: '0.08em' }}>
                 BIT Mesra &middot; Examination Control
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-md navbar-actions">
-            <Link
-              href="/tcc"
-              className="btn btn-sm"
-              style={{
-                background: 'rgba(45, 106, 79, 0.25)',
-                color: '#52b788',
-                border: '1px solid rgba(45, 106, 79, 0.55)',
-                fontSize: '0.75rem',
-                padding: '3px 9px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-              }}
-            >
-              <MessageSquareQuote size={13} />
-              <span>TCC Com</span>
-            </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <span
               className="badge"
               style={{
@@ -144,13 +131,13 @@ function AdminHomeContent() {
             >
               Admin Sr.
             </span>
-            <span style={{ fontSize: '0.78125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+            <span className="desktop-only" style={{ fontSize: '0.78125rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
               {email}
             </span>
             <button
               id="admin-signout"
               className="btn btn-outline btn-sm"
-              style={{ padding: '4px 12px', fontSize: '0.8125rem' }}
+              style={{ padding: '4px 10px', fontSize: '0.75rem' }}
               onClick={() => auth.signOut()}
             >
               Sign Out
@@ -169,15 +156,15 @@ function AdminHomeContent() {
           }}
         >
           <div>
-            <h1 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+            <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
               Admin Dashboard
             </h1>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-              Manage the examination lifecycle from setup to results declaration.
+            <p style={{ fontSize: '0.78125rem', color: 'var(--text-muted)', margin: '3px 0 0 0' }}>
+              Manage examination lifecycle and coordination modules.
             </p>
           </div>
 
-          <div className="flex items-center gap-sm">
+          <div className="desktop-only-flex" style={{ alignItems: 'center', gap: 6 }}>
             <span
               style={{
                 fontSize: '0.75rem',
@@ -189,7 +176,7 @@ function AdminHomeContent() {
                 fontFamily: 'var(--font-mono)',
               }}
             >
-              7 Modules Available
+              {ADMIN_TABS.length} Modules Available
             </span>
           </div>
         </div>
