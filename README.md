@@ -139,6 +139,20 @@ The platform includes a dedicated, unified communication ecosystem—the **Team 
   - **Interactive Message Reactions:** Members can toggle one-tap emoji reactions (`👍`, `✅`, `👀`, `⚠️`) on any message with real-time actor attribution.
 - **Omnipresent Access:** Accessible directly via `/tcc`, with embedded tabs and quick shortcuts in the Admin Sr. console (`/admin`), Admin L1 dashboard (`/admin-l1`), Question Setter portal (`/question-setter`), and Global Audit Logs (`/admin/logs`).
 
+### 8.5 Candidate Enrollment & Adaptive Roster Ingestion
+
+The **Participant Management** console (`/admin/participants`) provides granular control over candidate access and test assignment.
+
+- **Dual Ingestion Interfaces:**
+  - **Manual Input:** Fast entry for single or multiple students formatted as `Name, Email` or plain `Email` (one entry per line).
+  - **Spreadsheet Bulk Import (`.xlsx`, `.csv`):** Upload candidate registries directly exported from Google Forms, Fillout, Microsoft Forms, or custom spreadsheets.
+- **Headerless & Form-Export Auto-Detection:**
+  - Standard spreadsheet parsers fail when sheets lack explicit column headers (`Name`, `Email`) or begin directly with candidate records on Row 1.
+  - The ingestion engine inspects row 1 for `@` signatures. If headers are absent, it dynamically detects the email column and derives candidate names without requiring manual spreadsheet editing.
+  - For sheets with headers, fuzzy matching automatically recognizes variations such as `email address`, `mail`, `student name`, `candidate name`, and `full name`.
+  - In cases of non-standard column arrangements, per-row dynamic cell scanning extracts valid email addresses and falls back gracefully to email prefix usernames when names are omitted.
+- **Per-Test Multi-Tenancy:** Candidates can be enrolled across multiple independent examinations simultaneously using RTDB indexed paths (`participants/{encodedEmail}/tests/{testId}`), allowing granular test-level revocation without deleting student master accounts.
+
 ## 9. Precision Proctoring & Candidate Protection
 
 - **Separation of Hard Violations vs Soft Telemetry:** Natural actions like glancing down at rough paper, blinking, or screen corner reading (`HEAD_PITCH_DOWN`, `GAZE_AWAY`) are logged silently for review but **do not deduct student lives** or disrupt their exam.

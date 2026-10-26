@@ -144,25 +144,79 @@ function ParticipantsContent() {
       const workbook = read(data);
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
-      const rows: any[] = utils.sheet_to_json(worksheet);
+      const rawRows: any[][] = utils.sheet_to_json(worksheet, { header: 1 });
+
+      if (!rawRows || rawRows.length === 0) {
+        setError('The uploaded file is empty.');
+        return;
+      }
+
+      // Check if the very first row contains email data (meaning no column header row)
+      const firstRow = rawRows[0] || [];
+      const firstRowHasEmail = firstRow.some((cell: any) => typeof cell === 'string' && cell.includes('@') && cell.includes('.'));
+
+      let emailColIdx = -1;
+      let nameColIdx = -1;
+      let startIdx = 0;
+
+      if (firstRowHasEmail) {
+        // No header row - first row is already participant data
+        startIdx = 0;
+        for (let c = 0; c < firstRow.length; c++) {
+          const val = String(firstRow[c] || '');
+          if (val.includes('@')) {
+            emailColIdx = c;
+            break;
+          }
+        }
+        nameColIdx = emailColIdx === 0 ? 1 : 0;
+      } else {
+        // First row contains headers
+        startIdx = 1;
+        for (let c = 0; c < firstRow.length; c++) {
+          const header = String(firstRow[c] || '').toLowerCase().trim();
+          if (header.includes('email') || header.includes('mail')) {
+            emailColIdx = c;
+          }
+          if (header.includes('name')) {
+            nameColIdx = c;
+          }
+        }
+        // Fallback: if header name didn't match, inspect row 1 for '@'
+        if (emailColIdx === -1 && rawRows.length > 1) {
+          const sampleRow = rawRows[1] || [];
+          for (let c = 0; c < sampleRow.length; c++) {
+            if (String(sampleRow[c] || '').includes('@')) {
+              emailColIdx = c;
+              break;
+            }
+          }
+          nameColIdx = emailColIdx === 0 ? 1 : 0;
+        }
+      }
 
       let addedCount = 0;
 
-      for (const row of rows) {
-        let name = '';
-        let email = '';
+      for (let i = startIdx; i < rawRows.length; i++) {
+        const row = rawRows[i];
+        if (!row || row.length === 0) continue;
 
-        for (const k of Object.keys(row)) {
-          const lk = k.toLowerCase().trim();
-          if (lk === 'email' || lk === 'email address' || lk === 'mail') {
-            email = String(row[k] || '');
-          }
-          if (lk === 'name' || lk === 'student name' || lk === 'candidate name' || lk === 'full name') {
-            name = String(row[k] || '');
+        let email = emailColIdx >= 0 ? String(row[emailColIdx] || '').trim() : '';
+        let name = nameColIdx >= 0 ? String(row[nameColIdx] || '').trim() : '';
+
+        // Dynamic fallback: scan cells in the row if email column wasn't detected
+        if (!email || !email.includes('@')) {
+          for (let c = 0; c < row.length; c++) {
+            const str = String(row[c] || '').trim();
+            if (str.includes('@') && str.includes('.')) {
+              email = str;
+              if (c === nameColIdx) name = '';
+              break;
+            }
           }
         }
 
-        if (email) {
+        if (email && email.includes('@')) {
           if (!name) name = email.split('@')[0];
           const ok = await addParticipant(name, email);
           if (ok) addedCount++;
