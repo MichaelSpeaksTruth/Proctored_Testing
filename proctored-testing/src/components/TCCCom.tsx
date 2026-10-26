@@ -34,7 +34,7 @@ import {
   X,
   UserCheck,
   ChevronRight,
-  Sparkles,
+  MessageSquarePlus,
   AtSign,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -859,17 +859,16 @@ export default function TCCCom({
                 justifyContent: 'center',
                 gap: 8,
                 fontSize: '0.8125rem',
-                padding: '9px 14px',
-                background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
-                borderColor: 'var(--accent-green-light)',
-                borderRadius: 'var(--radius-sm)',
-                boxShadow: 'var(--shadow-sm)',
+                padding: '8px 14px',
+                background: '#15803d',
+                borderColor: '#22c55e',
+                borderRadius: '6px',
                 fontWeight: 600,
                 marginBottom: 10,
               }}
             >
-              <Plus size={16} />
-              <span>Initiate Conversation Session</span>
+              <MessageSquarePlus size={15} />
+              <span>New Conversation</span>
             </button>
 
             {/* Inset Search */}
@@ -1867,19 +1866,19 @@ export default function TCCCom({
               >
                 <MessageSquare size={26} />
               </div>
-              <h3 style={{ fontSize: '1.25rem', marginBottom: 8, color: 'var(--white)', fontWeight: 700 }}>
-                Team Coordination Corner
+              <h3 style={{ fontSize: '1.15rem', marginBottom: 6, color: 'var(--white)', fontWeight: 700 }}>
+                No Conversation Selected
               </h3>
               <p
                 style={{
-                  maxWidth: 420,
+                  maxWidth: 380,
                   color: 'var(--text-muted)',
-                  fontSize: '0.875rem',
-                  marginBottom: 'var(--space-lg)',
-                  lineHeight: 1.6,
+                  fontSize: '0.8125rem',
+                  marginBottom: 18,
+                  lineHeight: 1.5,
                 }}
               >
-                Select a conversation from your past 50 sessions on the left, or initiate a new coordination session with fellow personnel.
+                Select a thread from the history list or start a new conversation to coordinate with administrators and setters.
               </p>
               <button
                 onClick={() => setNewSessionModalOpen(true)}
@@ -1888,396 +1887,433 @@ export default function TCCCom({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 8,
-                  padding: '9px 18px',
-                  background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
-                  borderColor: 'var(--accent-green-light)',
+                  padding: '8px 16px',
+                  background: '#15803d',
+                  borderColor: '#22c55e',
                   fontWeight: 600,
-                  fontSize: '0.875rem',
+                  fontSize: '0.8125rem',
+                  borderRadius: '6px',
                 }}
               >
-                <Plus size={16} />
-                <span>Initiate New Session</span>
+                <MessageSquarePlus size={15} />
+                <span>Start Conversation</span>
               </button>
             </div>
           )}
         </main>
       </div>
 
-      {/* ── MODAL: INITIATE NEW CONVERSATION SESSION (HIGHLY POLISHED) ───────────── */}
+      {/* ── MODAL: START CONVERSATION (ACCESSIBLE & SCROLLABLE) ──────────────── */}
       {newSessionModalOpen && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
             zIndex: 9999,
-            background: 'rgba(0, 0, 0, 0.85)',
-            backdropFilter: 'blur(8px)',
+            background: 'rgba(0, 0, 0, 0.82)',
+            backdropFilter: 'blur(6px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: 16,
+            overflowY: 'auto',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !creatingSession) {
+              setNewSessionModalOpen(false);
+            }
           }}
         >
           <div
             style={{
               width: '100%',
-              maxWidth: 580,
-              maxHeight: '92vh',
+              maxWidth: 560,
+              maxHeight: 'min(90vh, 640px)',
+              height: 'auto',
               display: 'flex',
               flexDirection: 'column',
-              background: '#0d0d10',
+              background: '#0d0f12',
               border: '1px solid rgba(255, 255, 255, 0.12)',
               borderRadius: '12px',
-              boxShadow: '0 24px 64px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.06)',
-              padding: '24px 26px',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.05)',
               position: 'relative',
               boxSizing: 'border-box',
+              overflow: 'hidden',
+              margin: 'auto',
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <button
-              onClick={() => setNewSessionModalOpen(false)}
-              style={{
-                position: 'absolute',
-                top: 18,
-                right: 18,
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '6px',
-                width: 32,
-                height: 32,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--text-muted)',
-                cursor: 'pointer',
-                transition: 'all 120ms ease',
-              }}
-              title="Close"
-            >
-              <X size={16} />
-            </button>
-
-            {/* Modal Header */}
-            <div style={{ marginBottom: 18 }}>
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '3px 10px',
-                  borderRadius: '20px',
-                  background: 'rgba(45, 106, 79, 0.18)',
-                  border: '1px solid rgba(64, 145, 108, 0.45)',
-                  color: 'var(--accent-green-light)',
-                  fontSize: '0.6875rem',
-                  fontWeight: 600,
-                  marginBottom: 8,
-                }}
-              >
-                <Sparkles size={12} />
-                <span>TEAM COORDINATION CORNER</span>
-              </div>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0, color: '#ffffff', letterSpacing: '-0.02em' }}>
-                Start a Conversation Session
-              </h2>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.45 }}>
-                Initiate a live discussion with approved administrators and setters. Indexed in your past 50 sessions.
-              </p>
-            </div>
-
-            {createError && (
-              <div
-                className="alert alert-danger"
-                style={{ marginBottom: 14, padding: '10px 14px', fontSize: '0.8125rem', borderRadius: '6px' }}
-              >
-                {createError}
-              </div>
-            )}
-
             <form
               onSubmit={handleCreateSession}
-              style={{ display: 'flex', flexDirection: 'column', gap: 16, overflow: 'hidden' }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+                maxHeight: 'min(90vh, 640px)',
+                margin: 0,
+                overflow: 'hidden',
+              }}
             >
-              {/* Session Title Input */}
-              <div>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600, display: 'block', marginBottom: 6, color: 'var(--text-secondary)' }}>
-                  Conversation Topic / Subject <span style={{ color: '#ff6b6b' }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Physics Section Question #104 Review"
-                  value={newSessionTitle}
-                  onChange={(e) => setNewSessionTitle(e.target.value)}
-                  required
-                  style={{
-                    width: '100%',
-                    height: 40,
-                    padding: '0 14px',
-                    borderRadius: '6px',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    color: '#ffffff',
-                    fontSize: '0.875rem',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
-              {/* Involved Personnel Selection (Clean Card Layout) */}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                      Involved Personnel
-                    </label>
-                    <span
-                      style={{
-                        fontSize: '0.6875rem',
-                        padding: '1px 7px',
-                        borderRadius: '10px',
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        color: 'var(--text-primary)',
-                        fontFamily: 'var(--font-mono)',
-                      }}
-                    >
-                      {selectedPersonnel.length} of {allPersonnel.length} invited
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => setSelectedPersonnel(allPersonnel)}
-                      style={{ fontSize: '0.6875rem', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.08)' }}
-                    >
-                      Select All
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => setSelectedPersonnel([])}
-                      style={{ fontSize: '0.6875rem', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.08)' }}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </div>
-
-                {/* Personnel Card Scroll List */}
-                <div
-                  className="custom-scrollbar"
-                  style={{
-                    maxHeight: 210,
-                    overflowY: 'auto',
-                    overflowX: 'hidden',
-                    background: '#070709',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    padding: 6,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6,
-                    width: '100%',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  {allPersonnel.length === 0 ? (
-                    <div style={{ padding: '24px 16px', fontSize: '0.8125rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                      No other approved personnel registered yet.
-                    </div>
-                  ) : (
-                    allPersonnel.map((person) => {
-                      const isChecked = selectedPersonnel.some((p) => p.encodedEmail === person.encodedEmail);
-                      return (
-                        <div
-                          key={person.encodedEmail}
-                          onClick={() => {
-                            if (isChecked) {
-                              setSelectedPersonnel((prev) => prev.filter((p) => p.encodedEmail !== person.encodedEmail));
-                            } else {
-                              setSelectedPersonnel((prev) => [...prev, person]);
-                            }
-                          }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '9px 12px',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            background: isChecked ? 'rgba(45, 106, 79, 0.12)' : 'rgba(255, 255, 255, 0.02)',
-                            border: isChecked ? '1px solid rgba(64, 145, 108, 0.45)' : '1px solid rgba(255, 255, 255, 0.05)',
-                            transition: 'all 120ms ease',
-                            boxSizing: 'border-box',
-                            width: '100%',
-                          }}
-                        >
-                          {/* Left: Checkbox + Avatar + Name/Email */}
-                          <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1, gap: 12 }}>
-                            {/* Checkbox with strict size override */}
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {}} // handled by parent onClick
-                              style={{
-                                width: '16px',
-                                minWidth: '16px',
-                                maxWidth: '16px',
-                                height: '16px',
-                                minHeight: '16px',
-                                maxHeight: '16px',
-                                padding: 0,
-                                margin: 0,
-                                cursor: 'pointer',
-                                flexShrink: 0,
-                                accentColor: '#40916c',
-                              }}
-                            />
-
-                            {/* Avatar with Initials */}
-                            <div
-                              style={{
-                                width: 32,
-                                minWidth: 32,
-                                height: 32,
-                                borderRadius: '7px',
-                                background: getRoleBadgeStyle(person.role).avatarBg,
-                                color: '#ffffff',
-                                fontSize: '0.6875rem',
-                                fontWeight: 700,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0,
-                                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.15)',
-                              }}
-                            >
-                              {getInitials(person.name)}
-                            </div>
-
-                            {/* Personnel Name and Email */}
-                            <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
-                              <div
-                                style={{
-                                  fontSize: '0.84rem',
-                                  fontWeight: 600,
-                                  color: '#ffffff',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  lineHeight: 1.3,
-                                }}
-                              >
-                                {person.name}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: '0.71875rem',
-                                  color: 'var(--text-muted)',
-                                  fontFamily: 'var(--font-mono)',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  lineHeight: 1.3,
-                                }}
-                              >
-                                {person.email}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Right: Role Badge */}
-                          <span
-                            className="badge"
-                            style={{
-                              ...getRoleBadgeStyle(person.role),
-                              fontSize: '0.625rem',
-                              padding: '2px 7px',
-                              flexShrink: 0,
-                              marginLeft: 10,
-                              fontWeight: 700,
-                              letterSpacing: '0.04em',
-                            }}
-                          >
-                            {person.role}
-                          </span>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              {/* Opening Message */}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    Opening Message / Briefing
-                  </label>
-                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>Optional</span>
-                </div>
-                <textarea
-                  rows={3}
-                  placeholder="Introduce the purpose of this conversation session..."
-                  value={newSessionInitialMsg}
-                  onChange={(e) => setNewSessionInitialMsg(e.target.value)}
-                  style={{
-                    width: '100%',
-                    resize: 'none',
-                    padding: '10px 12px',
-                    borderRadius: '6px',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    color: '#ffffff',
-                    fontSize: '0.875rem',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
-              {/* Modal Actions */}
+              {/* Fixed Header */}
               <div
                 style={{
+                  padding: '16px 20px 14px',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                   display: 'flex',
-                  justifyContent: 'flex-end',
-                  alignItems: 'center',
-                  gap: 10,
-                  marginTop: 6,
-                  paddingTop: 14,
-                  borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  flexShrink: 0,
+                  background: '#11141a',
                 }}
               >
+                <div>
+                  <h2
+                    style={{
+                      fontSize: '1.125rem',
+                      fontWeight: 700,
+                      margin: 0,
+                      color: '#ffffff',
+                      letterSpacing: '-0.01em',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <MessageSquarePlus size={18} style={{ color: '#22c55e' }} />
+                    <span>Start Conversation</span>
+                  </h2>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '4px 0 0', lineHeight: 1.4 }}>
+                    Direct or group coordination with administrators and question setters.
+                  </p>
+                </div>
                 <button
                   type="button"
-                  className="btn btn-ghost"
                   onClick={() => setNewSessionModalOpen(false)}
-                  disabled={creatingSession}
-                  style={{ padding: '8px 16px', fontSize: '0.8125rem' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={creatingSession || !newSessionTitle.trim()}
                   style={{
-                    background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
-                    borderColor: 'var(--accent-green-light)',
-                    fontWeight: 600,
-                    padding: '8px 20px',
-                    fontSize: '0.8125rem',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderRadius: '6px',
+                    width: 30,
+                    height: 30,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 8,
-                    borderRadius: '6px',
-                    boxShadow: '0 2px 10px rgba(45, 106, 79, 0.3)',
+                    justifyContent: 'center',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    transition: 'all 120ms ease',
                   }}
+                  title="Close"
                 >
-                  <Send size={14} />
-                  <span>{creatingSession ? 'Starting Session...' : 'Start Session'}</span>
+                  <X size={15} />
                 </button>
+              </div>
+
+              {/* Scrollable Form Body */}
+              <div
+                className="custom-scrollbar"
+                style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '16px 20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 14,
+                }}
+              >
+                {createError && (
+                  <div
+                    className="alert alert-danger"
+                    style={{ padding: '9px 12px', fontSize: '0.78125rem', borderRadius: '6px' }}
+                  >
+                    {createError}
+                  </div>
+                )}
+
+                {/* Session Title Input */}
+                <div>
+                  <label style={{ fontSize: '0.78125rem', fontWeight: 600, display: 'block', marginBottom: 6, color: 'var(--text-secondary)' }}>
+                    Topic / Subject <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Physics Section Question #104 Review"
+                    value={newSessionTitle}
+                    onChange={(e) => setNewSessionTitle(e.target.value)}
+                    required
+                    autoFocus
+                    style={{
+                      width: '100%',
+                      height: 38,
+                      padding: '0 12px',
+                      borderRadius: '6px',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      color: '#ffffff',
+                      fontSize: '0.84rem',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                {/* Involved Personnel Selection */}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <label style={{ fontSize: '0.78125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                        Involved Personnel
+                      </label>
+                      <span
+                        style={{
+                          fontSize: '0.6875rem',
+                          padding: '1px 7px',
+                          borderRadius: '10px',
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          color: 'var(--text-primary)',
+                          fontFamily: 'var(--font-mono)',
+                        }}
+                      >
+                        {selectedPersonnel.length} of {allPersonnel.length} invited
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setSelectedPersonnel(allPersonnel)}
+                        style={{ fontSize: '0.6875rem', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.08)' }}
+                      >
+                        Select All
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setSelectedPersonnel([])}
+                        style={{ fontSize: '0.6875rem', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.08)' }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Personnel Card Scroll List */}
+                  <div
+                    className="custom-scrollbar"
+                    style={{
+                      maxHeight: 180,
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      background: '#07080a',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      padding: 6,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 5,
+                      width: '100%',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    {allPersonnel.length === 0 ? (
+                      <div style={{ padding: '20px 14px', fontSize: '0.78125rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                        No other approved personnel registered yet.
+                      </div>
+                    ) : (
+                      allPersonnel.map((person) => {
+                        const isChecked = selectedPersonnel.some((p) => p.encodedEmail === person.encodedEmail);
+                        return (
+                          <div
+                            key={person.encodedEmail}
+                            onClick={() => {
+                              if (isChecked) {
+                                setSelectedPersonnel((prev) => prev.filter((p) => p.encodedEmail !== person.encodedEmail));
+                              } else {
+                                setSelectedPersonnel((prev) => [...prev, person]);
+                              }
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '8px 10px',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              background: isChecked ? 'rgba(34, 197, 94, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                              border: isChecked ? '1px solid rgba(34, 197, 94, 0.35)' : '1px solid rgba(255, 255, 255, 0.05)',
+                              transition: 'all 100ms ease',
+                              boxSizing: 'border-box',
+                              width: '100%',
+                            }}
+                          >
+                            {/* Left: Checkbox + Avatar + Name/Email */}
+                            <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1, gap: 10 }}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {}}
+                                style={{
+                                  width: '16px',
+                                  minWidth: '16px',
+                                  maxWidth: '16px',
+                                  height: '16px',
+                                  minHeight: '16px',
+                                  maxHeight: '16px',
+                                  padding: 0,
+                                  margin: 0,
+                                  cursor: 'pointer',
+                                  flexShrink: 0,
+                                  accentColor: '#22c55e',
+                                }}
+                              />
+
+                              <div
+                                style={{
+                                  width: 28,
+                                  minWidth: 28,
+                                  height: 28,
+                                  borderRadius: '6px',
+                                  background: getRoleBadgeStyle(person.role).avatarBg,
+                                  color: '#ffffff',
+                                  fontSize: '0.625rem',
+                                  fontWeight: 700,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {getInitials(person.name)}
+                              </div>
+
+                              <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                                <div
+                                  style={{
+                                    fontSize: '0.8125rem',
+                                    fontWeight: 600,
+                                    color: '#ffffff',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    lineHeight: 1.25,
+                                  }}
+                                >
+                                  {person.name}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: '0.6875rem',
+                                    color: 'var(--text-muted)',
+                                    fontFamily: 'var(--font-mono)',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    lineHeight: 1.25,
+                                  }}
+                                >
+                                  {person.email}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Right: Role Badge */}
+                            <span
+                              className="badge"
+                              style={{
+                                ...getRoleBadgeStyle(person.role),
+                                fontSize: '0.625rem',
+                                padding: '2px 6px',
+                                flexShrink: 0,
+                                marginLeft: 8,
+                                fontWeight: 600,
+                              }}
+                            >
+                              {person.role}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Opening Message */}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <label style={{ fontSize: '0.78125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      Opening Note / Briefing
+                    </label>
+                    <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>Optional</span>
+                  </div>
+                  <textarea
+                    rows={2}
+                    placeholder="Provide context or instructions for this thread..."
+                    value={newSessionInitialMsg}
+                    onChange={(e) => setNewSessionInitialMsg(e.target.value)}
+                    style={{
+                      width: '100%',
+                      resize: 'none',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      color: '#ffffff',
+                      fontSize: '0.8125rem',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Fixed Footer: Always Visible Actions */}
+              <div
+                style={{
+                  padding: '12px 20px',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                  background: '#11141a',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  flexShrink: 0,
+                }}
+              >
+                <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)' }}>
+                  <span style={{ color: '#ffffff', fontWeight: 600 }}>{selectedPersonnel.length}</span> recipient{selectedPersonnel.length === 1 ? '' : 's'}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => setNewSessionModalOpen(false)}
+                    disabled={creatingSession}
+                    style={{ padding: '7px 14px', fontSize: '0.8125rem' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={creatingSession || !newSessionTitle.trim()}
+                    style={{
+                      background: '#15803d',
+                      borderColor: '#22c55e',
+                      fontWeight: 600,
+                      padding: '7px 18px',
+                      fontSize: '0.8125rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 7,
+                      borderRadius: '6px',
+                      color: '#ffffff',
+                    }}
+                  >
+                    <Send size={13} />
+                    <span>{creatingSession ? 'Starting...' : 'Start Session'}</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -2297,6 +2333,7 @@ export default function TCCCom({
             alignItems: 'center',
             justifyContent: 'center',
             padding: 16,
+            overflowY: 'auto',
           }}
         >
           <div

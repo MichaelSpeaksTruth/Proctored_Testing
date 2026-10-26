@@ -179,6 +179,7 @@ export default function RaiseDisputeModal({
         alignItems: 'center',
         justifyContent: 'center',
         padding: 'var(--space-md)',
+        overflowY: 'auto',
       }}
     >
       <div
