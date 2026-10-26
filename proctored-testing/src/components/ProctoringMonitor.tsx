@@ -159,7 +159,7 @@ export default function ProctoringMonitor({
       activeInfractions.current.delete(event);
       onViolationClear?.(event);
       
-      const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'GAZE_AWAY';
+      const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'GAZE_AWAY' || event === 'NO_FACE' || event === 'SHOULDERS_OUT_OF_FRAME';
       // Minimum duration filters to ignore momentary glances or twitches
       if (isSlowEvent && durationInSeconds < 4) return;
       if (!isSlowEvent && durationInSeconds < 2) return;
@@ -240,7 +240,7 @@ export default function ProctoringMonitor({
     };
 
     const onFullscreen = () => {
-      if (isSubmittingRef.current) return;
+      if (isSubmittingRef.current || isMobileRef.current) return;
       if (!document.fullscreenElement) {
         openInfraction('LEFT_FULLSCREEN', 'high');
       } else {
@@ -254,7 +254,7 @@ export default function ProctoringMonitor({
       const endMs = Date.now();
       activeInfractions.current.forEach((val, event) => {
         const dur = Math.round((endMs - val.startTime) / 1000);
-        const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'GAZE_AWAY';
+        const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'GAZE_AWAY' || event === 'NO_FACE' || event === 'SHOULDERS_OUT_OF_FRAME';
         const isValid = (isSlowEvent && dur >= 4) || (!isSlowEvent && dur >= 2);
         if (isValid && !calibrationMode) {
           const snapshot = val.evidenceSnapshot || (dur >= 4 ? captureSnapshot(videoRef.current) : undefined);
@@ -404,7 +404,12 @@ export default function ProctoringMonitor({
 
         faceMesh.onResults((results: { multiFaceLandmarks: LM[][] }) => {
           if (!mounted) return;
-          const count = results.multiFaceLandmarks.length;
+          // Filter out tiny background faces (e.g. wall photos, poster images < 9% frame height)
+          const validFaces = results.multiFaceLandmarks.filter(faceLm => {
+            const fH = Math.abs(faceLm[IDX_CHIN].y - faceLm[IDX_FOREHEAD].y);
+            return fH >= 0.09;
+          });
+          const count = validFaces.length;
           report('NO_FACE', count === 0, 'medium');
           report('MULTIPLE_FACES', count > 1, 'critical');
           pushStatus({ faceDetected: count === 1 });
@@ -428,7 +433,7 @@ export default function ProctoringMonitor({
           }
 
           if (count === 1) {
-            const lm = results.multiFaceLandmarks[0];
+            const lm = validFaces[0];
             const noseTip  = lm[IDX_NOSE_TIP];
             const leftEar  = lm[IDX_LEFT_EAR];
             const rightEar = lm[IDX_RIGHT_EAR];
@@ -687,7 +692,7 @@ export default function ProctoringMonitor({
       const endMs = Date.now();
       activeInfractions.current.forEach((val, event) => {
         const dur = Math.round((endMs - val.startTime) / 1000);
-        const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'GAZE_AWAY';
+        const isSlowEvent = event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'GAZE_AWAY' || event === 'NO_FACE' || event === 'SHOULDERS_OUT_OF_FRAME';
         const isValid = (isSlowEvent && dur >= 4) || (!isSlowEvent && dur >= 2);
         if (isValid && !calibrationMode) {
           const snapshot = val.evidenceSnapshot || (dur >= 4 ? captureSnapshot(videoRef.current) : undefined);

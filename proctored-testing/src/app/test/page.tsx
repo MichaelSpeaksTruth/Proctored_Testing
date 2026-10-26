@@ -239,7 +239,7 @@ function TestContent() {
   // Persist lives to localStorage whenever they change
   // ── Central section timer logic ──
   useEffect(() => {
-    if (!examStarted || submitted || !timesLoaded || penaltyRemaining > 0 || !proctoringAgreementAccepted) {
+    if (!examStarted || submitted || !timesLoaded || penaltyRemaining > 0 || !proctoringAgreementAccepted || isShouldersMisaligned) {
       lastTickRef.current = Date.now();
       return;
     }
@@ -269,7 +269,7 @@ function TestContent() {
     }, 200);
 
     return () => clearInterval(interval);
-  }, [examStarted, submitted, timesLoaded, currentSectionIdx, testId, uid, penaltyRemaining, proctoringAgreementAccepted]);
+  }, [examStarted, submitted, timesLoaded, currentSectionIdx, testId, uid, penaltyRemaining, proctoringAgreementAccepted, isShouldersMisaligned]);
   useEffect(() => {
     if (!testId || !uid) return;
     const livesKey = `pt_lives_${testId}_${uid}`;
@@ -485,11 +485,14 @@ function TestContent() {
           localStorage.removeItem(`pt_lives_${testId}_${uid}`);
           localStorage.removeItem(`pt_section_times_${testId}_${uid}`);
         } catch { /* ignore */ }
-        if (document.fullscreenElement) document.exitFullscreen();
+        if (document.fullscreenElement) {
+          try { await document.exitFullscreen(); } catch {}
+        }
         router.replace('/student-dashboard');
-      } catch (err) {
+      } catch (err: any) {
         console.error('Submit failed:', err);
         setSubmitted(false);
+        alert(err?.message || 'Submission could not be saved due to a network interruption. Your answers are safely saved in your browser. Please check your internet connection and click Submit again.');
       }
     },
     [submitted, uid, testId, answers, clearPersistedState, router]
@@ -508,9 +511,9 @@ function TestContent() {
         .filter(idx => sectionTimes[idx] > 0);
 
       if (available.length > 0) {
-        // Switch to a random available section
-        const randomIdx = available[Math.floor(Math.random() * available.length)];
-        setCurrentSectionIdx(randomIdx);
+        // Switch to next available section in sequence
+        const nextIdx = available.find(idx => idx > currentSectionIdx) ?? available[0];
+        setCurrentSectionIdx(nextIdx);
         setCurrentQuestionIdx(0);
         lastTickRef.current = Date.now();
       } else {
@@ -1061,6 +1064,13 @@ function TestContent() {
                 document.documentElement.requestFullscreen().catch(console.error);
               }}>Resume Fullscreen</button>
             )}
+            <button
+              className="btn btn-outline"
+              style={{ marginTop: 12, width: '100%', borderColor: 'rgba(255, 255, 255, 0.25)', color: 'var(--text-primary)' }}
+              onClick={() => setIsShouldersMisaligned(false)}
+            >
+              I Have Adjusted My Screen (Continue Exam)
+            </button>
           </div>
         </div>
       )}
