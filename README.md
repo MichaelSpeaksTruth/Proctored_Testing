@@ -129,11 +129,14 @@ The platform includes a dedicated, unified communication ecosystem—the **Team 
   - **Dynamic Party Selection:** The dispute raiser can dynamically select which additional personnel (Admin Sr., Admin L1s, Question Setters) need to be included in the room.
   - **Audit Tracking & Formal Resolution:** Disputes record priority (`Normal`, `High`, `Urgent`), grounds for dispute, and reference the disputed log entry. The raiser or Admin Sr. can conclude disputes with formal resolution notes stamped directly into the session timeline.
 - **Real-Time Notification & In-App Pings:** Real-time listeners (`tcc_notifications`) alert personnel immediately when they are pinged in a dispute, invited to a session, or tagged in chat.
-- **Smart @Mention & Tagging Engine:**
-  - **Context-Aware Autocomplete:** Typing `@` in the message composer triggers an interactive autocomplete popup with keyboard navigation (Up/Down arrows, Enter/Tab to select, Esc to dismiss).
-  - **One-Tap Quick Tag Chips:** Quick pills (`@all`, `@Admin Sr.`, `@Admin L1`, `@Question Setter`, and participant names) allow rapid 1-tap tagging on mobile and desktop without manual typing.
-  - **Rich Highlighting & Amber Mentions:** Tagged tokens are rendered as distinct glowing pills; messages mentioning the current user are highlighted with an amber accent border and background.
-  - **Instant Mention Notifications:** Tagging a member or `@all` triggers dedicated real-time `mention` notifications with snippet previews directly to the tagged recipients.
+- **Smart @Mention & Universal Citizen Tagging:**
+  - **Cross-Platform Member Discovery:** Typing `@` or clicking tag chips surfaces all approved personnel across the entire platform (Admin Sr., Admin L1, Question Setters), not just existing room members.
+  - **Automatic Session Onboarding & History Sync:** Tagging an outside citizen automatically joins them into the session, indexes the conversation in their personal 50-session archive, posts a system onboarding notice, and delivers an instant high-priority ping so they immediately receive full message history.
+  - **Manual Member Management:** Room drawer features a `+ Add Personnel` action to directly invite platform members without requiring a tag.
+- **Transparency, Read Receipts & Presence Tracking:**
+  - **Per-Message Read Receipts:** Messages track participant read status in real-time, showing single checkmark (`✓ Sent`) and double green checkmarks (`✓✓ Read by [Name]`) with hover tooltips detailing who read each message.
+  - **Live Room Presence:** The participants drawer shows real-time activity (`● Active now`, `Seen [time]`, or `Unseen`) based on atomic `lastReadTimestamp` synchronization.
+  - **Interactive Message Reactions:** Members can toggle one-tap emoji reactions (`👍`, `✅`, `👀`, `⚠️`) on any message with real-time actor attribution.
 - **Omnipresent Access:** Accessible directly via `/tcc`, with embedded tabs and quick shortcuts in the Admin Sr. console (`/admin`), Admin L1 dashboard (`/admin-l1`), Question Setter portal (`/question-setter`), and Global Audit Logs (`/admin/logs`).
 
 ## 9. Precision Proctoring & Candidate Protection

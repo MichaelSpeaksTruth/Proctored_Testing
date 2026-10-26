@@ -30,8 +30,11 @@ export interface TCCParticipant {
   name: string;
   role: TCCRole;
   joinedAt: string;
+  addedBy?: string;
   isLogInitiator?: boolean;
   isDisputeRaiser?: boolean;
+  lastReadTimestamp?: number;
+  lastSeen?: string;
 }
 
 export interface TCCMessage {
@@ -44,6 +47,7 @@ export interface TCCMessage {
   timestampMs: number;
   isSystemNotice?: boolean;
   isDisputeNotice?: boolean;
+  reactions?: Record<string, Record<string, { name: string; role: string; timestamp: string }>>; // emoji -> encEmail -> user
 }
 
 export interface TCCDisputeDetails {
@@ -580,14 +584,18 @@ export async function raiseDisputeFromLog(params: {
 }
 
 /**
- * Send a message into a session
+ * Send a message into a session.
+ * Automatically detects mentions of ANY platform personnel:
+ * If an outside approved personnel is tagged, they are immediately added to the
+ * session, receive full message history, and get an instant mention notification.
  */
 export async function sendTCCMessage(params: {
   sessionId: string;
   sender: ApprovedPersonnelInfo;
   text: string;
+  allPersonnel?: ApprovedPersonnelInfo[];
 }): Promise<string> {
-  const { sessionId, sender, text } = params;
+  const { sessionId, sender, text, allPersonnel } = params;
   const now = new Date();
   const nowIso = now.toISOString();
   const nowMs = now.getTime();
@@ -612,7 +620,7 @@ export async function sendTCCMessage(params: {
   }
 
   const session = sessionSnap.val() as TCCSession;
-  const participants = session.participants || {};
+  const participants = { ...(session.participants || {}) };
 
   const updates: Record<string, any> = {};
   updates[`tcc_sessions/${sessionId}/messages/${msgId}`] = message;
@@ -625,18 +633,81 @@ export async function sendTCCMessage(params: {
     timestamp: nowIso,
   };
 
-  const participantKeys = Object.keys(participants);
+  // Sender has read this message immediately
+  updates[`tcc_sessions/${sessionId}/participants/${sender.encodedEmail}/lastReadTimestamp`] = nowMs;
+  updates[`tcc_sessions/${sessionId}/participants/${sender.encodedEmail}/lastSeen`] = nowIso;
+
   const lowerText = text.toLowerCase();
   const isMentionAll = lowerText.includes('@all') || lowerText.includes('@everyone');
+
+  // 1. Check if any OUTSIDE personnel from allPersonnel were mentioned
+  const newlyAddedPersonnel: ApprovedPersonnelInfo[] = [];
+  if (allPersonnel && allPersonnel.length > 0) {
+    for (const person of allPersonnel) {
+      if (person.email.toLowerCase() === sender.email.toLowerCase()) continue;
+      if (participants[person.encodedEmail]) continue; // already in room
+
+      const nameLower = person.name.toLowerCase();
+      const emailLower = person.email.toLowerCase();
+      const firstNameLower = person.name.includes(' ') ? person.name.split(' ')[0].toLowerCase() : '';
+
+      const isMentioned =
+        lowerText.includes(`@${nameLower}`) ||
+        lowerText.includes(`@${emailLower}`) ||
+        (firstNameLower.length >= 3 && lowerText.includes(`@${firstNameLower}`));
+
+      if (isMentioned) {
+        newlyAddedPersonnel.push(person);
+        // Add to local participants map so they also receive index update below
+        participants[person.encodedEmail] = {
+          email: person.email,
+          name: person.name,
+          role: person.role,
+          joinedAt: nowIso,
+          addedBy: `${sender.name} (${sender.role})`,
+        };
+
+        // Write participant record into session
+        updates[`tcc_sessions/${sessionId}/participants/${person.encodedEmail}`] = {
+          email: person.email,
+          name: person.name,
+          role: person.role,
+          joinedAt: nowIso,
+          addedBy: `${sender.name} (${sender.role})`,
+        };
+
+        // System notice in session timeline
+        const noticeRef = push(ref(rtdb, `tcc_sessions/${sessionId}/messages`));
+        updates[`tcc_sessions/${sessionId}/messages/${noticeRef.key}`] = {
+          id: noticeRef.key,
+          senderEmail: 'system',
+          senderName: 'TCC System',
+          senderRole: 'System',
+          text: `👋 ${person.name} (${person.role}) was tagged by ${sender.name} and added to the conversation.`,
+          timestamp: nowIso,
+          timestampMs: nowMs + 1,
+          isSystemNotice: true,
+        };
+      }
+    }
+  }
+
+  // 2. Update user_sessions index and dispatch notifications to all participants
+  const participantKeys = Object.keys(participants);
 
   for (const encKey of participantKeys) {
     updates[`tcc_user_sessions/${encKey}/${sessionId}/lastActivityTimestamp`] = nowMs;
     updates[`tcc_user_sessions/${encKey}/${sessionId}/lastActivity`] = nowIso;
     updates[`tcc_user_sessions/${encKey}/${sessionId}/lastMessageSnippet`] = text.trim();
+    updates[`tcc_user_sessions/${encKey}/${sessionId}/title`] = session.title;
+    updates[`tcc_user_sessions/${encKey}/${sessionId}/type`] = session.type;
+    updates[`tcc_user_sessions/${encKey}/${sessionId}/status`] = session.status;
+    updates[`tcc_user_sessions/${encKey}/${sessionId}/createdByEmail`] = session.createdBy?.email || sender.email;
+    updates[`tcc_user_sessions/${encKey}/${sessionId}/createdAt`] = session.createdAt || nowIso;
+
     if (encKey !== sender.encodedEmail) {
       updates[`tcc_user_sessions/${encKey}/${sessionId}/unread`] = true;
 
-      // Check if participant was tagged/mentioned in message
       const p = participants[encKey];
       if (p) {
         const isTagged =
@@ -644,18 +715,20 @@ export async function sendTCCMessage(params: {
           lowerText.includes(`@${p.name.toLowerCase()}`) ||
           lowerText.includes(`@${p.email.toLowerCase()}`) ||
           lowerText.includes(`@${p.role.toLowerCase()}`) ||
-          // Also match first name if available (e.g. @Anurag)
           (p.name.includes(' ') && lowerText.includes(`@${p.name.split(' ')[0].toLowerCase()}`));
 
         if (isTagged) {
           const notifRef = push(ref(rtdb, `tcc_notifications/${encKey}`));
+          const isNewlyAdded = newlyAddedPersonnel.some((np) => np.encodedEmail === encKey);
           updates[`tcc_notifications/${encKey}/${notifRef.key}`] = {
             id: notifRef.key,
             sessionId,
             sessionTitle: session.title,
             type: 'mention',
-            title: `@Mention from ${sender.name}`,
-            message: `${sender.name} (${sender.role}) tagged you in "${session.title}": "${text.trim().slice(0, 90)}"`,
+            title: isNewlyAdded ? `@Mention & Added to Room by ${sender.name}` : `@Mention from ${sender.name}`,
+            message: isNewlyAdded
+              ? `${sender.name} (${sender.role}) tagged you and added you to "${session.title}". You now have full conversation access.`
+              : `${sender.name} (${sender.role}) tagged you in "${session.title}": "${text.trim().slice(0, 90)}"`,
             fromEmail: sender.email,
             fromName: sender.name,
             fromRole: sender.role,
@@ -670,7 +743,116 @@ export async function sendTCCMessage(params: {
 
   await update(ref(rtdb), updates);
 
+  // Prune session history to max 50 for newly added personnel
+  for (const newP of newlyAddedPersonnel) {
+    pruneUserSessions(newP.encodedEmail).catch((err) => console.warn('Prune error for new participant:', err));
+  }
+
   return msgId;
+}
+
+/**
+ * Manually add an approved platform personnel to an active session
+ */
+export async function addParticipantToSession(params: {
+  sessionId: string;
+  person: ApprovedPersonnelInfo;
+  addedBy: { name: string; role: string; email: string };
+  reason?: string;
+}): Promise<void> {
+  const { sessionId, person, addedBy, reason } = params;
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const nowMs = now.getTime();
+
+  const sessionSnap = await get(ref(rtdb, `tcc_sessions/${sessionId}`));
+  if (!sessionSnap.exists()) throw new Error('Session not found');
+  const session = sessionSnap.val() as TCCSession;
+
+  if (session.participants && session.participants[person.encodedEmail]) {
+    return; // Already participant
+  }
+
+  const updates: Record<string, any> = {};
+
+  // Add to session participants
+  updates[`tcc_sessions/${sessionId}/participants/${person.encodedEmail}`] = {
+    email: person.email,
+    name: person.name,
+    role: person.role,
+    joinedAt: nowIso,
+    addedBy: `${addedBy.name} (${addedBy.role})`,
+  };
+
+  // Add to target user's session index
+  updates[`tcc_user_sessions/${person.encodedEmail}/${sessionId}`] = {
+    sessionId,
+    title: session.title,
+    type: session.type,
+    status: session.status,
+    createdAt: session.createdAt,
+    createdByEmail: session.createdBy?.email || addedBy.email,
+    lastActivity: nowIso,
+    lastActivityTimestamp: nowMs,
+    lastMessageSnippet: session.lastMessage?.text || 'Added to conversation',
+    unread: true,
+  };
+
+  // System notice in session timeline
+  const noticeRef = push(ref(rtdb, `tcc_sessions/${sessionId}/messages`));
+  updates[`tcc_sessions/${sessionId}/messages/${noticeRef.key}`] = {
+    id: noticeRef.key,
+    senderEmail: 'system',
+    senderName: 'TCC System',
+    senderRole: 'System',
+    text: `👤 ${person.name} (${person.role}) was added to the room by ${addedBy.name}.${reason ? ` (${reason})` : ''}`,
+    timestamp: nowIso,
+    timestampMs: nowMs,
+    isSystemNotice: true,
+  };
+
+  // Dispatch notification
+  const notifRef = push(ref(rtdb, `tcc_notifications/${person.encodedEmail}`));
+  updates[`tcc_notifications/${person.encodedEmail}/${notifRef.key}`] = {
+    id: notifRef.key,
+    sessionId,
+    sessionTitle: session.title,
+    type: 'session_invite',
+    title: `Added to ${session.title}`,
+    message: `${addedBy.name} (${addedBy.role}) added you to "${session.title}". You now have full conversation access.`,
+    fromEmail: addedBy.email,
+    fromName: addedBy.name,
+    fromRole: addedBy.role as TCCRole,
+    timestamp: nowIso,
+    timestampMs: nowMs,
+    read: false,
+  };
+
+  await update(ref(rtdb), updates);
+  await pruneUserSessions(person.encodedEmail);
+}
+
+/**
+ * Toggle an emoji reaction on a message
+ */
+export async function toggleMessageReaction(params: {
+  sessionId: string;
+  messageId: string;
+  emoji: string;
+  user: ApprovedPersonnelInfo;
+}): Promise<void> {
+  const { sessionId, messageId, emoji, user } = params;
+  const path = `tcc_sessions/${sessionId}/messages/${messageId}/reactions/${emoji}/${user.encodedEmail}`;
+  const snap = await get(ref(rtdb, path));
+  if (snap.exists()) {
+    await remove(ref(rtdb, path));
+  } else {
+    await set(ref(rtdb, path), {
+      name: user.name,
+      role: user.role,
+      timestamp: new Date().toISOString(),
+    });
+  }
 }
 
 /**
@@ -723,11 +905,17 @@ export async function resolveTCCDispute(params: {
 }
 
 /**
- * Mark user session as read
+ * Mark user session as read and update real-time read receipts & presence
  */
 export async function markSessionAsRead(encodedEmail: string, sessionId: string): Promise<void> {
   try {
-    await update(ref(rtdb, `tcc_user_sessions/${encodedEmail}/${sessionId}`), { unread: false });
+    const nowMs = Date.now();
+    const nowIso = new Date().toISOString();
+    const updates: Record<string, any> = {};
+    updates[`tcc_user_sessions/${encodedEmail}/${sessionId}/unread`] = false;
+    updates[`tcc_sessions/${sessionId}/participants/${encodedEmail}/lastReadTimestamp`] = nowMs;
+    updates[`tcc_sessions/${sessionId}/participants/${encodedEmail}/lastSeen`] = nowIso;
+    await update(ref(rtdb), updates);
   } catch (err) {
     console.error('Error marking session as read:', err);
   }

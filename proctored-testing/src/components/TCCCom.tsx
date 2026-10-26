@@ -15,6 +15,8 @@ import {
   sendTCCMessage,
   resolveTCCDispute,
   markSessionAsRead,
+  addParticipantToSession,
+  toggleMessageReaction,
   subscribeUserSessions,
   subscribeSession,
   subscribeUserNotifications,
@@ -36,6 +38,9 @@ import {
   ChevronRight,
   MessageSquarePlus,
   AtSign,
+  Check,
+  CheckCheck,
+  UserPlus,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -94,8 +99,9 @@ export default function TCCCom({
   const [notifications, setNotifications] = useState<TCCNotification[]>([]);
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
 
-  // Details drawer
+  // Details drawer & Add Member
   const [showParticipantsDrawer, setShowParticipantsDrawer] = useState(false);
+  const [addMemberDropdownOpen, setAddMemberDropdownOpen] = useState(false);
 
   // 1. Auth & Profile Detection
   useEffect(() => {
@@ -170,20 +176,25 @@ export default function TCCCom({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeSession?.messages]);
 
-  // Load all approved personnel when opening new conversation modal
+  // Load all approved personnel across the platform on mount & profile resolution
+  useEffect(() => {
+    getApprovedPersonnelList().then((list) => {
+      const others = list.filter((p) => p.email.toLowerCase() !== personnelProfile?.email.toLowerCase());
+      setAllPersonnel(others);
+      if (selectedPersonnel.length === 0) {
+        setSelectedPersonnel(others);
+      }
+    });
+  }, [personnelProfile]);
+
+  // Reset modal state on open
   useEffect(() => {
     if (newSessionModalOpen) {
       setNewSessionTitle('');
       setNewSessionInitialMsg('');
       setCreateError(null);
-      getApprovedPersonnelList().then((list) => {
-        // Exclude current user from selectable list
-        const others = list.filter((p) => p.email.toLowerCase() !== personnelProfile?.email.toLowerCase());
-        setAllPersonnel(others);
-        setSelectedPersonnel(others); // Preselect all for quick team broadcast
-      });
     }
-  }, [newSessionModalOpen, personnelProfile]);
+  }, [newSessionModalOpen]);
 
   // Filtered session list
   const filteredSessions = useMemo(() => {
@@ -227,12 +238,42 @@ export default function TCCCom({
         sessionId: activeSessionId,
         sender: personnelProfile,
         text: messageInput.trim(),
+        allPersonnel,
       });
       setMessageInput('');
+      setMentionQuery(null);
     } catch (err) {
       console.error('Failed to send message:', err);
     } finally {
       setSendingMsg(false);
+    }
+  };
+
+  const handleReaction = async (msgId: string, emoji: string) => {
+    if (!activeSessionId || !personnelProfile) return;
+    try {
+      await toggleMessageReaction({
+        sessionId: activeSessionId,
+        messageId: msgId,
+        emoji,
+        user: personnelProfile,
+      });
+    } catch (err) {
+      console.error('Failed to toggle reaction:', err);
+    }
+  };
+
+  const handleAddParticipant = async (person: ApprovedPersonnelInfo) => {
+    if (!activeSessionId || !personnelProfile) return;
+    try {
+      await addParticipantToSession({
+        sessionId: activeSessionId,
+        person,
+        addedBy: personnelProfile,
+      });
+      setAddMemberDropdownOpen(false);
+    } catch (err) {
+      console.error('Failed to add participant:', err);
     }
   };
 
@@ -340,7 +381,7 @@ export default function TCCCom({
     };
   };
 
-  // Available mention candidates (roles, everyone, session participants)
+  // Available mention candidates (roles, in-room members, and outside platform personnel)
   const mentionCandidates = useMemo(() => {
     const list: {
       id: string;
@@ -350,15 +391,20 @@ export default function TCCCom({
       isSpecial?: boolean;
       avatar?: string;
       email?: string;
+      inRoom?: boolean;
+      category: 'special' | 'in_room' | 'outside';
     }[] = [
-      { id: 'all', label: '@all', insertText: '@all ', role: 'Everyone in Room', isSpecial: true },
-      { id: 'sr', label: '@Admin Sr.', insertText: '@Admin Sr. ', role: 'Admin Sr.', isSpecial: true },
-      { id: 'l1', label: '@Admin L1', insertText: '@Admin L1 ', role: 'Admin L1', isSpecial: true },
-      { id: 'qs', label: '@Question Setter', insertText: '@Question Setter ', role: 'Question Setter', isSpecial: true },
+      { id: 'all', label: '@all', insertText: '@all ', role: 'Everyone in Room', isSpecial: true, category: 'special' },
+      { id: 'sr', label: '@Admin Sr.', insertText: '@Admin Sr. ', role: 'Admin Sr.', isSpecial: true, category: 'special' },
+      { id: 'l1', label: '@Admin L1', insertText: '@Admin L1 ', role: 'Admin L1', isSpecial: true, category: 'special' },
+      { id: 'qs', label: '@Question Setter', insertText: '@Question Setter ', role: 'Question Setter', isSpecial: true, category: 'special' },
     ];
+
+    const inRoomEmails = new Set<string>();
 
     if (activeSession?.participants) {
       Object.values(activeSession.participants).forEach((p) => {
+        inRoomEmails.add(p.email.toLowerCase());
         list.push({
           id: p.email,
           label: `@${p.name}`,
@@ -366,7 +412,27 @@ export default function TCCCom({
           role: p.role,
           avatar: getInitials(p.name),
           email: p.email,
+          inRoom: true,
+          category: 'in_room',
         });
+      });
+    }
+
+    // Include other platform personnel not yet in this room
+    if (allPersonnel && allPersonnel.length > 0) {
+      allPersonnel.forEach((person) => {
+        if (!inRoomEmails.has(person.email.toLowerCase())) {
+          list.push({
+            id: person.email,
+            label: `@${person.name}`,
+            insertText: `@${person.name} `,
+            role: person.role,
+            avatar: getInitials(person.name),
+            email: person.email,
+            inRoom: false,
+            category: 'outside',
+          });
+        }
       });
     }
 
@@ -380,7 +446,14 @@ export default function TCCCom({
         (c.role && c.role.toLowerCase().includes(q)) ||
         (c.email && c.email.toLowerCase().includes(q))
     );
-  }, [activeSession?.participants, mentionQuery]);
+  }, [activeSession?.participants, allPersonnel, mentionQuery]);
+
+  // Platform personnel not yet in this room (for + Add Member & outside tagging)
+  const outsidePersonnel = useMemo(() => {
+    if (!allPersonnel || !activeSession?.participants) return [];
+    const inRoomEmails = new Set(Object.values(activeSession.participants).map((p) => p.email.toLowerCase()));
+    return allPersonnel.filter((p) => !inRoomEmails.has(p.email.toLowerCase()));
+  }, [allPersonnel, activeSession?.participants]);
 
   const insertMention = (tag: string) => {
     const textarea = textareaRef.current;
@@ -1299,78 +1372,193 @@ export default function TCCCom({
                 </div>
               )}
 
-              {/* Participants Drawer (Collapsible) */}
+              {/* Participants Drawer (Collapsible & Interactive with Add Member) */}
               {showParticipantsDrawer && (
                 <div
                   className="custom-scrollbar"
                   style={{
                     background: 'var(--bg-primary)',
                     borderBottom: '1px solid var(--border)',
-                    padding: '8px 16px',
+                    padding: '10px 16px',
                     display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: 6,
-                    alignItems: 'center',
+                    flexDirection: 'column',
+                    gap: 8,
                     flexShrink: 0,
-                    maxHeight: 120,
+                    maxHeight: 240,
                     overflowY: 'auto',
                   }}
                 >
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: 4 }}>
-                    Active Personnel:
-                  </span>
-                  {Object.values(activeSession.participants || {}).map((p) => (
-                    <div
-                      key={p.email}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '3px 8px',
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 'var(--radius-xs)',
-                        fontSize: '0.75rem',
-                      }}
-                    >
-                      <div
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Users size={14} color="var(--accent-green-light)" />
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--white)' }}>
+                        Room Personnel ({Object.keys(activeSession.participants || {}).length}):
+                      </span>
+                    </div>
+
+                    {outsidePersonnel.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setAddMemberDropdownOpen(!addMemberDropdownOpen)}
+                        className="btn btn-ghost btn-sm"
                         style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: '50%',
-                          background: getRoleBadgeStyle(p.role).avatarBg,
-                          color: '#fff',
-                          fontSize: '0.5625rem',
-                          fontWeight: 700,
-                          display: 'flex',
+                          fontSize: '0.6875rem',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(34, 197, 94, 0.4)',
+                          color: '#22c55e',
+                          background: 'rgba(34, 197, 94, 0.08)',
+                          display: 'inline-flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
+                          gap: 4,
+                          fontWeight: 600,
                         }}
                       >
-                        {getInitials(p.name)}
+                        <UserPlus size={12} />
+                        <span>+ Add Personnel</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Add Personnel Dropdown Panel */}
+                  {addMemberDropdownOpen && outsidePersonnel.length > 0 && (
+                    <div
+                      style={{
+                        padding: '8px 10px',
+                        background: '#0a0d10',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                        maxHeight: 140,
+                        overflowY: 'auto',
+                      }}
+                      className="custom-scrollbar"
+                    >
+                      <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginBottom: 2 }}>
+                        Click to invite and grant full message history:
                       </div>
-                      <span style={{ color: 'var(--white)', fontWeight: 500 }}>{p.name}</span>
-                      <span
-                        className="badge"
-                        style={{ ...getRoleBadgeStyle(p.role), fontSize: '0.625rem', padding: '1px 5px' }}
-                      >
-                        {p.role}
-                      </span>
-                      {p.isLogInitiator && (
-                        <span
-                          className="badge"
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {outsidePersonnel.map((person) => (
+                          <button
+                            key={person.email}
+                            type="button"
+                            onClick={() => handleAddParticipant(person)}
+                            className="btn btn-ghost btn-sm"
+                            style={{
+                              fontSize: '0.71875rem',
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              border: '1px solid rgba(255, 255, 255, 0.1)',
+                              background: 'rgba(255, 255, 255, 0.03)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <span style={{ color: '#ffffff', fontWeight: 600 }}>{person.name}</span>
+                            <span className="badge" style={{ ...getRoleBadgeStyle(person.role), fontSize: '0.5625rem', padding: '1px 4px' }}>
+                              {person.role}
+                            </span>
+                            <span style={{ color: '#22c55e', fontSize: '0.6875rem', fontWeight: 700 }}>+ Add</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* In-room members list with Real-Time Read & Presence Status */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                    {Object.values(activeSession.participants || {}).map((p) => {
+                      const isOnline = Date.now() - (p.lastReadTimestamp || 0) < 120000;
+                      return (
+                        <div
+                          key={p.email}
                           style={{
-                            background: 'rgba(155, 34, 38, 0.3)',
-                            color: '#ff6b6b',
-                            fontSize: '0.5625rem',
-                            padding: '1px 4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '4px 8px',
+                            background: 'var(--bg-card)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 'var(--radius-xs)',
+                            fontSize: '0.75rem',
                           }}
                         >
-                          Log Initiator
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                          <div
+                            style={{
+                              width: 20,
+                              height: 20,
+                              borderRadius: '50%',
+                              background: getRoleBadgeStyle(p.role).avatarBg,
+                              color: '#fff',
+                              fontSize: '0.5625rem',
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              position: 'relative',
+                            }}
+                          >
+                            {getInitials(p.name)}
+                            {isOnline && (
+                              <span
+                                style={{
+                                  position: 'absolute',
+                                  bottom: -1,
+                                  right: -1,
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: '50%',
+                                  background: '#22c55e',
+                                  boxShadow: '0 0 0 1px #000',
+                                }}
+                              />
+                            )}
+                          </div>
+
+                          <span style={{ color: 'var(--white)', fontWeight: 500 }}>{p.name}</span>
+
+                          <span
+                            className="badge"
+                            style={{ ...getRoleBadgeStyle(p.role), fontSize: '0.625rem', padding: '1px 5px' }}
+                          >
+                            {p.role}
+                          </span>
+
+                          {/* Real-time Presence & Read Status */}
+                          {isOnline ? (
+                            <span style={{ fontSize: '0.625rem', color: '#22c55e', fontWeight: 600 }}>
+                              Active now
+                            </span>
+                          ) : p.lastSeen ? (
+                            <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }} title={`Last seen: ${p.lastSeen}`}>
+                              Seen {formatTime(p.lastSeen)}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }}>
+                              Unseen
+                            </span>
+                          )}
+
+                          {p.isLogInitiator && (
+                            <span
+                              className="badge"
+                              style={{
+                                background: 'rgba(155, 34, 38, 0.3)',
+                                color: '#ff6b6b',
+                                fontSize: '0.5625rem',
+                                padding: '1px 4px',
+                              }}
+                            >
+                              Log Initiator
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -1504,6 +1692,144 @@ export default function TCCCom({
                           }}
                         >
                           {renderMessageContent(msg.text)}
+                        </div>
+
+                        {/* Interactive Reactions and Read Receipts Row */}
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: isMine ? 'flex-end' : 'flex-start',
+                            flexWrap: 'wrap',
+                            gap: 6,
+                            marginTop: 4,
+                          }}
+                        >
+                          {/* Active emoji reactions */}
+                          {msg.reactions &&
+                            Object.entries(msg.reactions).map(([emoji, userMap]) => {
+                              const users = Object.values(userMap || {});
+                              if (users.length === 0) return null;
+                              const hasReacted = !!userMap[personnelProfile.encodedEmail];
+                              return (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => handleReaction(msg.id, emoji)}
+                                  style={{
+                                    fontSize: '0.6875rem',
+                                    padding: '2px 6px',
+                                    borderRadius: '12px',
+                                    border: hasReacted
+                                      ? '1px solid rgba(34, 197, 94, 0.6)'
+                                      : '1px solid rgba(255, 255, 255, 0.1)',
+                                    background: hasReacted
+                                      ? 'rgba(34, 197, 94, 0.18)'
+                                      : 'rgba(255, 255, 255, 0.04)',
+                                    color: hasReacted ? '#22c55e' : 'var(--text-secondary)',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                    lineHeight: 1,
+                                  }}
+                                  title={users.map((u) => `${u.name} (${u.role})`).join(', ')}
+                                >
+                                  <span>{emoji}</span>
+                                  <span style={{ fontSize: '0.625rem', fontFamily: 'var(--font-mono)' }}>{users.length}</span>
+                                </button>
+                              );
+                            })}
+
+                          {/* Quick react hover icons */}
+                          <div style={{ display: 'inline-flex', gap: 2, opacity: 0.6 }}>
+                            {['👍', '✅', '👀', '⚠️'].map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => handleReaction(msg.id, emoji)}
+                                style={{
+                                  fontSize: '0.6875rem',
+                                  padding: '1px 3px',
+                                  borderRadius: '3px',
+                                  background: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                }}
+                                title={`React ${emoji}`}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Real-Time Read Receipts */}
+                          {isMine && (() => {
+                            const readers = Object.values(activeSession.participants || {}).filter(
+                              (p) =>
+                                p.email.toLowerCase() !== msg.senderEmail.toLowerCase() &&
+                                (p.lastReadTimestamp || 0) >= msg.timestampMs
+                            );
+                            if (readers.length === 0) {
+                              return (
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 2,
+                                    fontSize: '0.6875rem',
+                                    color: 'var(--text-muted)',
+                                    marginLeft: 4,
+                                  }}
+                                  title="Delivered to room"
+                                >
+                                  <Check size={11} />
+                                  <span>Sent</span>
+                                </span>
+                              );
+                            }
+                            return (
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 3,
+                                  fontSize: '0.6875rem',
+                                  color: '#22c55e',
+                                  fontWeight: 600,
+                                  marginLeft: 4,
+                                }}
+                                title={`Read by:\n${readers.map((r) => `• ${r.name} (${r.role})`).join('\n')}`}
+                              >
+                                <CheckCheck size={13} color="#22c55e" />
+                                <span>
+                                  Read by {readers.length === 1 ? readers[0].name.split(' ')[0] : `${readers[0].name.split(' ')[0]} +${readers.length - 1}`}
+                                </span>
+                              </span>
+                            );
+                          })()}
+
+                          {!isMine && (() => {
+                            const readers = Object.values(activeSession.participants || {}).filter(
+                              (p) =>
+                                p.email.toLowerCase() !== msg.senderEmail.toLowerCase() &&
+                                (p.lastReadTimestamp || 0) >= msg.timestampMs
+                            );
+                            if (readers.length === 0) return null;
+                            return (
+                              <span
+                                style={{
+                                  fontSize: '0.625rem',
+                                  color: 'var(--text-muted)',
+                                  fontFamily: 'var(--font-mono)',
+                                  marginLeft: 4,
+                                }}
+                                title={`Read by:\n${readers.map((r) => `• ${r.name} (${r.role})`).join('\n')}`}
+                              >
+                                Seen by {readers.length}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
@@ -1650,20 +1976,48 @@ export default function TCCCom({
                             </div>
                           </div>
 
-                          {c.role && (
-                            <span
-                              className="badge"
-                              style={{
-                                ...getRoleBadgeStyle(c.role),
-                                fontSize: '0.625rem',
-                                padding: '2px 6px',
-                                flexShrink: 0,
-                                marginLeft: 8,
-                              }}
-                            >
-                              {c.role}
-                            </span>
-                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 8 }}>
+                            {c.category === 'in_room' && (
+                              <span
+                                className="badge"
+                                style={{
+                                  background: 'rgba(34, 197, 94, 0.15)',
+                                  color: '#22c55e',
+                                  fontSize: '0.5625rem',
+                                  padding: '1px 5px',
+                                }}
+                              >
+                                In room
+                              </span>
+                            )}
+                            {c.category === 'outside' && (
+                              <span
+                                className="badge"
+                                style={{
+                                  background: 'rgba(244, 162, 97, 0.18)',
+                                  color: '#f4a261',
+                                  border: '1px solid rgba(244, 162, 97, 0.4)',
+                                  fontSize: '0.5625rem',
+                                  padding: '1px 5px',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                + Auto-add
+                              </span>
+                            )}
+                            {c.role && (
+                              <span
+                                className="badge"
+                                style={{
+                                  ...getRoleBadgeStyle(c.role),
+                                  fontSize: '0.625rem',
+                                  padding: '2px 6px',
+                                }}
+                              >
+                                {c.role}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -1738,6 +2092,32 @@ export default function TCCCom({
                         }}
                       >
                         @{shortName}
+                      </button>
+                    );
+                  })}
+
+                  {/* Quick tag other platform personnel (Auto-adds on send) */}
+                  {outsidePersonnel.slice(0, 4).map((p) => {
+                    const shortName = p.name.includes(' ') ? p.name.split(' ')[0] : p.name;
+                    return (
+                      <button
+                        key={p.email}
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => insertMention(`@${p.name} `)}
+                        style={{
+                          fontSize: '0.6875rem',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          border: '1px dashed rgba(244, 162, 97, 0.45)',
+                          color: '#f4a261',
+                          background: 'rgba(244, 162, 97, 0.08)',
+                          fontWeight: 600,
+                          flexShrink: 0,
+                        }}
+                        title={`Tag and auto-add ${p.name} (${p.role}) to this conversation`}
+                      >
+                        + @{shortName}
                       </button>
                     );
                   })}
