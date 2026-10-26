@@ -115,6 +115,7 @@ function ParticipantsContent() {
     let addedCount = 0;
     let duplicateCount = 0;
     const seenEmails = new Set<string>();
+    const enrolledList: Array<{ name: string; email: string }> = [];
 
     for (const line of lines) {
       const parts = line.split(',');
@@ -134,8 +135,12 @@ function ParticipantsContent() {
         seenEmails.add(email);
         const ok = await addParticipant(name, email);
         if (ok) {
-          if (!isDuplicate) addedCount++;
-          else duplicateCount++;
+          if (!isDuplicate) {
+            addedCount++;
+            enrolledList.push({ name: name || email.split('@')[0], email });
+          } else {
+            duplicateCount++;
+          }
         }
       }
     }
@@ -162,6 +167,9 @@ function ParticipantsContent() {
           testTitle,
           count: addedCount,
           duplicateCount,
+          participantName: addedCount === 1 ? enrolledList[0]?.name : undefined,
+          participantEmail: addedCount === 1 ? enrolledList[0]?.email : undefined,
+          participantsList: enrolledList,
         },
       });
     }
@@ -240,6 +248,7 @@ function ParticipantsContent() {
       let addedCount = 0;
       let duplicateCount = 0;
       const seenEmails = new Set<string>();
+      const enrolledList: Array<{ name: string; email: string }> = [];
 
       for (let i = startIdx; i < rawRows.length; i++) {
         const row = rawRows[i];
@@ -269,6 +278,7 @@ function ParticipantsContent() {
           if (ok) {
             if (!isDuplicate) {
               addedCount++;
+              enrolledList.push({ name, email });
             } else {
               duplicateCount++;
             }
@@ -299,6 +309,7 @@ function ParticipantsContent() {
             count: addedCount,
             duplicateCount,
             fileName: csvFile?.name || 'spreadsheet.xlsx',
+            participantsList: enrolledList,
           },
         });
       }
@@ -310,13 +321,14 @@ function ParticipantsContent() {
     }
   };
 
-  const handleRemove = async (email: string) => {
+  const handleRemove = async (email: string, name?: string) => {
     if (!confirm(`Remove ${email} from this test?`)) return;
     setLoading(true);
     const key = encodeEmail(email);
     
     const existingSnap = await get(ref(rtdb, `participants/${key}`));
     const existing = existingSnap.val() || {};
+    const candName = existing.name || name || email.split('@')[0];
     
     if (existing.tests && existing.tests[selectedTestId]) {
       const newTests = { ...existing.tests };
@@ -336,11 +348,12 @@ function ParticipantsContent() {
         actorRole,
         action: 'DELETE_PARTICIPANT',
         actionLabel: 'Removed Participant from Test',
-        targetTitle: `${email} (${testTitle})`,
+        targetTitle: `${candName} (${email})`,
         details: {
           testId: selectedTestId,
           testTitle,
           participantEmail: email,
+          participantName: candName,
         },
       });
     }
@@ -386,13 +399,13 @@ function ParticipantsContent() {
       actorEmail,
       actorName,
       actorRole,
-      action: 'ADD_PARTICIPANT',
+      action: 'UPDATE_PARTICIPANT',
       actionLabel: 'Updated Participant Details',
       targetTitle: `${newNameTrimmed} (${newEmailTrimmed})`,
       details: {
         participantName: newNameTrimmed,
         participantEmail: newEmailTrimmed,
-        oldEmail,
+        oldEmail: oldEmail !== newEmailTrimmed ? oldEmail : undefined,
       },
     });
     
@@ -598,7 +611,7 @@ function ParticipantsContent() {
                                         className="btn btn-ghost btn-sm"
                                         id={`remove-${p.email}`}
                                         style={{ color: 'var(--accent-red-light)' }}
-                                        onClick={() => handleRemove(p.email)}
+                                        onClick={() => handleRemove(p.email, p.name)}
                                       >
                                         Remove
                                       </button>
@@ -663,7 +676,7 @@ function ParticipantsContent() {
                           <button
                             className="btn btn-ghost btn-sm"
                             style={{ color: 'var(--accent-red-light)', padding: '4px 10px', fontSize: '0.75rem' }}
-                            onClick={() => handleRemove(p.email)}
+                            onClick={() => handleRemove(p.email, p.name)}
                           >
                             Remove
                           </button>

@@ -21,6 +21,7 @@ export interface AuditEvent {
     | 'REJECT_PERSONNEL'
     | 'REVOKE_PERSONNEL'
     | 'ADD_PARTICIPANT'
+    | 'UPDATE_PARTICIPANT'
     | 'BULK_ADD_PARTICIPANTS'
     | 'DELETE_PARTICIPANT';
   actionLabel: string;
@@ -37,7 +38,11 @@ export interface AuditEvent {
     targetName?: string;
     participantEmail?: string;
     participantName?: string;
+    oldEmail?: string;
     count?: number;
+    duplicateCount?: number;
+    fileName?: string;
+    participantsList?: Array<{ name: string; email: string }>;
     [key: string]: any;
   };
 }

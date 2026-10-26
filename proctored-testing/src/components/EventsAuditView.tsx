@@ -15,6 +15,145 @@ interface EventsAuditViewProps {
   embeddedInAdmin?: boolean;
 }
 
+function ParticipantRosterViewer({
+  list,
+  fileName,
+  duplicateCount,
+}: {
+  list: Array<{ name: string; email: string }>;
+  fileName?: string;
+  duplicateCount?: number;
+}) {
+  const [filter, setFilter] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const filtered = useMemo(() => {
+    if (!filter.trim()) return list;
+    const q = filter.toLowerCase().trim();
+    return list.filter(
+      p =>
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.email && p.email.toLowerCase().includes(q))
+    );
+  }, [list, filter]);
+
+  const handleCopy = () => {
+    const text = list.map(p => `${p.name}, ${p.email}`).join('\n');
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div
+      style={{
+        marginTop: 10,
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-sm)',
+        background: 'var(--bg-secondary)',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '8px 12px',
+          background: 'var(--bg-input)',
+          borderBottom: '1px solid var(--border)',
+          flexWrap: 'wrap',
+          gap: 8,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--text-primary)' }}>
+            Candidate Roster ({list.length} Enrolled)
+          </span>
+          {duplicateCount !== undefined && duplicateCount > 0 && (
+            <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>
+              {duplicateCount} Duplicates Merged
+            </span>
+          )}
+          {fileName && (
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Source: {fileName}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input
+            type="text"
+            placeholder="Search roster..."
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            style={{
+              padding: '3px 8px',
+              fontSize: '0.75rem',
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              color: 'var(--text-primary)',
+              width: 150,
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="btn btn-ghost btn-sm"
+            style={{ padding: '3px 8px', fontSize: '0.75rem' }}
+          >
+            {copied ? '✓ Copied' : 'Copy All'}
+          </button>
+        </div>
+      </div>
+      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78125rem' }}>
+          <thead>
+            <tr
+              style={{
+                background: 'var(--bg-primary)',
+                borderBottom: '1px solid var(--border)',
+                color: 'var(--text-muted)',
+                textAlign: 'left',
+                position: 'sticky',
+                top: 0,
+                zIndex: 1,
+              }}
+            >
+              <th style={{ padding: '6px 10px', width: 44 }}>#</th>
+              <th style={{ padding: '6px 10px' }}>Name</th>
+              <th style={{ padding: '6px 10px' }}>Email</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((p, idx) => (
+              <tr key={p.email + '-' + idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                <td style={{ padding: '5px 10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                  {idx + 1}
+                </td>
+                <td style={{ padding: '5px 10px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {p.name || 'Unnamed'}
+                </td>
+                <td style={{ padding: '5px 10px', color: 'var(--accent-green-light)', fontFamily: 'var(--font-mono)' }}>
+                  {p.email}
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={3} style={{ padding: '12px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  No candidates matching &ldquo;{filter}&rdquo;
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function EventsAuditView({ embeddedInAdmin = false }: EventsAuditViewProps) {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,8 +258,12 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
         const snippetMatch = evt.details?.questionSnippet?.toLowerCase().includes(q);
         const testMatch = evt.details?.testTitle?.toLowerCase().includes(q);
         const secMatch = evt.details?.sectionName?.toLowerCase().includes(q);
-        const partEmailMatch = evt.details?.participantEmail?.toLowerCase().includes(q);
-        const partNameMatch = evt.details?.participantName?.toLowerCase().includes(q);
+        const partEmailMatch =
+          evt.details?.participantEmail?.toLowerCase().includes(q) ||
+          evt.details?.participantsList?.some(p => p.email.toLowerCase().includes(q));
+        const partNameMatch =
+          evt.details?.participantName?.toLowerCase().includes(q) ||
+          evt.details?.participantsList?.some(p => p.name?.toLowerCase().includes(q));
 
         if (
           !actorNameMatch &&
@@ -629,6 +772,14 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
                         </code>
                       </div>
                     )}
+                    {evt.details.oldEmail && (
+                      <div style={{ marginBottom: 6 }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Previous Email: </span>
+                        <code style={{ color: 'var(--text-secondary)' }}>
+                          &lt;{evt.details.oldEmail}&gt;
+                        </code>
+                      </div>
+                    )}
                     {evt.details.questionTag && (
                       <div style={{ marginBottom: 6 }}>
                         <span style={{ color: 'var(--text-muted)' }}>Question Tag: </span>
@@ -668,11 +819,18 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
                         <span>{evt.details.targetRole}</span>
                       </div>
                     )}
-                    {evt.details.count !== undefined && (
+                    {evt.details.count !== undefined && !evt.details.participantsList && (
                       <div style={{ marginBottom: 4 }}>
                         <span style={{ color: 'var(--text-muted)' }}>Items Count: </span>
                         <span>{evt.details.count}</span>
                       </div>
+                    )}
+                    {evt.details.participantsList && evt.details.participantsList.length > 0 && (
+                      <ParticipantRosterViewer
+                        list={evt.details.participantsList}
+                        fileName={evt.details.fileName}
+                        duplicateCount={evt.details.duplicateCount}
+                      />
                     )}
                   </div>
                 )}
