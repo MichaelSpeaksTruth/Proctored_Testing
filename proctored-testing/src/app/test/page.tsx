@@ -356,68 +356,27 @@ function TestContent() {
   };
 
   const handleViolationStart = useCallback((event: ProctoringEvent) => {
-    const messages: Record<ProctoringEvent, string> = {
-      NO_FACE:            `No face detected in frame`,
-      MULTIPLE_FACES:     `Multiple faces detected`,
-      TAB_SWITCHED:       `Tab switching detected`,
-      LEFT_FULLSCREEN:    `Exited fullscreen`,
-      LOUD_AUDIO:         `Loud audio detected`,
-      CAMERA_COVERED:     `Camera covered`,
-      MIC_MUTED:          `Microphone muted`,
-      PHONE_DETECTED:     `Mobile device detected`,
-      GAZE_AWAY:          `Looking away from screen`,
-      HEAD_PITCH_DOWN:    `Looking down detected`,
-      DUCKING_DOWN:       `Face out of frame boundaries`,
-      SHOULDERS_OUT_OF_FRAME: `Camera alignment required`,
-    };
-
-    // 1. Handle dynamic shoulder alignment (does not deduct lives, just blurs until fixed)
+    // 1. Dynamic shoulder alignment: ONLY allowed modal interrupt to correct laptop screen tilt
     if (event === 'SHOULDERS_OUT_OF_FRAME') {
       setIsShouldersMisaligned(true);
       return;
     }
 
-    // 2. Atomic Offense Deduplication (Tab Switch & Fullscreen Exit)
-    let isCritical = false;
-    let deductLife = false;
+    // 2. Fullscreen re-entry lock when exiting fullscreen
+    if (event === 'LEFT_FULLSCREEN' && !isMobileDevice) {
+      setReEntryFullscreenLock(true);
+    }
 
+    // 3. Silent Auditing for all other events (PHONE_DETECTED, MULTIPLE_FACES, NO_FACE, etc.)
+    // During test, alarms, popups, and penalty boxes NEVER interrupt the candidate.
+    // Visual proof snapshots and durations are recorded silently to Firebase
+    // for administrative review and final grading audits.
     if (event === 'TAB_SWITCHED' || event === 'LEFT_FULLSCREEN') {
       const now = Date.now();
-      // If both fire within 1500ms, only count as 1 offense
       if (now - lastIncidentTimeRef.current > 1500) {
-        deductLife = true;
-        isCritical = true;
-        setCriticalViolationMsg(`Window unfocused or exited fullscreen`);
+        setLives(l => Math.max(0, l - 1));
       }
       lastIncidentTimeRef.current = now;
-      if (event === 'LEFT_FULLSCREEN' && !isMobileDevice) {
-        setReEntryFullscreenLock(true);
-      }
-    } else if (event === 'PHONE_DETECTED' || event === 'MULTIPLE_FACES') {
-      // Hard external cheating indicators deduct life
-      deductLife = true;
-      isCritical = true;
-      setCriticalViolationMsg(event === 'PHONE_DETECTED' ? 'Mobile device detected in camera' : 'Multiple people detected in frame');
-    }
-    // Soft telemetry (NO_FACE, HEAD_PITCH_DOWN, GAZE_AWAY, LOUD_AUDIO) is logged
-    // silently to Firebase for administrative review, but does NOT drain student lives.
-
-    if (deductLife) {
-      setLives(l => Math.max(0, l - 1));
-    }
-
-    // Completely suppress UI feedback for passive/soft telemetry
-    if (event === 'HEAD_PITCH_DOWN' || event === 'DUCKING_DOWN' || event === 'NO_FACE' || event === 'GAZE_AWAY') {
-      return;
-    }
-
-    if (isCritical) {
-      setPenaltyBoxEndTime(Date.now() + 5000); // 5-second mandatory blur
-    } else {
-      // Show normal non-critical toast warning
-      setViolation(messages[event] || 'Proctoring violation detected');
-      if (violationTimeoutRef.current) clearTimeout(violationTimeoutRef.current);
-      violationTimeoutRef.current = setTimeout(() => setViolation(null), 3500);
     }
   }, [isMobileDevice]);
 
