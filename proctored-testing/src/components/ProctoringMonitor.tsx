@@ -140,29 +140,36 @@ function cropStd(video: HTMLVideoElement, p: Probe, b: FBox) {
 }
 
 // Largest face = primary (unchanged behaviour for NO_FACE and pose).
-// Extras only count if they pass all four checks.
-function validateFaces(all: LM[][], video: HTMLVideoElement, tex: Probe | null) {
+// Extras only count if they pass all four checks + phone veto.
+function validateFaces(all: LM[][], video: HTMLVideoElement, tex: Probe | null, phoneBoxes: FBox[]) {
   const vw = video.videoWidth || 1, vh = video.videoHeight || 1;
   const sized = all
     .map((lm) => ({ lm, box: lmBox(lm), fH: Math.abs(lm[IDX_CHIN].y - lm[IDX_FOREHEAD].y) }))
     .filter((f) => f.fH >= MIN_FACE_H)
     .sort((a, b) => b.box.w * b.box.h - a.box.w * a.box.h);
   const rejected: string[] = [];
-  if (sized.length === 0) return { faces: [] as LM[][], rejected };
+  const info: { box: FBox; tag: string }[] = [];
+  if (sized.length === 0) return { faces: [] as LM[][], rejected, info };
 
   const [primary, ...rest] = sized;
+  info.push({ box: primary.box, tag: 'primary' });
   const kept = [primary];
   for (const f of rest) {
+    const ratio = f.box.h / primary.box.h;
+    const ov = overlapOfSmaller(f.box, primary.box);
     const aspect = (f.box.w * vw) / (f.box.h * vh);
+    const std = tex ? cropStd(video, tex, f.box) : -1;
     const why =
-      f.box.h < EXTRA_MIN_RATIO * primary.box.h ? 'small'
-      : overlapOfSmaller(f.box, primary.box) > EXTRA_MAX_OVERLAP ? 'overlap'
-      : aspect < EXTRA_ASPECT[0] || aspect > EXTRA_ASPECT[1] ? `aspect ${aspect.toFixed(2)}`
-      : tex && cropStd(video, tex, f.box) < EXTRA_MIN_TEXTURE ? 'flat'
+      phoneBoxes.some((pb) => overlapOfSmaller(f.box, pb) > 0.5) ? 'on-phone'
+      : ratio < EXTRA_MIN_RATIO ? 'small'
+      : ov > EXTRA_MAX_OVERLAP ? 'overlap'
+      : aspect < EXTRA_ASPECT[0] || aspect > EXTRA_ASPECT[1] ? 'aspect'
+      : std >= 0 && std < EXTRA_MIN_TEXTURE ? 'flat'
       : null;
+    info.push({ box: f.box, tag: `${why ?? 'KEPT'} r${ratio.toFixed(2)} o${ov.toFixed(2)} a${aspect.toFixed(2)} s${std.toFixed(0)}` });
     if (why) rejected.push(why); else kept.push(f);
   }
-  return { faces: kept.map((k) => k.lm), rejected };
+  return { faces: kept.map((k) => k.lm), rejected, info };
 }
 
 export interface MonitorStatus {
@@ -607,7 +614,16 @@ export default function ProctoringMonitor({
           if (!video || video.videoWidth === 0) return;
 
           const rawCount = results.multiFaceLandmarks.length;
-          const { faces: validFaces, rejected } = validateFaces(results.multiFaceLandmarks, video, texProbe);
+
+          // Build phoneBoxes from fresh COCO predictions (< 2s old) for phone-overlap veto
+          const lp = lastPredsRef.current;
+          const phoneBoxes: FBox[] = lp && Date.now() - lp.t < 2000
+            ? lp.preds
+                .filter((p) => ['cell phone', 'remote', 'laptop'].includes(p.class) && p.score >= 0.2)
+                .map((p) => ({ x: p.bbox[0] / lp.vw, y: p.bbox[1] / lp.vh, w: p.bbox[2] / lp.vw, h: p.bbox[3] / lp.vh }))
+            : [];
+
+          const { faces: validFaces, rejected, info } = validateFaces(results.multiFaceLandmarks, video, texProbe, phoneBoxes);
           const count = validFaces.length;
 
           // Glow = sudden jump in near-white pixels vs a slow baseline
@@ -780,26 +796,43 @@ export default function ProctoringMonitor({
                   }
                 }
               }
+            }
+          }
 
-              // Persistent rendering of COCO predictions (redrawn each FaceMesh frame after clearRect for 1.2s)
-              const lp = lastPredsRef.current;
-              if (gx && lp && Date.now() - lp.t < 1200) {
-                const sx = cv.width / lp.vw, sy = cv.height / lp.vh;
-                for (const p of lp.preds) {
-                  if (p.score < 0.28) continue;
-                  const isCheat = p.class in PHONE_CLASSES || (glowRef.current.active && p.class in LOOKALIKE);
-                  const [bx, by, bw, bh] = p.bbox;
-                  gx.strokeStyle = isCheat ? '#ff2200' : 'rgba(34,255,136,0.6)';
-                  gx.lineWidth = isCheat ? 2.5 : 1;
-                  gx.strokeRect(bx * sx, by * sy, bw * sx, bh * sy);
-                  gx.fillStyle = isCheat ? 'rgba(255,34,0,0.9)' : 'rgba(34,255,136,0.9)';
-                  gx.font = 'bold 12px monospace';
-                  gx.fillText(
-                    `${p.class.toUpperCase()} ${(p.score * 100).toFixed(0)}%`,
-                    bx * sx + 2,
-                    by * sy > 14 ? by * sy - 4 : (by + bh) * sy + 12
-                  );
-                }
+          if (overlayCanvasRef?.current) {
+            const cv = overlayCanvasRef.current;
+            const gx = cv.getContext('2d');
+
+            // Persistent rendering of COCO predictions (redrawn each FaceMesh frame after clearRect for 1.2s)
+            const lp = lastPredsRef.current;
+            if (gx && lp && Date.now() - lp.t < 1200) {
+              const sx = cv.width / lp.vw, sy = cv.height / lp.vh;
+              for (const p of lp.preds) {
+                if (p.score < 0.28) continue;
+                const isCheat = p.class in PHONE_CLASSES || (glowRef.current.active && p.class in LOOKALIKE);
+                const [bx, by, bw, bh] = p.bbox;
+                gx.strokeStyle = isCheat ? '#ff2200' : 'rgba(34,255,136,0.6)';
+                gx.lineWidth = isCheat ? 2.5 : 1;
+                gx.strokeRect(bx * sx, by * sy, bw * sx, bh * sy);
+                gx.fillStyle = isCheat ? 'rgba(255,34,0,0.9)' : 'rgba(34,255,136,0.9)';
+                gx.font = 'bold 12px monospace';
+                gx.fillText(
+                  `${p.class.toUpperCase()} ${(p.score * 100).toFixed(0)}%`,
+                  bx * sx + 2,
+                  by * sy > 14 ? by * sy - 4 : (by + bh) * sy + 12
+                );
+              }
+            }
+
+            // Draw every raw face candidate box with its stats in calibration mode
+            if (calibrationMode && gx) {
+              for (const { box, tag } of info) {
+                gx.strokeStyle = tag === 'primary' ? '#22ff88' : '#ffd400';
+                gx.lineWidth = 2;
+                gx.strokeRect(box.x * cv.width, box.y * cv.height, box.w * cv.width, box.h * cv.height);
+                gx.fillStyle = gx.strokeStyle;
+                gx.font = '11px monospace';
+                gx.fillText(tag, box.x * cv.width + 2, box.y * cv.height + 12);
               }
             }
           }
