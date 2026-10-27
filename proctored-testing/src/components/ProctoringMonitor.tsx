@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { ref, push } from 'firebase/database';
 import { rtdb } from '@/lib/firebase';
-import { ProctoringEvent, Severity, DurationFlag } from '@/lib/proctoring';
+import { ProctoringEvent, Severity, DurationFlag, Box, PhoneMeta } from '@/lib/proctoring';
 
 // ── Hysteresis ────────────────────────────────────────────────────────────────
 // Requiring sustained violating frames prevents momentary twitches or frame drops
@@ -44,6 +44,31 @@ function captureSnapshot(videoEl: HTMLVideoElement | null): string | undefined {
   }
 }
 
+
+
+const STATIC_SUPPRESS_MS = 10_000;  // fixed this long => candidate for suppression
+const ANCHOR_DRIFT = 0.01;          // center may move 1% of frame (~6px @640) and still be "same spot"
+const ANCHOR_SIZE_TOL = 0.10;
+const ANCHOR_FORGET_MS = 3_000;     // flicker of up to 3s doesn't reset the timer
+
+interface Anchor { 
+  cx: number; 
+  cy: number; 
+  w: number; 
+  h: number; 
+  since: number; 
+  lastSeen: number; 
+}
+
+function sameSpot(a: Anchor, b: Box, vw: number, vh: number) {
+  const cx = b[0] + b[2] / 2, cy = b[1] + b[3] / 2;
+  return (
+    Math.abs(cx - a.cx) < ANCHOR_DRIFT * vw &&
+    Math.abs(cy - a.cy) < ANCHOR_DRIFT * vh &&
+    Math.abs(b[2] - a.w) / a.w < ANCHOR_SIZE_TOL &&
+    Math.abs(b[3] - a.h) / a.h < ANCHOR_SIZE_TOL
+  );
+}
 
 export interface MonitorStatus {
   faceDetected: boolean;
@@ -87,10 +112,13 @@ export default function ProctoringMonitor({
   isMobile = false,
 }: Props) {
 
+  const faceBoxRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null); // normalized 0..1
+
   const activeInfractions = useRef<Map<ProctoringEvent, { 
     startTime: number; 
     severity: Severity; 
     evidenceSnapshot?: string; 
+    detection?: PhoneMeta;
   }>>(new Map());
   
   const lastAlignment = useRef(false);
@@ -132,19 +160,19 @@ export default function ProctoringMonitor({
   }, [uid, testId, calibrationMode]);
 
   const openInfraction = useCallback(
-    (event: ProctoringEvent, severity: Severity) => {
+    (event: ProctoringEvent, severity: Severity, evidence?: { snapshot?: string; detection?: PhoneMeta }) => {
       if (activeInfractions.current.has(event)) return;
 
-      // Capture lightweight snapshot evidence for critical/hard infractions
-      let snapshot: string | undefined = undefined;
-      if (event === 'MULTIPLE_FACES' || event === 'PHONE_DETECTED' || event === 'CAMERA_COVERED') {
+      let snapshot = evidence?.snapshot;
+      if (!snapshot && (event === 'MULTIPLE_FACES' || event === 'PHONE_DETECTED' || event === 'CAMERA_COVERED')) {
         snapshot = captureSnapshot(videoRef.current);
       }
 
       activeInfractions.current.set(event, { 
         startTime: Date.now(), 
         severity, 
-        evidenceSnapshot: snapshot 
+        evidenceSnapshot: snapshot,
+        detection: evidence?.detection,
       });
       onViolationStart?.(event, severity);
     },
@@ -178,6 +206,7 @@ export default function ProctoringMonitor({
         endTime: new Date(endMs).toISOString(),
         durationInSeconds,
         ...(snapshot ? { evidenceSnapshot: snapshot } : {}),
+        ...(record.detection ? { detection: record.detection } : {}),
       };
       onViolation?.(flag);
       if (!calibrationMode) push(ref(rtdb, flagPath()), flag);
@@ -266,6 +295,7 @@ export default function ProctoringMonitor({
             endTime: new Date(endMs).toISOString(),
             durationInSeconds: dur,
             ...(snapshot ? { evidenceSnapshot: snapshot } : {}),
+            ...(val.detection ? { detection: val.detection } : {}),
           });
         }
       });
@@ -313,40 +343,123 @@ export default function ProctoringMonitor({
         let detecting = false;
         let phoneStreak = 0;
         let phoneClearStreak = 0;
+        const anchors: Anchor[] = [];
+        const snapCanvas = document.createElement('canvas');
+
+        const grabFrame = (v: HTMLVideoElement) => {
+          const w = 320, h = Math.round((v.videoHeight / v.videoWidth) * w) || 240;
+          if (snapCanvas.width !== w) snapCanvas.width = w;
+          if (snapCanvas.height !== h) snapCanvas.height = h;
+          snapCanvas.getContext('2d')?.drawImage(v, 0, 0, w, h);
+        };
+
+        const annotate = (p: import('@tensorflow-models/coco-ssd').DetectedObject, vw: number) => {
+          const ctx = snapCanvas.getContext('2d');
+          if (!ctx) return undefined;
+          const s = snapCanvas.width / vw;
+          const [bx, by, bw, bh] = p.bbox;
+          ctx.strokeStyle = '#ff2200'; ctx.lineWidth = 2;
+          ctx.strokeRect(bx * s, by * s, bw * s, bh * s);
+          ctx.font = 'bold 11px monospace'; ctx.fillStyle = 'rgba(255,34,0,0.9)';
+          ctx.fillText(`${p.class.toUpperCase()} ${(p.score * 100).toFixed(0)}%`,
+                       bx * s + 2, by * s > 14 ? by * s - 3 : (by + bh) * s + 11);
+          return snapCanvas.toDataURL('image/jpeg', 0.6);
+        };
 
         cocoTimer = setInterval(async () => {
           if (!mounted || !videoRef.current || videoRef.current.readyState !== 4 || detecting) return;
           try {
             detecting = true;
             const video = videoRef.current;
-            
-            // Detect on native video element directly to maintain 100% native aspect ratio and resolution
+            const vw = video.videoWidth, vh = video.videoHeight;
+            const now = Date.now();
+
+            grabFrame(video); // Exact triggering frame
+
             let preds: import('@tensorflow-models/coco-ssd').DetectedObject[] = [];
-            tf.engine().startScope();
-            try {
-              preds = await model.detect(video);
-            } finally {
-              tf.engine().endScope();
+            try { 
+              preds = await model.detect(video); 
+            } catch {
+              /* ok */
             }
 
-            const phoneDetected = preds.some((p) => {
-              const thr = PHONE_CLASSES[p.class];
-              return thr !== undefined && p.score >= thr;
-            });
+            const face = faceBoxRef.current;
+            const behaviourAgrees =
+              activeInfractions.current.has('HEAD_PITCH_DOWN') ||
+              activeInfractions.current.has('GAZE_AWAY') ||
+              activeInfractions.current.has('DUCKING_DOWN');
 
-            // Require 3 consecutive verified detections @ 800ms (~2.4s) to eliminate momentary false positives
-            if (phoneDetected) {
+            let best: { p: typeof preds[number]; staticMs: number } | null = null;
+            let suppressedAny = false;
+
+            for (const p of preds) {
+              const thr = PHONE_CLASSES[p.class];
+              if (thr === undefined || p.score < thr) continue;
+
+              const bboxAsBox: Box = [p.bbox[0], p.bbox[1], p.bbox[2], p.bbox[3]];
+              let a = anchors.find((x) => sameSpot(x, bboxAsBox, vw, vh));
+              if (a) a.lastSeen = now;
+              else {
+                a = { cx: p.bbox[0] + p.bbox[2] / 2, cy: p.bbox[1] + p.bbox[3] / 2,
+                      w: p.bbox[2], h: p.bbox[3], since: now, lastSeen: now };
+                anchors.push(a);
+              }
+              const staticMs = now - a.since;
+
+              const nx = (p.bbox[0] + p.bbox[2] / 2) / vw;
+              const ny = (p.bbox[1] + p.bbox[3] / 2) / vh;
+              // Unknown face => treat as lap/desk zone and on-face, i.e. never suppress (fail toward flagging)
+              const belowChin = face ? ny > face.y + face.h : true;
+              const onFace = face ? nx > face.x && nx < face.x + face.w && ny > face.y && ny < face.y + face.h : true;
+
+              if (staticMs >= STATIC_SUPPRESS_MS && !belowChin && !onFace && !behaviourAgrees) {
+                suppressedAny = true;
+                continue;
+              }
+              if (!best || p.score > best.p.score) best = { p, staticMs };
+            }
+
+            for (let i = anchors.length - 1; i >= 0; i--) {
+              if (now - anchors[i].lastSeen > ANCHOR_FORGET_MS) anchors.splice(i, 1);
+            }
+
+            // Audit trail: mark the open flag instead of silently dropping it
+            if (suppressedAny) {
+              const rec = activeInfractions.current.get('PHONE_DETECTED');
+              if (rec?.detection) rec.detection.suppressedAsStatic = true;
+            }
+
+            if (best) {
               phoneStreak++;
               phoneClearStreak = 0;
               if (phoneStreak >= 3) {
-                openInfraction('PHONE_DETECTED', 'critical');
+                const rec = activeInfractions.current.get('PHONE_DETECTED');
+                if (rec?.detection) {
+                  rec.detection.maxStaticMs = Math.max(rec.detection.maxStaticMs, best.staticMs);
+                } else {
+                  openInfraction('PHONE_DETECTED', 'critical', {
+                    snapshot: annotate(best.p, vw),
+                    detection: {
+                      score: Number(best.p.score.toFixed(3)),
+                      box: [
+                        Math.round(best.p.bbox[0]),
+                        Math.round(best.p.bbox[1]),
+                        Math.round(best.p.bbox[2]),
+                        Math.round(best.p.bbox[3])
+                      ],
+                      frameW: vw, 
+                      frameH: vh, 
+                      maxStaticMs: best.staticMs,
+                    },
+                  });
+                }
               }
             } else {
               phoneClearStreak++;
               phoneStreak = Math.max(0, phoneStreak - 1);
-              if (phoneClearStreak >= 2) {
-                closeInfraction('PHONE_DETECTED');
-                phoneClearStreak = 0;
+              if (phoneClearStreak >= 2) { 
+                closeInfraction('PHONE_DETECTED'); 
+                phoneClearStreak = 0; 
               }
             }
 
@@ -374,8 +487,6 @@ export default function ProctoringMonitor({
                     );
                   }
                 });
-
-
               }
             }
           } catch {
@@ -421,6 +532,9 @@ export default function ProctoringMonitor({
           report('NO_FACE', count === 0, 'medium');
           report('MULTIPLE_FACES', count > 1, 'critical');
           pushStatus({ faceDetected: count === 1 });
+          if (count !== 1) {
+            faceBoxRef.current = null;
+          }
 
           if (overlayCanvasRef?.current) {
             const cv = overlayCanvasRef.current;
@@ -442,6 +556,12 @@ export default function ProctoringMonitor({
 
           if (count === 1) {
             const lm = validFaces[0];
+            let minX = 1, minY = 1, maxX = 0, maxY = 0;
+            for (const pt of lm) {
+              if (pt.x < minX) minX = pt.x; if (pt.x > maxX) maxX = pt.x;
+              if (pt.y < minY) minY = pt.y; if (pt.y > maxY) maxY = pt.y;
+            }
+            faceBoxRef.current = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
             const noseTip  = lm[IDX_NOSE_TIP];
             const leftEar  = lm[IDX_LEFT_EAR];
             const rightEar = lm[IDX_RIGHT_EAR];

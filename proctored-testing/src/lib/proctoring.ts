@@ -17,13 +17,25 @@ export type ProctoringEvent =
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 
+export type Box = [number, number, number, number]; // [x, y, w, h] in video pixels
+
+export interface PhoneMeta {
+  score: number;
+  box: Box;
+  frameW: number;
+  frameH: number;
+  maxStaticMs: number;
+  suppressedAsStatic?: boolean; // only set when true (RTDB rejects undefined)
+}
+
 export interface DurationFlag {
   event: ProctoringEvent;
   severity: Severity;
   startTime: string;
   endTime: string;
   durationInSeconds: number;
-  evidenceSnapshot?: string; // Optional lightweight base64 JPEG thumbnail for visual proof
+  evidenceSnapshot?: string; // Optional lightweight base64 JPEG thumbnail with burned-in box
+  detection?: PhoneMeta;
   confidence?: number;
 }
 
@@ -42,6 +54,7 @@ export function isHardViolation(event: ProctoringEvent): boolean {
  * Calculates a fair, transparent Integrity Score from 0 to 100%.
  * Soft posture / gaze changes do not destroy candidate scores;
  * hard intentional violations carry appropriate weight.
+ * Flags marked with suppressedAsStatic are not penalized as hard cheats.
  */
 export function calculateIntegrityScore(flags: DurationFlag[]): number {
   if (!flags || flags.length === 0) return 100;
@@ -50,31 +63,31 @@ export function calculateIntegrityScore(flags: DurationFlag[]): number {
   let softDurationSecs = 0;
 
   for (const f of flags) {
-    if (isHardViolation(f.event)) {
-      if (f.event === 'TAB_SWITCHED' || f.event === 'LEFT_FULLSCREEN') {
-        deduction += Math.min(20, 8 + Math.floor((f.durationInSeconds || 1) * 2));
-      } else if (f.event === 'MULTIPLE_FACES') {
-        deduction += Math.min(25, 12 + Math.floor((f.durationInSeconds || 1) * 3));
-      } else if (f.event === 'PHONE_DETECTED') {
-        deduction += Math.min(30, 15 + Math.floor((f.durationInSeconds || 1) * 3));
-      } else if (f.event === 'CAMERA_COVERED') {
-        deduction += Math.min(20, 10 + Math.floor((f.durationInSeconds || 1) * 2));
+    if (f.event === 'TAB_SWITCHED') {
+      deduction += 20;
+    } else if (f.event === 'LEFT_FULLSCREEN') {
+      deduction += 15;
+    } else if (f.event === 'MULTIPLE_FACES') {
+      deduction += 25;
+    } else if (f.event === 'PHONE_DETECTED') {
+      // If the detection was suppressed as a static background object, do not penalize heavily
+      if (f.detection?.suppressedAsStatic) {
+        deduction += 5;
       } else {
-        deduction += 10;
+        deduction += 35;
       }
+    } else if (f.event === 'CAMERA_COVERED') {
+      deduction += 25;
+    } else if (f.event === 'MIC_MUTED') {
+      deduction += 10;
     } else {
-      softDurationSecs += f.durationInSeconds || 0;
+      softDurationSecs += f.durationInSeconds;
     }
   }
 
-  // Soft telemetry deduction: 1 point per 20 seconds of sustained deviation, max 25 points
-  const softDeduction = Math.min(25, Math.floor(softDurationSecs / 20));
+  // Soft telemetry deduction: max 15 points total across entire exam
+  const softDeduction = Math.min(15, Math.floor(softDurationSecs / 10));
   deduction += softDeduction;
 
-  return Math.max(0, Math.min(100, 100 - deduction));
-}
-
-export function reportFlag(uid: string, flag: DurationFlag) {
-  const flagsRef = ref(rtdb, `proctoringFlags/${uid}`);
-  push(flagsRef, flag);
+  return Math.max(0, 100 - deduction);
 }
