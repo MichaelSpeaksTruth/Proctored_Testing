@@ -23,6 +23,11 @@ const PHONE_CLASSES: Record<string, number> = {
   'cell phone': 0.48,
 };
 
+const LOOKALIKE: Record<string, number> = { 
+  remote: 0.35, 
+  laptop: 0.45 
+};
+
 /**
  * Captures a small, compressed JPEG thumbnail directly from the webcam element.
  * Typical size is ~6-10 KB, safe for Firebase Realtime Database and instant for admin review.
@@ -70,6 +75,96 @@ function sameSpot(a: Anchor, b: Box, vw: number, vh: number) {
   );
 }
 
+
+interface FBox { x: number; y: number; w: number; h: number } // normalized 0..1
+
+const MIN_FACE_H = 0.06;            // existing floor
+const EXTRA_MIN_RATIO = 0.4;        // extra face height >= 40% of the primary's
+const EXTRA_MAX_OVERLAP = 0.3;      // max overlap with primary (fraction of the smaller box)
+const EXTRA_ASPECT: [number, number] = [0.5, 1.2];
+const EXTRA_MIN_TEXTURE = 12;       // luma std-dev; wall shadows and glow blobs are flat
+const GLOW_MIN_SAT = 0.02;          // >=2% of pixels near-white
+const GLOW_RATIO = 4;               // and 4x the rolling baseline
+
+function lmBox(lm: LM[]): FBox {
+  let minX = 1, minY = 1, maxX = 0, maxY = 0;
+  for (const pt of lm) {
+    if (pt.x < minX) minX = pt.x; if (pt.x > maxX) maxX = pt.x;
+    if (pt.y < minY) minY = pt.y; if (pt.y > maxY) maxY = pt.y;
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+function overlapOfSmaller(a: FBox, b: FBox) {
+  const iw = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  const ih = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  if (iw <= 0 || ih <= 0) return 0;
+  return (iw * ih) / Math.min(a.w * a.h, b.w * b.h);
+}
+
+function makeProbe(w: number, h: number) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  return ctx ? { ctx, w, h } : null;
+}
+type Probe = NonNullable<ReturnType<typeof makeProbe>>;
+
+// Whole-frame brightness stats on a 64x48 downscale (~3k pixels, negligible cost)
+function frameStats(video: HTMLVideoElement, p: Probe) {
+  p.ctx.drawImage(video, 0, 0, p.w, p.h);
+  const d = p.ctx.getImageData(0, 0, p.w, p.h).data;
+  let sat = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] > 235) sat++;
+  }
+  return { sat: sat / (p.w * p.h) };
+}
+
+// Luma std-dev inside a face box, 24x24 crop
+function cropStd(video: HTMLVideoElement, p: Probe, b: FBox) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const sx = Math.max(0, b.x * vw), sy = Math.max(0, b.y * vh);
+  const sw = Math.min(vw - sx, b.w * vw), sh = Math.min(vh - sy, b.h * vh);
+  if (sw < 4 || sh < 4) return 0;
+  p.ctx.drawImage(video, sx, sy, sw, sh, 0, 0, p.w, p.h);
+  const d = p.ctx.getImageData(0, 0, p.w, p.h).data;
+  const n = p.w * p.h;
+  let sum = 0, sum2 = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const y = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    sum += y; sum2 += y * y;
+  }
+  const mean = sum / n;
+  return Math.sqrt(Math.max(0, sum2 / n - mean * mean));
+}
+
+// Largest face = primary (unchanged behaviour for NO_FACE and pose).
+// Extras only count if they pass all four checks.
+function validateFaces(all: LM[][], video: HTMLVideoElement, tex: Probe | null) {
+  const vw = video.videoWidth || 1, vh = video.videoHeight || 1;
+  const sized = all
+    .map((lm) => ({ lm, box: lmBox(lm), fH: Math.abs(lm[IDX_CHIN].y - lm[IDX_FOREHEAD].y) }))
+    .filter((f) => f.fH >= MIN_FACE_H)
+    .sort((a, b) => b.box.w * b.box.h - a.box.w * a.box.h);
+  const rejected: string[] = [];
+  if (sized.length === 0) return { faces: [] as LM[][], rejected };
+
+  const [primary, ...rest] = sized;
+  const kept = [primary];
+  for (const f of rest) {
+    const aspect = (f.box.w * vw) / (f.box.h * vh);
+    const why =
+      f.box.h < EXTRA_MIN_RATIO * primary.box.h ? 'small'
+      : overlapOfSmaller(f.box, primary.box) > EXTRA_MAX_OVERLAP ? 'overlap'
+      : aspect < EXTRA_ASPECT[0] || aspect > EXTRA_ASPECT[1] ? `aspect ${aspect.toFixed(2)}`
+      : tex && cropStd(video, tex, f.box) < EXTRA_MIN_TEXTURE ? 'flat'
+      : null;
+    if (why) rejected.push(why); else kept.push(f);
+  }
+  return { faces: kept.map((k) => k.lm), rejected };
+}
+
 export interface MonitorStatus {
   faceDetected: boolean;
   cameraCovered: boolean;
@@ -113,6 +208,7 @@ export default function ProctoringMonitor({
 }: Props) {
 
   const faceBoxRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null); // normalized 0..1
+  const glowRef = useRef({ base: -1, sat: 0, active: false });
 
   const activeInfractions = useRef<Map<ProctoringEvent, { 
     startTime: number; 
@@ -387,13 +483,14 @@ export default function ProctoringMonitor({
             const behaviourAgrees =
               activeInfractions.current.has('HEAD_PITCH_DOWN') ||
               activeInfractions.current.has('GAZE_AWAY') ||
-              activeInfractions.current.has('DUCKING_DOWN');
+              activeInfractions.current.has('DUCKING_DOWN') ||
+              glowRef.current.active;
 
             let best: { p: typeof preds[number]; staticMs: number } | null = null;
             let suppressedAny = false;
 
             for (const p of preds) {
-              const thr = PHONE_CLASSES[p.class];
+              const thr = PHONE_CLASSES[p.class] ?? (glowRef.current.active ? LOOKALIKE[p.class] : undefined);
               if (thr === undefined || p.score < thr) continue;
 
               const bboxAsBox: Box = [p.bbox[0], p.bbox[1], p.bbox[2], p.bbox[3]];
@@ -521,16 +618,32 @@ export default function ProctoringMonitor({
           minTrackingConfidence: 0.45,
         });
 
+        const frameProbe = makeProbe(64, 48);
+        const texProbe = makeProbe(24, 24);
+
         faceMesh.onResults((results: { multiFaceLandmarks: LM[][] }) => {
           if (!mounted) return;
-          // Filter out tiny background posters / photos (< 6% frame height)
-          const validFaces = results.multiFaceLandmarks.filter(faceLm => {
-            const fH = Math.abs(faceLm[IDX_CHIN].y - faceLm[IDX_FOREHEAD].y);
-            return fH >= 0.06;
-          });
+          const video = videoRef.current;
+          if (!video || video.videoWidth === 0) return;
+
+          const rawCount = results.multiFaceLandmarks.length;
+          const { faces: validFaces, rejected } = validateFaces(results.multiFaceLandmarks, video, texProbe);
           const count = validFaces.length;
+
+          // Glow = sudden jump in near-white pixels vs a slow baseline (baseline freezes while active)
+          const g = glowRef.current;
+          if (frameProbe) {
+            const s = frameStats(video, frameProbe);
+            if (g.base < 0) g.base = s.sat;
+            g.sat = s.sat;
+            g.active = s.sat > Math.max(GLOW_MIN_SAT, g.base * GLOW_RATIO);
+            if (!g.active) g.base += (s.sat - g.base) * 0.02;
+          }
+
           report('NO_FACE', count === 0, 'medium');
           report('MULTIPLE_FACES', count > 1, 'critical');
+          // Light spike while face geometry breaks = a lit object in front of the lens
+          report('FACE_OCCLUDED', g.active && (rawCount !== 1 || count === 0), 'medium');
           pushStatus({ faceDetected: count === 1 });
           if (count !== 1) {
             faceBoxRef.current = null;
@@ -544,12 +657,12 @@ export default function ProctoringMonitor({
               gx.fillStyle = 'rgba(255,50,50,0.15)';
               gx.fillRect(0, 0, W, H);
               gx.fillStyle = '#ff4444';
-              gx.font = 'bold 15px monospace';
+              gx.font = 'bold 13px monospace';
               gx.textAlign = 'center';
-              gx.fillText(
-                count === 0 ? 'NO FACE DETECTED' : `${count} FACES DETECTED`,
-                W / 2, H / 2
-              );
+              const label = count === 0 
+                ? (g.active ? 'FACE OCCLUDED (SCREEN GLOW)' : 'NO FACE DETECTED')
+                : `${count} FACES (raw ${rawCount}, rej: ${rejected.join(',') || '-'})`;
+              gx.fillText(label, W / 2, H / 2);
               gx.textAlign = 'left';
             }
           }

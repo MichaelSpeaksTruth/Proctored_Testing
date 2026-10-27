@@ -1,6 +1,9 @@
 import { ref, push } from 'firebase/database';
 import { rtdb } from './firebase';
 
+export const FRAMES_TO_START = 16;
+export const FRAMES_TO_CLEAR = 18;
+
 export type ProctoringEvent =
   | 'NO_FACE'
   | 'MULTIPLE_FACES'
@@ -13,7 +16,8 @@ export type ProctoringEvent =
   | 'GAZE_AWAY'
   | 'HEAD_PITCH_DOWN'
   | 'DUCKING_DOWN'
-  | 'SHOULDERS_OUT_OF_FRAME';
+  | 'SHOULDERS_OUT_OF_FRAME'
+  | 'FACE_OCCLUDED';
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 
@@ -80,6 +84,9 @@ export function calculateIntegrityScore(flags: DurationFlag[]): number {
       deduction += 25;
     } else if (f.event === 'MIC_MUTED') {
       deduction += 10;
+    } else if (f.event === 'FACE_OCCLUDED') {
+      // Moderate deduction for screen glow / face occlusion
+      deduction += 8;
     } else {
       softDurationSecs += f.durationInSeconds;
     }

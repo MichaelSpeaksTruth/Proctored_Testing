@@ -5,7 +5,7 @@ import AdminGuard from '@/components/AdminGuard';
 import WebcamFeed from '@/components/WebcamFeed';
 import ProctoringMonitor from '@/components/ProctoringMonitor';
 import { Monitor } from 'lucide-react';
-import { ProctoringEvent, DurationFlag } from '@/lib/proctoring';
+import { ProctoringEvent, DurationFlag, FRAMES_TO_START, FRAMES_TO_CLEAR } from '@/lib/proctoring';
 import Link from 'next/link';
 import BackButton from '@/components/BackButton';
 import { formatDateTime } from '@/lib/dateUtils';
@@ -23,6 +23,7 @@ const EVENT_META: Record<ProctoringEvent, { label: string; color: string }> = {
   HEAD_PITCH_DOWN:    { label: 'Looking Down', color: '#e63946' },
   DUCKING_DOWN:       { label: 'Ducking Out of Frame', color: '#e63946' },
   SHOULDERS_OUT_OF_FRAME: { label: 'Shoulders Out of Frame', color: '#e63946' },
+  FACE_OCCLUDED:      { label: 'Face Occluded / Glow', color: '#e76f51' },
 };
 
 function CalibrationContent() {
@@ -213,8 +214,8 @@ function CalibrationContent() {
               {/* Legend */}
               <div style={{ marginTop: 'var(--space-md)', fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: 1.7 }}>
                 <strong style={{ color: 'var(--text-secondary)' }}>Active Models:</strong>{' '}
-                MediaPipe FaceMesh (w/ iris refinement) · COCO-SSD MobileNetV2 · Web Audio API<br />
-                <em>Hysteresis: 14 frames to start, 20 to clear - eliminates false positives.</em><br />
+                MediaPipe FaceMesh (w/ texture & glow probe) · COCO-SSD MobileNetV2 · Web Audio API<br />
+                <em>Hysteresis: {FRAMES_TO_START} frames to start (~{(FRAMES_TO_START / 12).toFixed(1)}s), {FRAMES_TO_CLEAR} to clear (~{(FRAMES_TO_CLEAR / 12).toFixed(1)}s) - eliminates false positives.</em><br />
                 <em>To test: switch tabs, exit fullscreen (F11), cover camera, talk, or show a phone.</em>
               </div>
             </div>
@@ -268,7 +269,7 @@ function CalibrationContent() {
                   <div style={{ color: 'var(--text-muted)' }}>
                     Waiting for events…<br /><br />
                     The improved engine uses <strong style={{ color: 'var(--text-secondary)' }}>hysteresis</strong> -
-                    a violation must persist for ~½s before it is logged, and must resolve for ~⅔s before it clears.
+                    a violation must persist for ~{(FRAMES_TO_START / 12).toFixed(1)}s before it is logged, and must resolve for ~{(FRAMES_TO_CLEAR / 12).toFixed(1)}s before it clears.
                     This eliminates single-frame false positives.
                   </div>
                 ) : (
