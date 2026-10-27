@@ -10,18 +10,7 @@ function TCCPageInner() {
   const initialSessionId = searchParams.get('session');
 
   return (
-    <main
-      style={{
-        height: '100dvh',
-        maxHeight: '100dvh',
-        padding: '8px',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        boxSizing: 'border-box',
-        background: 'var(--bg-primary)',
-      }}
-    >
+    <main className="tcc-page-main">
       <TCCCom
         initialSessionId={initialSessionId}
         embedded={false}

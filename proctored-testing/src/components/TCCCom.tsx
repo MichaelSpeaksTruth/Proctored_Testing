@@ -784,18 +784,7 @@ export default function TCCCom({
 
   return (
     <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: embedded ? '780px' : 'calc(100vh - 16px)',
-        maxHeight: '100vh',
-        background: 'var(--bg-secondary)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-md)',
-        overflow: 'hidden',
-        position: 'relative',
-        boxShadow: 'var(--shadow-lg)',
-      }}
+      className={`tcc-wrapper ${embedded ? 'tcc-wrapper-embedded' : ''}`}
     >
       {/* ── TOP UNIFIED HEADER BAR (Clean, no nested duplicate) ────────────────── */}
       <header
@@ -803,11 +792,12 @@ export default function TCCCom({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '8px 16px',
-          background: 'var(--bg-card)',
-          borderBottom: '1px solid var(--border)',
+          padding: '8px 14px',
+          background: 'rgba(10, 13, 24, 0.96)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          backdropFilter: 'blur(16px)',
           flexShrink: 0,
-          gap: 12,
+          gap: 10,
         }}
       >
         {/* Left Brand & Navigation */}
@@ -826,7 +816,7 @@ export default function TCCCom({
           />
 
           {!embedded && (
-            <div style={{ width: 28, height: 28, borderRadius: 'var(--radius-xs)', overflow: 'hidden', flexShrink: 0 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 'var(--radius-xs)', overflow: 'hidden', flexShrink: 0, boxShadow: '0 0 10px rgba(16, 185, 129, 0.3)' }}>
               <Image src="/aerosoc_logo.jpeg" alt="Logo" width={28} height={28} style={{ objectFit: 'cover' }} />
             </div>
           )}
@@ -855,8 +845,9 @@ export default function TCCCom({
                   whiteSpace: 'nowrap',
                 }}
               >
-                TCC Room
+                TCC OPS
               </span>
+              <span className="tcc-pulse-emerald" title="Live Secure Link" />
               <span
                 className="badge desktop-only"
                 style={{
@@ -928,9 +919,9 @@ export default function TCCCom({
               alignItems: 'center',
               gap: 8,
               padding: '4px 10px',
-              background: 'rgba(255, 255, 255, 0.04)',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border)',
+              background: 'rgba(255, 255, 255, 0.05)',
+              borderRadius: '20px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
             }}
           >
             <div
@@ -945,6 +936,7 @@ export default function TCCCom({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                boxShadow: `0 0 10px ${getRoleBadgeStyle(personnelProfile.role).avatarBg}80`,
               }}
             >
               {getInitials(personnelProfile.name)}
@@ -1106,78 +1098,57 @@ export default function TCCCom({
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {/* ── LEFT PANE: SESSIONS LIST (MAX 50 SESSIONS) ─────────────────────── */}
         <aside
-          style={{
-            width: '100%',
-            maxWidth: 350,
-            minWidth: 290,
-            background: 'var(--bg-primary)',
-            borderRight: '1px solid var(--border)',
-            display: mobileView === 'sidebar' ? 'flex' : 'none',
-            flexDirection: 'column',
-            flexShrink: 0,
-            height: '100%',
-          }}
-          className="tcc-sidebar-pane"
+          className={`tcc-sidebar-pane ${mobileView === 'chat' ? 'mobile-hidden' : ''}`}
         >
           {/* Top Actions: New Session + Search */}
-          <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', flexShrink: 0 }}>
             <button
+              type="button"
               onClick={() => setNewSessionModalOpen(true)}
-              className="btn btn-primary"
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                fontSize: '0.8125rem',
-                padding: '8px 14px',
-                background: '#15803d',
-                borderColor: '#22c55e',
-                borderRadius: '6px',
-                fontWeight: 600,
-                marginBottom: 10,
-              }}
+              className="tcc-btn-cyber-new"
             >
-              <MessageSquarePlus size={15} />
-              <span>New Conversation</span>
+              <MessageSquarePlus size={16} />
+              <span>+ New Conversation</span>
             </button>
 
             {/* Inset Search */}
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative', marginTop: 10 }}>
               <Search
                 size={14}
                 style={{
                   position: 'absolute',
-                  left: 10,
+                  left: 12,
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  color: 'var(--text-muted)',
+                  color: 'rgba(255, 255, 255, 0.4)',
                 }}
               />
               <input
                 type="text"
-                className="input"
                 placeholder="Search sessions or topics..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
                   width: '100%',
-                  paddingLeft: 30,
-                  paddingRight: searchQuery ? 28 : 10,
-                  fontSize: '0.75rem',
-                  height: 32,
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  borderColor: 'var(--border)',
-                  borderRadius: 'var(--radius-xs)',
+                  paddingLeft: 34,
+                  paddingRight: searchQuery ? 30 : 12,
+                  fontSize: '0.8rem',
+                  height: 36,
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '10px',
+                  color: '#ffffff',
+                  outline: 'none',
+                  boxSizing: 'border-box',
                 }}
               />
               {searchQuery && (
                 <button
+                  type="button"
                   onClick={() => setSearchQuery('')}
                   style={{
                     position: 'absolute',
-                    right: 8,
+                    right: 10,
                     top: '50%',
                     transform: 'translateY(-50%)',
                     background: 'transparent',
@@ -1186,23 +1157,13 @@ export default function TCCCom({
                     cursor: 'pointer',
                   }}
                 >
-                  <X size={12} />
+                  <X size={13} />
                 </button>
               )}
             </div>
 
             {/* Filter Tabs */}
-            <div
-              style={{
-                display: 'flex',
-                gap: 3,
-                marginTop: 8,
-                padding: 2,
-                background: 'var(--bg-card)',
-                borderRadius: 'var(--radius-xs)',
-                border: '1px solid var(--border)',
-              }}
-            >
+            <div className="tcc-filter-capsule">
               {[
                 { id: 'all', label: 'All' },
                 { id: 'dispute', label: 'Disputes' },
@@ -1211,15 +1172,9 @@ export default function TCCCom({
               ].map((tab) => (
                 <button
                   key={tab.id}
+                  type="button"
                   onClick={() => setFilterType(tab.id as any)}
-                  className={`btn btn-sm ${filterType === tab.id ? 'btn-primary' : 'btn-ghost'}`}
-                  style={{
-                    flex: 1,
-                    fontSize: '0.6875rem',
-                    padding: '4px 2px',
-                    borderRadius: 'var(--radius-xs)',
-                    fontWeight: filterType === tab.id ? 700 : 500,
-                  }}
+                  className={`tcc-filter-pill-btn ${filterType === tab.id ? 'active' : ''}`}
                 >
                   {tab.label}
                 </button>
@@ -1267,45 +1222,38 @@ export default function TCCCom({
                   <div
                     key={s.sessionId}
                     onClick={() => handleSelectSession(s.sessionId)}
-                    style={{
-                      padding: '12px 14px',
-                      borderBottom: '1px solid var(--border)',
-                      cursor: 'pointer',
-                      background: isSelected
-                        ? 'rgba(255, 255, 255, 0.06)'
-                        : s.unread
-                        ? 'rgba(45, 106, 79, 0.1)'
-                        : 'transparent',
-                      borderLeft: isSelected
-                        ? s.type === 'dispute'
-                          ? '3px solid #ff6b6b'
-                          : '3px solid var(--accent-green-light)'
-                        : '3px solid transparent',
-                      transition: 'all 120ms ease',
-                    }}
+                    className={`tcc-session-card ${isSelected ? 'selected' : ''} ${s.type === 'dispute' ? 'is-dispute' : ''}`}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
                         {s.type === 'dispute' ? (
                           <span
                             className="badge"
                             style={{
-                              background: 'rgba(155, 34, 38, 0.25)',
+                              background: 'rgba(239, 68, 68, 0.2)',
                               color: '#ff6b6b',
                               fontSize: '0.625rem',
-                              padding: '1px 5px',
-                              border: '1px solid rgba(155, 34, 38, 0.5)',
+                              padding: '2px 6px',
+                              border: '1px solid rgba(239, 68, 68, 0.45)',
                               fontWeight: 700,
+                              letterSpacing: '0.02em',
                             }}
                           >
                             ⚠️ DISPUTE
                           </span>
                         ) : (
                           <span
-                            className="badge badge-gray"
-                            style={{ fontSize: '0.625rem', padding: '1px 5px', fontWeight: 600 }}
+                            className="badge"
+                            style={{
+                              background: 'rgba(16, 185, 129, 0.15)',
+                              color: '#10b981',
+                              fontSize: '0.625rem',
+                              padding: '2px 6px',
+                              border: '1px solid rgba(16, 185, 129, 0.3)',
+                              fontWeight: 700,
+                            }}
                           >
-                            CHAT
+                            💬 CHAT
                           </span>
                         )}
 
@@ -1321,10 +1269,11 @@ export default function TCCCom({
                         {s.unread && (
                           <span
                             style={{
-                              width: 7,
-                              height: 7,
+                              width: 8,
+                              height: 8,
                               borderRadius: '50%',
-                              background: 'var(--accent-green-light)',
+                              background: '#10b981',
+                              boxShadow: '0 0 8px #10b981',
                               display: 'inline-block',
                             }}
                           />
@@ -1332,7 +1281,7 @@ export default function TCCCom({
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                        <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                        <span style={{ fontSize: '0.6875rem', color: 'rgba(255, 255, 255, 0.45)', fontFamily: 'var(--font-mono)' }}>
                           {formatTime(s.lastActivity)}
                         </span>
                         {personnelProfile?.role === 'Admin Sr.' && (
@@ -1345,19 +1294,19 @@ export default function TCCCom({
                             style={{
                               background: 'transparent',
                               border: 'none',
-                              color: 'var(--text-muted)',
+                              color: 'rgba(255, 255, 255, 0.3)',
                               cursor: 'pointer',
-                              padding: 2,
+                              padding: 3,
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               borderRadius: 4,
                             }}
                             onMouseEnter={(e) => (e.currentTarget.style.color = '#ff6b6b')}
-                            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255, 255, 255, 0.3)')}
                             title="Delete this session entirely (Admin Sr. only)"
                           >
-                            <Trash2 size={12} />
+                            <Trash2 size={13} />
                           </button>
                         )}
                       </div>
@@ -1365,13 +1314,14 @@ export default function TCCCom({
 
                     <div
                       style={{
-                        fontSize: '0.8125rem',
+                        fontSize: '0.84rem',
                         fontWeight: s.unread ? 700 : 600,
-                        color: 'var(--white)',
+                        color: '#ffffff',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                         marginBottom: 4,
+                        letterSpacing: '-0.01em',
                       }}
                       title={s.title.replace(/^\[DISPUTE\]\s*/i, '')}
                     >
@@ -1381,7 +1331,7 @@ export default function TCCCom({
                     <div
                       style={{
                         fontSize: '0.75rem',
-                        color: 'var(--text-secondary)',
+                        color: 'rgba(255, 255, 255, 0.55)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -1399,39 +1349,35 @@ export default function TCCCom({
 
         {/* ── RIGHT PANE: ACTIVE CHAT ROOM ──────────────────────────────────── */}
         <main
-          style={{
-            flex: 1,
-            display: mobileView === 'chat' || typeof window === 'undefined' ? 'flex' : 'none',
-            flexDirection: 'column',
-            background: 'var(--bg-secondary)',
-            position: 'relative',
-            overflow: 'hidden',
-            height: '100%',
-          }}
-          className="tcc-chat-pane"
+          className={`tcc-chat-pane ${mobileView === 'sidebar' ? 'mobile-hidden' : ''}`}
         >
           {activeSession ? (
             <>
               {/* Active Room Header */}
               <div
                 style={{
-                  padding: '10px 16px',
-                  background: 'var(--bg-card)',
-                  borderBottom: '1px solid var(--border)',
+                  padding: '10px 14px',
+                  background: 'rgba(10, 13, 24, 0.96)',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                  backdropFilter: 'blur(16px)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 12,
+                  gap: 10,
                   flexShrink: 0,
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
                   {/* Back button for mobile view */}
-                  <BackButton
-                    className="tcc-mobile-back-btn"
+                  <button
+                    type="button"
+                    className="mobile-only back-btn-unified"
                     onClick={() => setMobileView('sidebar')}
-                    style={{ padding: '5px 10px', fontSize: '0.75rem' }}
-                  />
+                    style={{ padding: '6px 10px', fontSize: '0.75rem', gap: 4 }}
+                  >
+                    <ArrowLeft size={14} />
+                    <span>Sessions</span>
+                  </button>
 
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
@@ -2055,11 +2001,8 @@ export default function TCCCom({
 
               {/* Message Composer Area */}
               <div
+                className="tcc-composer-wrapper"
                 style={{
-                  padding: '10px 16px',
-                  background: 'var(--bg-card)',
-                  borderTop: '1px solid var(--border)',
-                  flexShrink: 0,
                   position: 'relative',
                 }}
               >
@@ -2422,11 +2365,11 @@ export default function TCCCom({
                   </div>
                 )}
 
-                <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <textarea
                     ref={textareaRef}
-                    className="input"
-                    rows={2}
+                    className="tcc-composer-input"
+                    rows={1}
                     value={messageInput}
                     onChange={handleComposerChange}
                     onKeyDown={(e) => {
@@ -2462,30 +2405,12 @@ export default function TCCCom({
                       }
                     }}
                     placeholder="Type a message or use @ to tag..."
-                    style={{
-                      flex: 1,
-                      resize: 'none',
-                      padding: '8px 12px',
-                      fontSize: '0.875rem',
-                      borderRadius: 'var(--radius-sm)',
-                      background: 'rgba(255, 255, 255, 0.03)',
-                      borderColor: 'var(--border)',
-                    }}
                   />
                   <button
                     type="submit"
-                    className="btn btn-primary"
+                    className="tcc-send-btn"
                     disabled={sendingMsg || !messageInput.trim()}
-                    style={{
-                      height: 48,
-                      padding: '0 18px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: '#15803d',
-                      borderColor: '#22c55e',
-                      borderRadius: 'var(--radius-sm)',
-                    }}
+                    title="Send Message"
                   >
                     <Send size={16} />
                   </button>
