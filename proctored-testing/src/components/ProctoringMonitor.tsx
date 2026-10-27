@@ -484,7 +484,7 @@ export default function ProctoringMonitor({
             try { 
               preds = await model.detect(video); 
               if (calibrationMode) {
-                console.log('[Proctor COCO preds]:', preds.map(p => ({ class: p.class, score: Number(p.score.toFixed(3)), bbox: p.bbox.map(Math.round) })));
+                console.log('[COCO]', preds.map(p => `${p.class} ${(p.score * 100).toFixed(0)}% [${p.bbox.map(Math.round)}]`).join(' | ') || 'none');
               }
             } catch {
               /* ok */
@@ -501,7 +501,10 @@ export default function ProctoringMonitor({
             let suppressedAny = false;
 
             for (const p of preds) {
-              const thr = PHONE_CLASSES[p.class] ?? (glowRef.current.active ? LOOKALIKE[p.class] : undefined);
+              const nx = (p.bbox[0] + p.bbox[2] / 2) / vw;
+              const ny = (p.bbox[1] + p.bbox[3] / 2) / vh;
+              const nearFace = face && Math.abs(nx - (face.x + face.w / 2)) < face.w * 1.5 && Math.abs(ny - (face.y + face.h / 2)) < face.h * 1.5;
+              const thr = PHONE_CLASSES[p.class] ?? ((glowRef.current.active || behaviourAgrees || nearFace) ? LOOKALIKE[p.class] : undefined);
               if (thr === undefined || p.score < thr) continue;
 
               const bboxAsBox: Box = [p.bbox[0], p.bbox[1], p.bbox[2], p.bbox[3]];
@@ -514,8 +517,6 @@ export default function ProctoringMonitor({
               }
               const staticMs = now - a.since;
 
-              const nx = (p.bbox[0] + p.bbox[2] / 2) / vw;
-              const ny = (p.bbox[1] + p.bbox[3] / 2) / vh;
               // Unknown face => treat as lap/desk zone and on-face, i.e. never suppress (fail toward flagging)
               const belowChin = face ? ny > face.y + face.h : true;
               const onFace = face ? nx > face.x && nx < face.x + face.w && ny > face.y && ny < face.y + face.h : true;
@@ -624,6 +625,9 @@ export default function ProctoringMonitor({
             : [];
 
           const { faces: validFaces, rejected, info } = validateFaces(results.multiFaceLandmarks, video, texProbe, phoneBoxes);
+          if (calibrationMode && rawCount > 1) {
+            console.log('[FACES]', info.map(i => i.tag).join(' | '));
+          }
           const count = validFaces.length;
 
           // Glow = sudden jump in near-white pixels vs a slow baseline
@@ -806,11 +810,14 @@ export default function ProctoringMonitor({
             // Persistent rendering of COCO predictions (redrawn each FaceMesh frame after clearRect for 1.2s)
             const lp = lastPredsRef.current;
             if (gx && lp && Date.now() - lp.t < 1200) {
+              const face = faceBoxRef.current;
               const sx = cv.width / lp.vw, sy = cv.height / lp.vh;
               for (const p of lp.preds) {
                 if (p.score < 0.28) continue;
-                const isCheat = p.class in PHONE_CLASSES || (glowRef.current.active && p.class in LOOKALIKE);
                 const [bx, by, bw, bh] = p.bbox;
+                const cnx = (bx + bw / 2) / lp.vw, cny = (by + bh / 2) / lp.vh;
+                const nearFace = face && Math.abs(cnx - (face.x + face.w / 2)) < face.w * 1.5 && Math.abs(cny - (face.y + face.h / 2)) < face.h * 1.5;
+                const isCheat = p.class in PHONE_CLASSES || ((glowRef.current.active || nearFace) && p.class in LOOKALIKE);
                 gx.strokeStyle = isCheat ? '#ff2200' : 'rgba(34,255,136,0.6)';
                 gx.lineWidth = isCheat ? 2.5 : 1;
                 gx.strokeRect(bx * sx, by * sy, bw * sx, bh * sy);
@@ -826,13 +833,14 @@ export default function ProctoringMonitor({
 
             // Draw every raw face candidate box with its stats in calibration mode
             if (calibrationMode && gx) {
+              const fSize = Math.max(11, Math.round(cv.width / 45));
+              gx.font = `${fSize}px monospace`;
               for (const { box, tag } of info) {
                 gx.strokeStyle = tag === 'primary' ? '#22ff88' : '#ffd400';
                 gx.lineWidth = 2;
                 gx.strokeRect(box.x * cv.width, box.y * cv.height, box.w * cv.width, box.h * cv.height);
                 gx.fillStyle = gx.strokeStyle;
-                gx.font = '11px monospace';
-                gx.fillText(tag, box.x * cv.width + 2, box.y * cv.height + 12);
+                gx.fillText(tag, box.x * cv.width + 2, box.y * cv.height + fSize + 2);
               }
             }
           }
