@@ -85,8 +85,8 @@ export function calculateIntegrityScore(flags: DurationFlag[]): number {
     } else if (f.event === 'MIC_MUTED') {
       deduction += 10;
     } else if (f.event === 'FACE_OCCLUDED') {
-      // Moderate deduction for screen glow / face occlusion
-      deduction += 8;
+      // Review-only signal: minimal deduction (2 points) so honest candidates with lighting glare aren't hurt
+      deduction += 2;
     } else {
       softDurationSecs += f.durationInSeconds;
     }

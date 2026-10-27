@@ -208,7 +208,8 @@ export default function ProctoringMonitor({
 }: Props) {
 
   const faceBoxRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null); // normalized 0..1
-  const glowRef = useRef({ base: -1, sat: 0, active: false });
+  const glowRef = useRef({ base: -1, sat: 0, active: false, since: 0 });
+  const lastPredsRef = useRef<{ preds: import('@tensorflow-models/coco-ssd').DetectedObject[]; t: number; vw: number; vh: number } | null>(null);
 
   const activeInfractions = useRef<Map<ProctoringEvent, { 
     startTime: number; 
@@ -475,7 +476,7 @@ export default function ProctoringMonitor({
             let preds: import('@tensorflow-models/coco-ssd').DetectedObject[] = [];
             try { 
               preds = await model.detect(video); 
-              if (preds.length > 0) {
+              if (calibrationMode) {
                 console.log('[Proctor COCO preds]:', preds.map(p => ({ class: p.class, score: Number(p.score.toFixed(3)), bbox: p.bbox.map(Math.round) })));
               }
             } catch {
@@ -563,32 +564,8 @@ export default function ProctoringMonitor({
               }
             }
 
-            // Draw bounding boxes on overlay canvas for active visual verification
-            if (overlayCanvasRef?.current && video.videoWidth > 0) {
-              const cv = overlayCanvasRef.current;
-              const gx = cv.getContext('2d');
-              if (gx) {
-                const sx = cv.width / video.videoWidth;
-                const sy = cv.height / video.videoHeight;
-                preds.forEach((p) => {
-                  if (p.score < 0.28) return;
-                  const isCheat = p.class in PHONE_CLASSES;
-                  const [bx, by, bw, bh] = p.bbox;
-                  gx.strokeStyle = isCheat ? '#ff2200' : 'rgba(34,255,136,0.6)';
-                  gx.lineWidth   = isCheat ? 2.5 : 1;
-                  gx.strokeRect(bx * sx, by * sy, bw * sx, bh * sy);
-                  if (isCheat) {
-                    gx.fillStyle = 'rgba(255,34,0,0.85)';
-                    gx.font = 'bold 12px monospace';
-                    gx.fillText(
-                      `${p.class.toUpperCase()} ${(p.score * 100).toFixed(0)}%`,
-                      bx * sx + 2,
-                      by * sy > 14 ? by * sy - 4 : by * sy + bh * sy + 12
-                    );
-                  }
-                });
-              }
-            }
+            // Save predictions for persistent per-frame rendering by FaceMesh (survives 83ms clearRect)
+            lastPredsRef.current = { preds, t: Date.now(), vw: video.videoWidth, vh: video.videoHeight };
           } catch {
             /* suppress */
           } finally {
@@ -633,15 +610,21 @@ export default function ProctoringMonitor({
           const { faces: validFaces, rejected } = validateFaces(results.multiFaceLandmarks, video, texProbe);
           const count = validFaces.length;
 
-          // Glow = sudden jump in near-white pixels vs a slow baseline (baseline freezes while active)
+          // Glow = sudden jump in near-white pixels vs a slow baseline
           const g = glowRef.current;
           if (frameProbe) {
             const s = frameStats(video, frameProbe);
+            const now = Date.now();
             if (g.base < 0) g.base = s.sat;
             g.sat = s.sat;
             g.active = s.sat > Math.max(GLOW_MIN_SAT, g.base * GLOW_RATIO);
-            if (!g.active) g.base += (s.sat - g.base) * 0.02;
-            else g.base += (s.sat - g.base) * 0.002; // slow drift so permanent room brightening adapts
+            if (g.active) {
+              if (!g.since) g.since = now;
+              if (now - g.since > 45_000) { g.base = g.sat; g.since = 0; } // lasting change becomes the new normal
+            } else {
+              g.since = 0;
+              g.base += (s.sat - g.base) * 0.02;
+            }
           }
 
           report('NO_FACE', count === 0, 'medium');
@@ -795,6 +778,27 @@ export default function ProctoringMonitor({
                     lastAlignment.current = isAligned;
                     onAlignmentUpdate?.(isAligned);
                   }
+                }
+              }
+
+              // Persistent rendering of COCO predictions (redrawn each FaceMesh frame after clearRect for 1.2s)
+              const lp = lastPredsRef.current;
+              if (gx && lp && Date.now() - lp.t < 1200) {
+                const sx = cv.width / lp.vw, sy = cv.height / lp.vh;
+                for (const p of lp.preds) {
+                  if (p.score < 0.28) continue;
+                  const isCheat = p.class in PHONE_CLASSES || (glowRef.current.active && p.class in LOOKALIKE);
+                  const [bx, by, bw, bh] = p.bbox;
+                  gx.strokeStyle = isCheat ? '#ff2200' : 'rgba(34,255,136,0.6)';
+                  gx.lineWidth = isCheat ? 2.5 : 1;
+                  gx.strokeRect(bx * sx, by * sy, bw * sx, bh * sy);
+                  gx.fillStyle = isCheat ? 'rgba(255,34,0,0.9)' : 'rgba(34,255,136,0.9)';
+                  gx.font = 'bold 12px monospace';
+                  gx.fillText(
+                    `${p.class.toUpperCase()} ${(p.score * 100).toFixed(0)}%`,
+                    bx * sx + 2,
+                    by * sy > 14 ? by * sy - 4 : (by + bh) * sy + 12
+                  );
                 }
               }
             }
