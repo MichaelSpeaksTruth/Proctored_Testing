@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Fragment } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { calculateIntegrityScore, DurationFlag } from '@/lib/proctoring';
 import { formatDateTime } from '@/lib/dateUtils';
 
@@ -33,7 +33,50 @@ export interface LeaderboardEntry {
   integrityFlag?: string;
   delaySeconds?: number;
   flagNote?: string;
+  roll?: string;
+  rollNumber?: string;
 }
+
+export interface SnapshotPreviewData {
+  src: string;
+  charges: string;
+  duration?: number;
+  timestamp?: string;
+  studentName: string;
+  studentRoll: string;
+  studentEmail: string;
+  count: number;
+}
+
+export const getStudentRollNumber = (entry: LeaderboardEntry): string => {
+  if (entry.roll && entry.roll.trim()) return entry.roll.trim();
+  if (entry.rollNumber && entry.rollNumber.trim()) return entry.rollNumber.trim();
+  
+  const email = (entry.email || '').toLowerCase().trim();
+  const [username, domain] = email.split('@');
+  
+  // Academic / institutional domains (e.g. bitmesra.ac.in, somename.edu, .ac.in, etc.)
+  if (domain && !['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'live.com'].includes(domain)) {
+    if (username && username.length > 2) return username;
+  }
+  
+  // Specific pattern for roll numbers with prefix + numbers (e.g. btech10199.26, 2021001, cs21b01)
+  if (/^(btech|mtech|bca|mca|be|me|ug|pg|[a-z]{2,4})\d+[\w.]*$/i.test(username) || /^\d{5,}$/.test(username)) {
+    return username;
+  }
+  
+  return 'NA';
+};
+
+export const getSnapshotDownloadName = (snap: SnapshotPreviewData): string => {
+  const sanitize = (val: string) => (val || '').replace(/[/\\?%*:|"<>]/g, '').trim().replace(/\s+/g, '_');
+  const name = sanitize(snap.studentName) || 'student';
+  const roll = sanitize(snap.studentRoll) || 'NA';
+  const email = sanitize(snap.studentEmail) || 'email';
+  const charges = sanitize(snap.charges) || 'VIOLATION';
+  const count = snap.count || 1;
+  return `${name}_${roll}_${email}_(${charges})_${count}.jpeg`;
+};
 
 interface Props {
   entries: LeaderboardEntry[];
@@ -49,7 +92,77 @@ const PAGE_SIZE = 20;
 export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDelete, onUpdateRoundStatus, onEditInfo }: Props) {
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [previewSnapshot, setPreviewSnapshot] = useState<{ src: string; title: string } | null>(null);
+  const [previewSnapshot, setPreviewSnapshot] = useState<SnapshotPreviewData | null>(null);
+  const [isImageLoading, setIsImageLoading] = useState(true);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!previewSnapshot) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPreviewSnapshot(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = origOverflow;
+    };
+  }, [previewSnapshot]);
+
+  const handleDownloadSnapshot = async (snap: SnapshotPreviewData) => {
+    const filename = getSnapshotDownloadName(snap);
+    try {
+      let finalDataUrl = snap.src;
+
+      if (!snap.src.startsWith('data:image/jpeg')) {
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error('Image failed to load for conversion'));
+            img.src = snap.src;
+          });
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width || 320;
+          canvas.height = img.naturalHeight || img.height || 240;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            finalDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+          }
+        } catch (err) {
+          console.warn('Canvas conversion fallback, using original src:', err);
+          finalDataUrl = snap.src;
+        }
+      }
+
+      const a = document.createElement('a');
+      a.href = finalDataUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 2500);
+    } catch (err) {
+      console.error('Download error:', err);
+      const a = document.createElement('a');
+      a.href = snap.src;
+      a.download = filename;
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 2500);
+    }
+  };
 
   const totalPages = Math.ceil(entries.length / PAGE_SIZE);
   const pageEntries = entries.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -220,14 +333,15 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                             Edit Info
                           </button>
                         )}
-                        {onAnalyze && !entry.aiSeverity && (
+                        {onAnalyze && (
                           <button
                             className="btn btn-outline btn-sm"
                             id={`analyze-${entry.uid}`}
                             onClick={() => onAnalyze(entry.uid)}
                             disabled={analyzing === entry.uid}
+                            title={entry.aiSeverity ? 'Re-run AI analysis on proctoring flags' : 'Run on-demand AI integrity review'}
                           >
-                            {analyzing === entry.uid ? 'Analyzing...' : 'AI Review'}
+                            {analyzing === entry.uid ? 'Analyzing...' : entry.aiSeverity ? 'Re-review' : 'AI Review'}
                           </button>
                         )}
                         {onDelete && (
@@ -315,26 +429,75 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                                     </span>
 
                                     {/* Visual Evidence Snapshot Button */}
-                                    {f.evidenceSnapshot && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setPreviewSnapshot({ src: f.evidenceSnapshot!, title: `${f.event} (${f.durationInSeconds || 0}s)` })}
-                                        style={{
-                                          background: 'rgba(59, 130, 246, 0.15)',
-                                          border: '1px solid rgba(59, 130, 246, 0.35)',
-                                          color: '#60a5fa',
-                                          borderRadius: 4,
-                                          padding: '2px 8px',
-                                          cursor: 'pointer',
-                                          fontSize: '0.72rem',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: 4
-                                        }}
-                                      >
-                                        View Proof
-                                      </button>
-                                    )}
+                                    {f.evidenceSnapshot && (() => {
+                                      const studentRoll = getStudentRollNumber(entry);
+                                      const snapshotData: SnapshotPreviewData = {
+                                        src: f.evidenceSnapshot!,
+                                        charges: f.event,
+                                        duration: f.durationInSeconds,
+                                        timestamp: f.startTime || f.timestamp,
+                                        studentName: entry.name,
+                                        studentRoll,
+                                        studentEmail: entry.email,
+                                        count: i + 1,
+                                      };
+                                      return (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setIsImageLoading(true);
+                                              setDownloadSuccess(false);
+                                              setPreviewSnapshot(snapshotData);
+                                            }}
+                                            style={{
+                                              background: 'rgba(59, 130, 246, 0.15)',
+                                              border: '1px solid rgba(59, 130, 246, 0.35)',
+                                              color: '#60a5fa',
+                                              borderRadius: 4,
+                                              padding: '2px 8px',
+                                              cursor: 'pointer',
+                                              fontSize: '0.72rem',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: 5,
+                                              fontWeight: 500
+                                            }}
+                                          >
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                              <circle cx="12" cy="12" r="3" />
+                                            </svg>
+                                            View Proof
+                                          </button>
+                                          <button
+                                            type="button"
+                                            title={`Download: ${getSnapshotDownloadName(snapshotData)}`}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDownloadSnapshot(snapshotData);
+                                            }}
+                                            style={{
+                                              background: 'rgba(255, 255, 255, 0.08)',
+                                              border: '1px solid rgba(255, 255, 255, 0.16)',
+                                              color: '#cbd5e1',
+                                              borderRadius: 4,
+                                              padding: '2px 6px',
+                                              cursor: 'pointer',
+                                              fontSize: '0.72rem',
+                                              display: 'inline-flex',
+                                              alignItems: 'center'
+                                            }}
+                                          >
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                              <polyline points="7 10 12 15 17 10" />
+                                              <line x1="12" y1="15" x2="12" y2="3" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               ))}
@@ -356,53 +519,234 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
       {/* Snapshot Preview Modal */}
       {previewSnapshot && (
         <div 
+          role="dialog"
+          aria-modal="true"
+          aria-label="Visual Evidence Proof"
           onClick={() => setPreviewSnapshot(null)}
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.82)',
-            zIndex: 9999,
+            background: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 99999,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: 20
+            padding: 16
           }}
         >
           <div 
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: 'var(--bg-card, #111827)',
-              border: '1px solid var(--border, #374151)',
-              borderRadius: 8,
-              padding: 16,
-              maxWidth: 480,
+              background: '#0d1117',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              borderRadius: 10,
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+              maxWidth: 580,
               width: '100%',
               display: 'flex',
               flexDirection: 'column',
-              gap: 12
+              overflow: 'hidden'
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
-                Evidence Frame: {previewSnapshot.title}
-              </span>
-              <button 
-                className="btn btn-ghost btn-sm"
-                onClick={() => setPreviewSnapshot(null)}
-                style={{ padding: '2px 8px' }}
-              >
-                Close
-              </button>
+            {/* Top Bar ("over all on top") with Details, Download Button, and Cross Button */}
+            <div 
+              style={{
+                padding: '12px 16px',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+                background: 'rgba(255, 255, 255, 0.04)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.925rem', color: '#f8fafc', letterSpacing: '-0.01em' }}>
+                    Evidence: {previewSnapshot.charges}
+                  </span>
+                  {previewSnapshot.duration !== undefined && previewSnapshot.duration > 0 && (
+                    <span style={{
+                      background: 'rgba(239, 68, 68, 0.18)',
+                      border: '1px solid rgba(239, 68, 68, 0.35)',
+                      color: '#f87171',
+                      fontSize: '0.7rem',
+                      padding: '1px 6px',
+                      borderRadius: 4,
+                      fontWeight: 600,
+                      fontFamily: 'var(--font-mono)'
+                    }}>
+                      {previewSnapshot.duration}s
+                    </span>
+                  )}
+                  <span style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    color: '#94a3b8',
+                    fontSize: '0.7rem',
+                    padding: '1px 6px',
+                    borderRadius: 4,
+                    fontFamily: 'var(--font-mono)'
+                  }}>
+                    Violation #{previewSnapshot.count}
+                  </span>
+                </div>
+                <div style={{
+                  fontSize: '0.75rem',
+                  color: '#94a3b8',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}>
+                  <strong style={{ color: '#e2e8f0' }}>{previewSnapshot.studentName}</strong>
+                  {previewSnapshot.studentRoll && previewSnapshot.studentRoll !== 'NA' && (
+                    <span> &middot; Roll: {previewSnapshot.studentRoll}</span>
+                  )}
+                  <span> &middot; {previewSnapshot.studentEmail}</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                {/* Download Button */}
+                <button
+                  type="button"
+                  onClick={() => handleDownloadSnapshot(previewSnapshot)}
+                  title={`Download proof as ${getSnapshotDownloadName(previewSnapshot)}`}
+                  style={{
+                    background: downloadSuccess ? '#15803d' : '#2563eb',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 6,
+                    padding: '6px 12px',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  {downloadSuccess ? 'Downloaded!' : 'Download'}
+                </button>
+
+                {/* Cross Button */}
+                <button 
+                  type="button"
+                  onClick={() => setPreviewSnapshot(null)}
+                  title="Close (Esc)"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    color: '#cbd5e1',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: 6,
+                    width: 30,
+                    height: 30,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    lineHeight: 1,
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)';
+                    e.currentTarget.style.color = '#ffffff';
+                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                    e.currentTarget.style.color = '#cbd5e1';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img 
-              src={previewSnapshot.src} 
-              alt="Violation evidence" 
-              style={{ width: '100%', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)' }}
-            />
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, textAlign: 'center' }}>
-              Webcam snapshot captured automatically at violation onset.
-            </p>
+
+            {/* Photo Proof Box with Loading State */}
+            <div 
+              style={{
+                position: 'relative',
+                minHeight: 280,
+                maxHeight: '68vh',
+                background: '#020617',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 12
+              }}
+            >
+              {isImageLoading && (
+                <div 
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 12,
+                    background: '#090d16',
+                    zIndex: 2
+                  }}
+                >
+                  <div className="spinner" style={{ width: 34, height: 34, borderTopColor: '#3b82f6' }} />
+                  <span style={{ fontSize: '0.825rem', color: '#94a3b8', fontWeight: 500 }}>
+                    Loading evidence photo...
+                  </span>
+                </div>
+              )}
+
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img 
+                src={previewSnapshot.src} 
+                alt={`Violation evidence: ${previewSnapshot.charges}`}
+                onLoad={() => setIsImageLoading(false)}
+                onError={() => setIsImageLoading(false)}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '62vh',
+                  objectFit: 'contain',
+                  borderRadius: 6,
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  display: isImageLoading ? 'none' : 'block',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)'
+                }}
+              />
+            </div>
+
+            {/* Footer / Filename Preview */}
+            <div 
+              style={{
+                padding: '10px 16px',
+                background: 'rgba(0, 0, 0, 0.4)',
+                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 8,
+                fontSize: '0.75rem',
+                color: '#94a3b8'
+              }}
+            >
+              <span>Webcam snapshot captured automatically at violation onset.</span>
+              <span 
+                title="Download file name format: name_roll_email_(charges)_count.jpeg"
+                style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: '#64748b' }}
+              >
+                {getSnapshotDownloadName(previewSnapshot)}
+              </span>
+            </div>
           </div>
         </div>
       )}

@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { DurationFlag, calculateIntegrityScore, isHardViolation } from '@/lib/proctoring';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export async function POST(req: Request) {
   try {
-    const { uid, flags, score, total } = await req.json();
+    const { uid, flags, score, total, testId } = await req.json();
 
     if (!uid) {
       return NextResponse.json({ error: 'uid is required' }, { status: 400 });
@@ -106,10 +107,27 @@ Output format: You must respond in strict JSON format:
       computedSeverity = 'medium';
     }
 
+    const finalSeverity = result.severity || computedSeverity;
+    const finalSummary = result.summary || `Integrity Score: ${integrityScore}/100 with ${totalHardEvents} critical events recorded.`;
+    const finalIntegrityScore = result.integrityScore ?? integrityScore;
+
+    if (testId && uid) {
+      try {
+        const db = getAdminDb();
+        await db.ref(`results/${testId}/${uid}`).update({
+          aiSeverity: finalSeverity,
+          aiSummary: finalSummary,
+          integrityScore: finalIntegrityScore,
+        });
+      } catch (dbErr) {
+        console.warn('Failed to persist AI review to RTDB via admin SDK:', dbErr);
+      }
+    }
+
     return NextResponse.json({
-      severity: result.severity || computedSeverity,
-      summary: result.summary || `Integrity Score: ${integrityScore}/100 with ${totalHardEvents} critical events recorded.`,
-      integrityScore: result.integrityScore ?? integrityScore,
+      severity: finalSeverity,
+      summary: finalSummary,
+      integrityScore: finalIntegrityScore,
     });
   } catch (err: any) {
     console.error('Groq analysis error:', err.message || err);

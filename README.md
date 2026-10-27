@@ -97,11 +97,13 @@ The platform features a multi-tiered Role-Based Access Control (RBAC) system for
 ### 8.1 Role Hierarchy
 
 - **Admin Sr. (Supreme Administrators):** Root administrators (`NEXT_PUBLIC_ADMIN_1`, `NEXT_PUBLIC_ADMIN_2`) holding complete authority over test setups, candidate enrollments, personnel approvals, results declaration, and system calibration. All actions taken by supreme admins are explicitly stamped as **Admin Sr.** in the system audit logs.
-- **Admin L1 (Supervisory & Audit Administrator):** A specialized observational role designed for club leadership and senior monitors. Admin L1 users have access to:
+- **Admin L1 (Supervisory & Audit Administrator):** A specialized supervisory and auditing role designed for club leadership and senior monitors. Admin L1 users have access to:
   1. **Organized Events View:** Real-time chronological audit trail of all actions performed by Question Setters and Admin Sr. (question additions/edits/deletions, section updates, personnel actions). Includes role filters, category filters, and preview details.
   2. **Test Structure & Question Attribution:** Full inspection of tests and sections, with an explicit attribution badge under every question indicating who created it, their role, and timestamps. Strictly read-only to prevent unauthorized alterations.
-  3. **Spectator View Access:** Full access to the live leaderboard, Interviewer Mode (filtering Qualified/Waitlisted candidates, AI review severity, proctoring flags, search), and Excel exports (`.xlsx`).
-  4. **Participants Directory (Read-Only):** Secure inspection of registered candidate rosters and examination enrollments without modification privileges.
+  3. **Live Leaderboard & Candidate Evaluation:** Full access to examination results with live leaderboard rankings, Interviewer Mode (filtering Qualified and Waitlisted candidates), search filtering, and Excel export (`.xlsx`).
+  4. **On-Demand AI Integrity Review:** Direct access to trigger and re-run on-demand Groq AI reviews on candidates' proctoring telemetry. Persisted securely via the server-side Firebase Admin SDK.
+  5. **Candidate Round Status Management:** Authority to advance or adjust candidate admission statuses across **Pending**, **Qualified**, **Eliminated**, and **Waitlisted** via the dedicated, authenticated `/api/update-round-status` server endpoint.
+  6. **Participants Directory (Read-Only):** Secure inspection of registered candidate rosters and examination enrollments without modification privileges.
 - **Question Setter:** Authorized club personnel permitted to create exam sections, upload and edit questions with unique 9-character alphanumeric tags (`#123ABCXYZ`), and submit solutions once tests conclude. Database rules enforce author-only modifications.
 - **Spectator's View:** Dedicated evaluation role for interviewers to view declared candidate rankings, AI integrity summaries, flagged incidents, and evidence snapshots.
 
@@ -180,7 +182,13 @@ To eliminate ambiguity across locales and maximize readability on dark UI surfac
 - **Separation of Hard Violations vs Soft Telemetry:** Natural actions like glancing down at rough paper, blinking, or screen corner reading (`HEAD_PITCH_DOWN`, `GAZE_AWAY`) are logged silently for review but **do not deduct student lives** or disrupt their exam.
 - **Realistic Head Pitch Angles:** Forward screen viewing is recognized as normal posture. Lap-looking detection is calibrated to steep downward angles ($\text{headPitch} < -28^\circ$ AND $\text{pitchDeg} > 12^\circ$), preventing normal reading from triggering false alerts.
 - **Adaptive Ambient Audio:** Background noise baseline updates dynamically to accommodate room fans and air conditioning, requiring human vocal frequencies ($300\text{--}3000\text{ Hz}$) before triggering audio warnings.
-- **Evidence-Backed Admin Review:** When reviewing the leaderboard, administrators can click "View Proof" on any flagged incident to inspect the captured webcam snapshot. This eliminates guesswork and protects honest candidates.
+- **Evidence-Backed Admin Review & Interactive Proof Modal:** When reviewing the leaderboard, administrators and Admin L1 reviewers can click "View Proof" on any flagged incident to open a high-contrast rectangular modal on top of the viewport with backdrop blur.
+  - **Immediate Visual Loading Indicator:** Features an embedded animated spinner and `Loading evidence photo...` status, preventing any ambiguity while base64 thumbnails are decoded.
+  - **Top Action Bar:** Displays violation metadata (`[EVENT] duration`, flag count, candidate name, roll, and email), an instant `✕` close button (with `Escape` key and backdrop dismissal), and a primary **Download** button.
+  - **Standardized Export Naming Convention:** Downloaded proof frames automatically format as:
+    $$\text{name\_roll\_email\_(charges)\_count.jpeg}$$
+    *(e.g., `shouryashekhar_btech10199.26_btech10199.26@bitmesra.ac.in_(MIC_MUTED)_1.jpeg` or `yashita_NA_yashita.yashita28@gmail.com_(PHONE_DETECTED)_2.jpeg`)*.
+  - **Inline Quick Downloads:** Individual telemetry cards include a one-click download shortcut directly beside the "View Proof" trigger for fast offline archiving.
 
 ## 10. Deployment and Usage
 

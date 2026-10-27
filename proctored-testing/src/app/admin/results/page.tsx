@@ -64,9 +64,17 @@ function ResultsContent() {
           const partsSnap = await get(ref(rtdb, 'participants'));
           const partsData = partsSnap.val() || {};
           const uidToName: Record<string, string> = {};
+          const uidToRoll: Record<string, string> = {};
+          const emailToRoll: Record<string, string> = {};
           Object.keys(partsData).forEach(key => {
-            if (partsData[key].uid) {
-              uidToName[partsData[key].uid] = partsData[key].name || partsData[key].email.split('@')[0];
+            const p = partsData[key];
+            const pRoll = p.rollNumber || p.roll || p.rollNo || p.regNo || '';
+            if (p.uid) {
+              uidToName[p.uid] = p.name || p.email?.split('@')[0];
+              if (pRoll) uidToRoll[p.uid] = pRoll;
+            }
+            if (p.email && pRoll) {
+              emailToRoll[p.email.toLowerCase()] = pRoll;
             }
           });
 
@@ -84,11 +92,14 @@ function ResultsContent() {
             if (!fallbackName) {
               fallbackName = isEmailUid ? 'Unknown Name' : (data.email?.split('@')[0] || 'Unknown Name');
             }
+            const fallbackRoll = data.roll || data.rollNumber || uidToRoll[uid] || (data.email ? emailToRoll[data.email.toLowerCase()] : '') || '';
 
             return {
               uid,
               name: fallbackName,
               email: fallbackEmail,
+              roll: fallbackRoll,
+              rollNumber: fallbackRoll,
               score: data.score,
               total: data.total,
               rank: data.rank,
@@ -241,13 +252,16 @@ function ResultsContent() {
       const participantsSnap = await get(ref(rtdb, 'participants'));
       const partsData = participantsSnap.val() || {};
 
-      // Map uid -> {email, name} from participants
-      const uidToData: Record<string, {email: string, name: string}> = {};
+      // Map uid -> {email, name, roll} from participants
+      const uidToData: Record<string, {email: string, name: string, roll: string}> = {};
       Object.keys(partsData).forEach(k => { 
-        if (partsData[k].uid) {
-          uidToData[partsData[k].uid] = { 
-            email: partsData[k].email,
-            name: partsData[k].name || partsData[k].email.split('@')[0]
+        const p = partsData[k];
+        const pRoll = p.rollNumber || p.roll || p.rollNo || p.regNo || '';
+        if (p.uid) {
+          uidToData[p.uid] = { 
+            email: p.email,
+            name: p.name || p.email.split('@')[0],
+            roll: pRoll
           };
         }
       });
@@ -280,6 +294,7 @@ function ResultsContent() {
         const existingVal = existingResultSnap.val() || {};
 
         const roundStatus = roundStatusUpdates[uid] || existingVal.roundStatus || 'Pending';
+        const candidateRoll = existingVal.roll || existingVal.rollNumber || uidToData[uid]?.roll || '';
 
         await update(ref(rtdb, `results/${selectedTestId}/${uid}`), {
           score,
@@ -288,6 +303,7 @@ function ResultsContent() {
           roundStatus,
           email,
           name,
+          ...(candidateRoll ? { roll: candidateRoll, rollNumber: candidateRoll } : {})
         });
 
         const flagsSnap = await get(ref(rtdb, `proctoringFlags/${uid}/${selectedTestId}/flags`));
@@ -300,6 +316,8 @@ function ResultsContent() {
           uid,
           name,
           email,
+          roll: candidateRoll,
+          rollNumber: candidateRoll,
           score,
           total: totalQuestions,
           rank,

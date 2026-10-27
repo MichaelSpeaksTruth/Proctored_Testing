@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { auth, rtdb } from '@/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { ref, get } from 'firebase/database';
+import { ref, get, update } from 'firebase/database';
 import RoleGuard from '@/components/RoleGuard';
 import EventsAuditView from '@/components/EventsAuditView';
 import LeaderboardTable, { LeaderboardEntry } from '@/components/LeaderboardTable';
@@ -58,6 +58,9 @@ function AdminL1Content() {
   const [resultsDeclared, setResultsDeclared] = useState(false);
   const [isInterviewerMode, setIsInterviewerMode] = useState(false);
   const [spectatorSearch, setSpectatorSearch] = useState('');
+  const [analyzing, setAnalyzing] = useState<string | null>(null);
+  const [analyzeMsg, setAnalyzeMsg] = useState<string | null>(null);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
   // Participants state
   const [participants, setParticipants] = useState<ParticipantItem[]>([]);
@@ -159,6 +162,8 @@ function AdminL1Content() {
                 uid,
                 name: data.name || 'Unknown Candidate',
                 email: data.email || 'Unknown Email',
+                roll: data.roll || data.rollNumber || '',
+                rollNumber: data.roll || data.rollNumber || '',
                 score: data.score,
                 total: data.total,
                 rank: data.rank,
@@ -167,6 +172,7 @@ function AdminL1Content() {
                 flags,
                 aiSeverity: data.aiSeverity,
                 aiSummary: data.aiSummary,
+                integrityScore: data.integrityScore,
                 interviewScheduled: data.interviewScheduled,
                 panelNo: data.panelNo,
                 venue: data.venue,
@@ -192,6 +198,103 @@ function AdminL1Content() {
 
     fetchResults();
   }, [spectatorTestId]);
+
+  const analyzeStudent = async (uid: string) => {
+    const entry = leaderboard.find(e => e.uid === uid);
+    if (!entry) return;
+    setAnalyzing(uid);
+    setAnalyzeError(null);
+    setAnalyzeMsg(null);
+    try {
+      const res = await fetch('/api/analyze-flags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid,
+          flags: entry.flags || [],
+          score: entry.score,
+          total: entry.total,
+          testId: spectatorTestId,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        setAnalyzeError(data.error);
+        return;
+      }
+
+      if (spectatorTestId && data.severity) {
+        try {
+          await update(ref(rtdb, `results/${spectatorTestId}/${uid}`), {
+            aiSeverity: data.severity,
+            aiSummary: data.summary,
+            integrityScore: data.integrityScore,
+          });
+        } catch {
+          // Handled server-side by Firebase Admin SDK in /api/analyze-flags
+        }
+      }
+
+      setLeaderboard(prev =>
+        prev.map(e =>
+          e.uid === uid
+            ? { ...e, aiSeverity: data.severity, aiSummary: data.summary, integrityScore: data.integrityScore }
+            : e
+        )
+      );
+      setAnalyzeMsg(`AI review completed for ${entry.name}.`);
+      setTimeout(() => setAnalyzeMsg(null), 4000);
+    } catch (e) {
+      console.error('AI review failed:', e);
+      setAnalyzeError('AI analysis failed. Please try again.');
+    } finally {
+      setAnalyzing(null);
+    }
+  };
+
+  const updateRoundStatus = async (uid: string, status: string) => {
+    if (!spectatorTestId) return;
+
+    // Optimistically update local leaderboard state
+    setLeaderboard(prev =>
+      prev.map(e => (e.uid === uid ? { ...e, roundStatus: status } : e))
+    );
+
+    try {
+      const idToken = currentUser ? await currentUser.getIdToken() : undefined;
+      const res = await fetch('/api/update-round-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          testId: spectatorTestId,
+          uid,
+          roundStatus: status,
+          idToken,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        console.error('Failed to update round status:', data.error);
+        setAnalyzeError(data.error || 'Failed to update round status.');
+      } else {
+        setAnalyzeMsg(`Candidate status updated to "${status}".`);
+        setTimeout(() => setAnalyzeMsg(null), 3000);
+      }
+
+      // Also attempt direct client-side update if authorized
+      try {
+        await update(ref(rtdb, `results/${spectatorTestId}/${uid}`), {
+          roundStatus: status,
+        });
+      } catch {
+        // Handled server-side
+      }
+    } catch (err) {
+      console.error('Error updating round status:', err);
+      setAnalyzeError('Failed to save status change.');
+    }
+  };
 
   // Fetch Participants list (view-only) via API route
   const fetchParticipants = useCallback(async () => {
@@ -738,7 +841,28 @@ function AdminL1Content() {
                   </div>
                 )}
 
-                <LeaderboardTable entries={filteredLeaderboard} />
+                {analyzeMsg && (
+                  <div className="alert alert-success" style={{ marginBottom: 'var(--space-md)' }}>
+                    {analyzeMsg}
+                  </div>
+                )}
+
+                {analyzeError && (
+                  <div className="alert alert-danger" style={{ marginBottom: 'var(--space-md)' }}>
+                    {analyzeError}
+                  </div>
+                )}
+
+                <div className="alert alert-info" style={{ marginBottom: 'var(--space-md)' }}>
+                  <strong>AI Proctoring Review:</strong> Click &ldquo;AI Review&rdquo; on any student row to run an on-demand Groq analysis of their proctoring flags.
+                </div>
+
+                <LeaderboardTable
+                  entries={filteredLeaderboard}
+                  onAnalyze={analyzeStudent}
+                  analyzing={analyzing}
+                  onUpdateRoundStatus={updateRoundStatus}
+                />
               </div>
             )}
           </div>
