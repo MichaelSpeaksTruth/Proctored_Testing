@@ -129,7 +129,6 @@ function SpectatorContent() {
         {/* Header Bar */}
         <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 10 }}>
           <div className="flex items-center gap-md">
-            <BackButton fallbackUrl="/" />
             <div>
               <h1 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
                 Spectator Dashboard

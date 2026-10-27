@@ -272,16 +272,13 @@ function AdminL1Content() {
             borderRadius: 'var(--radius-lg)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <BackButton fallbackUrl="/" />
-            <div className="brand">
-              <div style={{ width: 32, height: 32, borderRadius: '4px', overflow: 'hidden' }}>
-                <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={32} height={32} style={{ objectFit: 'cover' }} />
-              </div>
-              <div>
-                <div className="brand-name">AeroSoc Admin L1</div>
-                <div className="brand-sub">BIT Mesra · Examination Supervisory Portal</div>
-              </div>
+          <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: '4px', overflow: 'hidden', flexShrink: 0 }}>
+              <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={32} height={32} style={{ objectFit: 'cover' }} />
+            </div>
+            <div>
+              <div className="brand-name">AeroSoc Admin L1</div>
+              <div className="brand-sub desktop-only">BIT Mesra &middot; Examination Supervisory Portal</div>
             </div>
           </div>
 

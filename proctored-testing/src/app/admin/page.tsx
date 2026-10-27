@@ -6,7 +6,6 @@ import { onAuthStateChanged } from 'firebase/auth';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 import Image from 'next/image';
-import BackButton from '@/components/BackButton';
 import {
   Settings,
   Users,
@@ -88,35 +87,34 @@ function AdminHomeContent() {
   }, []);
 
   return (
-    <main className="page-wrapper" style={{ minHeight: '100vh', padding: '16px 0 var(--space-xl)' }}>
-      <div className="container" style={{ maxWidth: 1200 }}>
+    <main className="page-wrapper" style={{ minHeight: '100vh', padding: '16px 0 var(--space-xl)', overflowX: 'hidden' }}>
+      <div className="container" style={{ maxWidth: 1200, width: '100%', boxSizing: 'border-box' }}>
         {/* Compact Navbar */}
         <nav
           style={{
             marginBottom: 'var(--space-md)',
             borderRadius: 'var(--radius-md)',
-            padding: '10px 16px',
+            padding: '10px 14px',
             border: '1px solid var(--border)',
             background: 'var(--bg-card)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 10,
+            gap: 8,
+            width: '100%',
+            boxSizing: 'border-box',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-            <BackButton fallbackUrl="/" />
-            <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 'var(--radius-xs)', overflow: 'hidden', flexShrink: 0 }}>
-                <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={28} height={28} style={{ objectFit: 'cover' }} />
+          <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 'var(--radius-xs)', overflow: 'hidden', flexShrink: 0 }}>
+              <Image src="/aerosoc_logo.jpeg" alt="AeroSoc Logo" width={28} height={28} style={{ objectFit: 'cover' }} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div className="brand-name" style={{ fontSize: '0.9375rem', fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
+                AeroSoc Admin
               </div>
-              <div style={{ minWidth: 0 }}>
-                <div className="brand-name" style={{ fontSize: '0.9375rem', fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-                  AeroSoc Admin
-                </div>
-                <div className="brand-sub desktop-only" style={{ fontSize: '0.625rem', letterSpacing: '0.08em' }}>
-                  BIT Mesra &middot; Examination Control
-                </div>
+              <div className="brand-sub desktop-only" style={{ fontSize: '0.625rem', letterSpacing: '0.08em' }}>
+                BIT Mesra &middot; Examination Control
               </div>
             </div>
           </div>
@@ -131,6 +129,7 @@ function AdminHomeContent() {
                 fontSize: '0.6875rem',
                 fontWeight: 700,
                 padding: '2px 8px',
+                whiteSpace: 'nowrap',
               }}
             >
               Admin Sr.
@@ -141,7 +140,7 @@ function AdminHomeContent() {
             <button
               id="admin-signout"
               className="btn btn-outline btn-sm"
-              style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+              style={{ padding: '4px 10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
               onClick={() => auth.signOut()}
             >
               Sign Out
@@ -189,25 +188,28 @@ function AdminHomeContent() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: '12px',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+            gap: '10px',
+            width: '100%',
           }}
         >
           {ADMIN_TABS.map((tab) => (
-            <Link key={tab.href} href={tab.href} style={{ textDecoration: 'none' }}>
+            <Link key={tab.href} href={tab.href} style={{ textDecoration: 'none', width: '100%' }}>
               <div
                 id={`admin-nav-${tab.label.toLowerCase().replace(/\s+/g, '-')}`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 12,
-                  padding: '14px 16px',
+                  padding: '12px 14px',
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border)',
                   borderRadius: 'var(--radius-sm)',
                   cursor: 'pointer',
                   transition: 'all var(--transition-fast)',
                   height: '100%',
+                  boxSizing: 'border-box',
+                  width: '100%',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = 'var(--border-focus)';
@@ -244,9 +246,6 @@ function AdminHomeContent() {
                       color: 'var(--text-primary)',
                       marginBottom: 2,
                       letterSpacing: '-0.01em',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
                     }}
                   >
                     {tab.label}
@@ -256,9 +255,6 @@ function AdminHomeContent() {
                       fontSize: '0.75rem',
                       color: 'var(--text-muted)',
                       lineHeight: 1.35,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
                     }}
                   >
                     {tab.desc}
