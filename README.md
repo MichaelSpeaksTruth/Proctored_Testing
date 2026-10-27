@@ -186,8 +186,8 @@ To eliminate ambiguity across locales and maximize readability on dark UI surfac
   - **Immediate Visual Loading Indicator:** Features an embedded animated spinner and `Loading evidence photo...` status, preventing any ambiguity while base64 thumbnails are decoded.
   - **Top Action Bar:** Displays violation metadata (`[EVENT] duration`, flag count, candidate name, roll, and email), an instant `✕` close button (with `Escape` key and backdrop dismissal), and a primary **Download** button.
   - **Standardized Export Naming Convention:** Downloaded proof frames automatically format as:
-    $$\text{name\_roll\_email\_(charges)\_count.jpeg}$$
-    *(e.g., `shouryashekhar_btech10199.26_btech10199.26@bitmesra.ac.in_(MIC_MUTED)_1.jpeg` or `yashita_NA_yashita.yashita28@gmail.com_(PHONE_DETECTED)_2.jpeg`)*.
+    $$\text{name\_email\_(charges)\_count.jpeg}$$
+    *(e.g., `Kartikey_Bora_kartikeysbora180119@gmail.com_(MIC_MUTED)_2.jpeg` or `yashita_yashita.yashita28@gmail.com_(PHONE_DETECTED)_1.jpeg`)*.
   - **Inline Quick Downloads:** Individual telemetry cards include a one-click download shortcut directly beside the "View Proof" trigger for fast offline archiving.
 
 ## 10. Deployment and Usage

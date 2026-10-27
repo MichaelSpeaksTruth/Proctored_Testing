@@ -72,11 +72,10 @@ export const getStudentRollNumber = (entry: LeaderboardEntry): string => {
 export const getSnapshotDownloadName = (snap: SnapshotPreviewData): string => {
   const sanitize = (val: string) => (val || '').replace(/[/\\?%*:|"<>]/g, '').trim().replace(/\s+/g, '_');
   const name = sanitize(snap.studentName) || 'student';
-  const roll = sanitize(snap.studentRoll) || 'NA';
   const email = sanitize(snap.studentEmail) || 'email';
   const charges = sanitize(snap.charges) || 'VIOLATION';
   const count = snap.count || 1;
-  return `${name}_${roll}_${email}_(${charges})_${count}.jpeg`;
+  return `${name}_${email}_(${charges})_${count}.jpeg`;
 };
 
 interface Props {
@@ -552,10 +551,10 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
           <div 
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: '#0e131f',
-              border: '1px solid rgba(255, 255, 255, 0.16)',
-              borderRadius: 12,
-              boxShadow: '0 25px 70px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.08)',
+              background: '#090d16',
+              border: '1px solid #1f2737',
+              borderRadius: 0,
+              boxShadow: '0 25px 70px rgba(0, 0, 0, 0.95)',
               maxWidth: 540,
               width: '100%',
               maxHeight: '92vh',
@@ -568,28 +567,28 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
             {/* Top Bar ("over all on top") with Details, Download Button, and Cross Button */}
             <div 
               style={{
-                padding: '14px 18px',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                background: 'rgba(255, 255, 255, 0.03)',
+                padding: '12px 16px',
+                borderBottom: '1px solid #1a2232',
+                background: '#0e1320',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: 12
               }}
             >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#ffffff', letterSpacing: '-0.01em' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.925rem', color: '#ffffff', letterSpacing: '-0.01em' }}>
                     Evidence: {previewSnapshot.charges}
                   </span>
                   {previewSnapshot.duration !== undefined && previewSnapshot.duration > 0 && (
                     <span style={{
-                      background: 'rgba(239, 68, 68, 0.15)',
+                      background: 'rgba(239, 68, 68, 0.16)',
                       border: '1px solid rgba(239, 68, 68, 0.35)',
                       color: '#f87171',
                       fontSize: '0.72rem',
-                      padding: '2px 7px',
-                      borderRadius: 4,
+                      padding: '1px 6px',
+                      borderRadius: 0,
                       fontWeight: 700,
                       fontFamily: 'var(--font-mono)'
                     }}>
@@ -600,8 +599,8 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                     background: 'rgba(255, 255, 255, 0.08)',
                     color: '#94a3b8',
                     fontSize: '0.72rem',
-                    padding: '2px 7px',
-                    borderRadius: 4,
+                    padding: '1px 6px',
+                    borderRadius: 0,
                     fontWeight: 600,
                     fontFamily: 'var(--font-mono)'
                   }}>
@@ -616,9 +615,6 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                   textOverflow: 'ellipsis'
                 }}>
                   <strong style={{ color: '#f1f5f9' }}>{previewSnapshot.studentName}</strong>
-                  {previewSnapshot.studentRoll && previewSnapshot.studentRoll !== 'NA' && (
-                    <span> &middot; Roll: {previewSnapshot.studentRoll}</span>
-                  )}
                   <span> &middot; {previewSnapshot.studentEmail}</span>
                 </div>
               </div>
@@ -628,21 +624,20 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                 <button
                   type="button"
                   onClick={() => handleDownloadSnapshot(previewSnapshot)}
-                  title={`Download proof as ${getSnapshotDownloadName(previewSnapshot)}`}
+                  title="Download snapshot proof"
                   style={{
                     background: downloadSuccess ? '#16a34a' : '#2563eb',
                     color: '#ffffff',
                     border: 'none',
-                    borderRadius: 6,
-                    padding: '7px 14px',
+                    borderRadius: 0,
+                    padding: '6px 14px',
                     fontSize: '0.8rem',
                     fontWeight: 600,
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 6,
                     cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)'
+                    transition: 'all 0.15s ease'
                   }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -657,19 +652,19 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                 <button 
                   type="button"
                   onClick={() => setPreviewSnapshot(null)}
-                  title="Close proof (Esc)"
+                  title="Close (Esc)"
                   style={{
-                    background: 'rgba(255, 255, 255, 0.08)',
+                    background: 'rgba(255, 255, 255, 0.06)',
                     color: '#cbd5e1',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    borderRadius: 6,
-                    width: 32,
-                    height: 32,
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: 0,
+                    width: 28,
+                    height: 28,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    fontSize: '1rem',
+                    fontSize: '0.95rem',
                     lineHeight: 1,
                     transition: 'all 0.15s ease'
                   }}
@@ -679,9 +674,9 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                     e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
                     e.currentTarget.style.color = '#cbd5e1';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)';
                   }}
                 >
                   ✕
@@ -689,16 +684,17 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
               </div>
             </div>
 
-            {/* Photo Proof Box with Centered Natural Framing */}
+            {/* Photo Proof Box with Clean Sharp Natural Framing */}
             <div 
               style={{
                 position: 'relative',
-                background: '#040711',
-                padding: '16px',
+                background: '#000000',
+                padding: '8px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                minHeight: '260px'
+                minHeight: '260px',
+                borderBottom: '1px solid #1a2232'
               }}
             >
               {isImageLoading && (
@@ -731,22 +727,19 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                 style={{
                   width: '100%',
                   height: 'auto',
-                  maxHeight: '56vh',
+                  maxHeight: '60vh',
                   objectFit: 'contain',
-                  borderRadius: 8,
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  boxShadow: '0 8px 30px rgba(0, 0, 0, 0.7)',
+                  borderRadius: 0,
                   display: isImageLoading ? 'none' : 'block'
                 }}
               />
             </div>
 
-            {/* Footer / Filename & Timestamp Preview */}
+            {/* Clean Minimalist Footer */}
             <div 
               style={{
-                padding: '12px 18px',
-                background: 'rgba(0, 0, 0, 0.35)',
-                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                padding: '10px 16px',
+                background: '#0e1320',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
@@ -760,31 +753,17 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                 <span style={{
                   width: 6,
                   height: 6,
-                  borderRadius: '50%',
+                  borderRadius: 0,
                   background: '#10b981',
                   display: 'inline-block'
                 }} />
-                <span>Webcam snapshot captured automatically at violation onset</span>
-                {previewSnapshot.timestamp && (
-                  <span style={{ color: '#ffffff', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-                    &middot; {formatDateTime(previewSnapshot.timestamp, 'numeric', true)}
-                  </span>
-                )}
+                <span>Webcam snapshot captured at violation onset</span>
               </div>
-              <span 
-                title="Download file name format: name_roll_email_(charges)_count.jpeg"
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.7rem',
-                  color: '#60a5fa',
-                  background: 'rgba(59, 130, 246, 0.08)',
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  border: '1px solid rgba(59, 130, 246, 0.2)'
-                }}
-              >
-                {getSnapshotDownloadName(previewSnapshot)}
-              </span>
+              {previewSnapshot.timestamp && (
+                <span style={{ color: '#ffffff', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+                  {formatDateTime(previewSnapshot.timestamp, 'numeric', true)}
+                </span>
+              )}
             </div>
           </div>
         </div>,
