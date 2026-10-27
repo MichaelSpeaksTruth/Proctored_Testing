@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, Fragment } from 'react';
+import { createPortal } from 'react-dom';
 import { calculateIntegrityScore, DurationFlag } from '@/lib/proctoring';
 import { formatDateTime } from '@/lib/dateUtils';
 
@@ -90,11 +91,16 @@ interface Props {
 const PAGE_SIZE = 20;
 
 export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDelete, onUpdateRoundStatus, onEditInfo }: Props) {
+  const [mounted, setMounted] = useState(false);
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [previewSnapshot, setPreviewSnapshot] = useState<SnapshotPreviewData | null>(null);
   const [isImageLoading, setIsImageLoading] = useState(true);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!previewSnapshot) return;
@@ -516,46 +522,55 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
         </table>
       </div>
 
-      {/* Snapshot Preview Modal */}
-      {previewSnapshot && (
+      {/* Snapshot Preview Modal — Rendered into document.body via Portal to escape parent container constraints */}
+      {mounted && previewSnapshot && typeof document !== 'undefined' && createPortal(
         <div 
           role="dialog"
           aria-modal="true"
-          aria-label="Visual Evidence Proof"
+          aria-label="Proctoring Visual Evidence Frame"
           onClick={() => setPreviewSnapshot(null)}
           style={{
             position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.85)',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
-            zIndex: 99999,
+            zIndex: 999999,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: 16
+            padding: 16,
+            boxSizing: 'border-box',
+            overflowY: 'auto'
           }}
         >
           <div 
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: '#0d1117',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: 10,
-              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.1)',
-              maxWidth: 580,
+              background: '#0e131f',
+              border: '1px solid rgba(255, 255, 255, 0.16)',
+              borderRadius: 12,
+              boxShadow: '0 25px 70px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.08)',
+              maxWidth: 540,
               width: '100%',
+              maxHeight: '92vh',
               display: 'flex',
               flexDirection: 'column',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              margin: 'auto'
             }}
           >
             {/* Top Bar ("over all on top") with Details, Download Button, and Cross Button */}
             <div 
               style={{
-                padding: '12px 16px',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
-                background: 'rgba(255, 255, 255, 0.04)',
+                padding: '14px 18px',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'rgba(255, 255, 255, 0.03)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -564,18 +579,18 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 700, fontSize: '0.925rem', color: '#f8fafc', letterSpacing: '-0.01em' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#ffffff', letterSpacing: '-0.01em' }}>
                     Evidence: {previewSnapshot.charges}
                   </span>
                   {previewSnapshot.duration !== undefined && previewSnapshot.duration > 0 && (
                     <span style={{
-                      background: 'rgba(239, 68, 68, 0.18)',
+                      background: 'rgba(239, 68, 68, 0.15)',
                       border: '1px solid rgba(239, 68, 68, 0.35)',
                       color: '#f87171',
-                      fontSize: '0.7rem',
-                      padding: '1px 6px',
+                      fontSize: '0.72rem',
+                      padding: '2px 7px',
                       borderRadius: 4,
-                      fontWeight: 600,
+                      fontWeight: 700,
                       fontFamily: 'var(--font-mono)'
                     }}>
                       {previewSnapshot.duration}s
@@ -584,22 +599,23 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                   <span style={{
                     background: 'rgba(255, 255, 255, 0.08)',
                     color: '#94a3b8',
-                    fontSize: '0.7rem',
-                    padding: '1px 6px',
+                    fontSize: '0.72rem',
+                    padding: '2px 7px',
                     borderRadius: 4,
+                    fontWeight: 600,
                     fontFamily: 'var(--font-mono)'
                   }}>
                     Violation #{previewSnapshot.count}
                   </span>
                 </div>
                 <div style={{
-                  fontSize: '0.75rem',
+                  fontSize: '0.78rem',
                   color: '#94a3b8',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis'
                 }}>
-                  <strong style={{ color: '#e2e8f0' }}>{previewSnapshot.studentName}</strong>
+                  <strong style={{ color: '#f1f5f9' }}>{previewSnapshot.studentName}</strong>
                   {previewSnapshot.studentRoll && previewSnapshot.studentRoll !== 'NA' && (
                     <span> &middot; Roll: {previewSnapshot.studentRoll}</span>
                   )}
@@ -614,18 +630,19 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                   onClick={() => handleDownloadSnapshot(previewSnapshot)}
                   title={`Download proof as ${getSnapshotDownloadName(previewSnapshot)}`}
                   style={{
-                    background: downloadSuccess ? '#15803d' : '#2563eb',
+                    background: downloadSuccess ? '#16a34a' : '#2563eb',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: 6,
-                    padding: '6px 12px',
-                    fontSize: '0.78rem',
+                    padding: '7px 14px',
+                    fontSize: '0.8rem',
                     fontWeight: 600,
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 6,
                     cursor: 'pointer',
-                    transition: 'all 0.15s ease'
+                    transition: 'all 0.15s ease',
+                    boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)'
                   }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -640,14 +657,14 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                 <button 
                   type="button"
                   onClick={() => setPreviewSnapshot(null)}
-                  title="Close (Esc)"
+                  title="Close proof (Esc)"
                   style={{
                     background: 'rgba(255, 255, 255, 0.08)',
                     color: '#cbd5e1',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
                     borderRadius: 6,
-                    width: 30,
-                    height: 30,
+                    width: 32,
+                    height: 32,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -664,7 +681,7 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
                     e.currentTarget.style.color = '#cbd5e1';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
                   }}
                 >
                   ✕
@@ -672,17 +689,16 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
               </div>
             </div>
 
-            {/* Photo Proof Box with Loading State */}
+            {/* Photo Proof Box with Centered Natural Framing */}
             <div 
               style={{
                 position: 'relative',
-                minHeight: 280,
-                maxHeight: '68vh',
-                background: '#020617',
+                background: '#040711',
+                padding: '16px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: 12
+                minHeight: '260px'
               }}
             >
               {isImageLoading && (
@@ -695,13 +711,13 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 12,
-                    background: '#090d16',
+                    background: '#040711',
                     zIndex: 2
                   }}
                 >
                   <div className="spinner" style={{ width: 34, height: 34, borderTopColor: '#3b82f6' }} />
-                  <span style={{ fontSize: '0.825rem', color: '#94a3b8', fontWeight: 500 }}>
-                    Loading evidence photo...
+                  <span style={{ fontSize: '0.8125rem', color: '#94a3b8', fontWeight: 500 }}>
+                    Loading webcam snapshot...
                   </span>
                 </div>
               )}
@@ -713,22 +729,23 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                 onLoad={() => setIsImageLoading(false)}
                 onError={() => setIsImageLoading(false)}
                 style={{
-                  maxWidth: '100%',
-                  maxHeight: '62vh',
+                  width: '100%',
+                  height: 'auto',
+                  maxHeight: '56vh',
                   objectFit: 'contain',
-                  borderRadius: 6,
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  display: isImageLoading ? 'none' : 'block',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)'
+                  borderRadius: 8,
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  boxShadow: '0 8px 30px rgba(0, 0, 0, 0.7)',
+                  display: isImageLoading ? 'none' : 'block'
                 }}
               />
             </div>
 
-            {/* Footer / Filename Preview */}
+            {/* Footer / Filename & Timestamp Preview */}
             <div 
               style={{
-                padding: '10px 16px',
-                background: 'rgba(0, 0, 0, 0.4)',
+                padding: '12px 18px',
+                background: 'rgba(0, 0, 0, 0.35)',
                 borderTop: '1px solid rgba(255, 255, 255, 0.08)',
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -739,16 +756,39 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                 color: '#94a3b8'
               }}
             >
-              <span>Webcam snapshot captured automatically at violation onset.</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: '#10b981',
+                  display: 'inline-block'
+                }} />
+                <span>Webcam snapshot captured automatically at violation onset</span>
+                {previewSnapshot.timestamp && (
+                  <span style={{ color: '#ffffff', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+                    &middot; {formatDateTime(previewSnapshot.timestamp, 'numeric', true)}
+                  </span>
+                )}
+              </div>
               <span 
                 title="Download file name format: name_roll_email_(charges)_count.jpeg"
-                style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: '#64748b' }}
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.7rem',
+                  color: '#60a5fa',
+                  background: 'rgba(59, 130, 246, 0.08)',
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  border: '1px solid rgba(59, 130, 246, 0.2)'
+                }}
               >
                 {getSnapshotDownloadName(previewSnapshot)}
               </span>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Pagination */}
