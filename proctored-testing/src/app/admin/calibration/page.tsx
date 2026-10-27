@@ -24,6 +24,7 @@ const EVENT_META: Record<ProctoringEvent, { label: string; color: string }> = {
   DUCKING_DOWN:       { label: 'Ducking Out of Frame', color: '#e63946' },
   SHOULDERS_OUT_OF_FRAME: { label: 'Shoulders Out of Frame', color: '#e63946' },
   FACE_OCCLUDED:      { label: 'Face Occluded / Glow', color: '#e76f51' },
+  POSSIBLE_EXTRA_FACE: { label: 'Possible Extra Face', color: '#f4a261' },
 };
 
 function CalibrationContent() {

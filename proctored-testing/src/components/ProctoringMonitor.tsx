@@ -82,7 +82,8 @@ const MIN_FACE_H = 0.06;            // existing floor
 const EXTRA_MIN_RATIO = 0.4;        // extra face height >= 40% of the primary's
 const EXTRA_MAX_OVERLAP = 0.3;      // max overlap with primary (fraction of the smaller box)
 const EXTRA_ASPECT: [number, number] = [0.5, 1.2];
-const EXTRA_MIN_TEXTURE = 12;       // luma std-dev; wall shadows and glow blobs are flat
+const EXTRA_MIN_TEXTURE = 12;       // luma std-dev floor
+const EXTRA_STRONG_TEXTURE = 18;    // extra face with std-dev >= 18 is clearly textured second person
 const GLOW_MIN_SAT = 0.02;          // >=2% of pixels near-white
 const GLOW_RATIO = 4;               // and 4x the rolling baseline
 
@@ -140,7 +141,7 @@ function cropStd(video: HTMLVideoElement, p: Probe, b: FBox) {
 }
 
 // Largest face = primary (unchanged behaviour for NO_FACE and pose).
-// Extras only count if they pass all four checks + phone veto.
+// Extras only count as confirmed MULTIPLE_FACES if clearly textured; ambiguous extras become POSSIBLE_EXTRA_FACE.
 function validateFaces(all: LM[][], video: HTMLVideoElement, tex: Probe | null, phoneBoxes: FBox[]) {
   const vw = video.videoWidth || 1, vh = video.videoHeight || 1;
   const sized = all
@@ -149,11 +150,15 @@ function validateFaces(all: LM[][], video: HTMLVideoElement, tex: Probe | null, 
     .sort((a, b) => b.box.w * b.box.h - a.box.w * a.box.h);
   const rejected: string[] = [];
   const info: { box: FBox; tag: string }[] = [];
-  if (sized.length === 0) return { faces: [] as LM[][], rejected, info };
+  if (sized.length === 0) return { faces: [] as LM[][], weakCount: 0, rejected, info };
 
   const [primary, ...rest] = sized;
-  info.push({ box: primary.box, tag: 'primary' });
-  const kept = [primary];
+  const pStd = tex ? cropStd(video, tex, primary.box) : -1;
+  info.push({ box: primary.box, tag: `primary s${pStd.toFixed(0)}` });
+
+  const strong = [];
+  const weak = [];
+
   for (const f of rest) {
     const ratio = f.box.h / primary.box.h;
     const ov = overlapOfSmaller(f.box, primary.box);
@@ -164,12 +169,21 @@ function validateFaces(all: LM[][], video: HTMLVideoElement, tex: Probe | null, 
       : ratio < EXTRA_MIN_RATIO ? 'small'
       : ov > EXTRA_MAX_OVERLAP ? 'overlap'
       : aspect < EXTRA_ASPECT[0] || aspect > EXTRA_ASPECT[1] ? 'aspect'
-      : std >= 0 && std < EXTRA_MIN_TEXTURE ? 'flat'
       : null;
-    info.push({ box: f.box, tag: `${why ?? 'KEPT'} r${ratio.toFixed(2)} o${ov.toFixed(2)} a${aspect.toFixed(2)} s${std.toFixed(0)}` });
-    if (why) rejected.push(why); else kept.push(f);
+
+    if (why) {
+      rejected.push(why);
+      info.push({ box: f.box, tag: `${why} r${ratio.toFixed(2)} o${ov.toFixed(2)} a${aspect.toFixed(2)} s${std.toFixed(0)}` });
+    } else if (std >= EXTRA_STRONG_TEXTURE) {
+      strong.push(f);
+      info.push({ box: f.box, tag: `STRONG r${ratio.toFixed(2)} o${ov.toFixed(2)} a${aspect.toFixed(2)} s${std.toFixed(0)}` });
+    } else {
+      weak.push(f);
+      info.push({ box: f.box, tag: `WEAK r${ratio.toFixed(2)} o${ov.toFixed(2)} a${aspect.toFixed(2)} s${std.toFixed(0)}` });
+    }
   }
-  return { faces: kept.map((k) => k.lm), rejected, info };
+
+  return { faces: [primary.lm, ...strong.map((s) => s.lm)], weakCount: weak.length, rejected, info };
 }
 
 export interface MonitorStatus {
@@ -268,7 +282,7 @@ export default function ProctoringMonitor({
       if (activeInfractions.current.has(event)) return;
 
       let snapshot = evidence?.snapshot;
-      if (!snapshot && (event === 'MULTIPLE_FACES' || event === 'PHONE_DETECTED' || event === 'CAMERA_COVERED')) {
+      if (!snapshot && (event === 'MULTIPLE_FACES' || event === 'POSSIBLE_EXTRA_FACE' || event === 'PHONE_DETECTED' || event === 'CAMERA_COVERED')) {
         snapshot = captureSnapshot(videoRef.current);
       }
 
@@ -441,7 +455,7 @@ export default function ProctoringMonitor({
         const model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
 
         if (mounted && videoRef.current && videoRef.current.readyState === 4) {
-          try { await model.detect(videoRef.current); } catch { /* ok */ }
+          try { await model.detect(videoRef.current, 20, 0.20); } catch { /* ok */ }
         }
 
         let detecting = false;
@@ -482,7 +496,7 @@ export default function ProctoringMonitor({
 
             let preds: import('@tensorflow-models/coco-ssd').DetectedObject[] = [];
             try { 
-              preds = await model.detect(video); 
+              preds = await model.detect(video, 20, 0.20); 
               if (calibrationMode) {
                 console.log('[COCO]', preds.map(p => `${p.class} ${(p.score * 100).toFixed(0)}% [${p.bbox.map(Math.round)}]`).join(' | ') || 'none');
               }
@@ -624,7 +638,7 @@ export default function ProctoringMonitor({
                 .map((p) => ({ x: p.bbox[0] / lp.vw, y: p.bbox[1] / lp.vh, w: p.bbox[2] / lp.vw, h: p.bbox[3] / lp.vh }))
             : [];
 
-          const { faces: validFaces, rejected, info } = validateFaces(results.multiFaceLandmarks, video, texProbe, phoneBoxes);
+          const { faces: validFaces, weakCount, rejected, info } = validateFaces(results.multiFaceLandmarks, video, texProbe, phoneBoxes);
           if (calibrationMode && rawCount > 1) {
             console.log('[FACES]', info.map(i => i.tag).join(' | '));
           }
@@ -649,6 +663,7 @@ export default function ProctoringMonitor({
 
           report('NO_FACE', count === 0, 'medium');
           report('MULTIPLE_FACES', count > 1, 'critical');
+          report('POSSIBLE_EXTRA_FACE', count === 1 && weakCount > 0, 'medium');
           // Light spike while face geometry breaks = a lit object in front of the lens
           report('FACE_OCCLUDED', g.active && (rawCount !== 1 || count === 0), 'medium');
           pushStatus({ faceDetected: count === 1 });
@@ -836,7 +851,10 @@ export default function ProctoringMonitor({
               const fSize = Math.max(11, Math.round(cv.width / 45));
               gx.font = `${fSize}px monospace`;
               for (const { box, tag } of info) {
-                gx.strokeStyle = tag === 'primary' ? '#22ff88' : '#ffd400';
+                gx.strokeStyle = tag.startsWith('primary') ? '#22ff88'
+                  : tag.startsWith('STRONG') ? '#ff2200'
+                  : tag.startsWith('WEAK') ? '#ffd400'
+                  : '#888888';
                 gx.lineWidth = 2;
                 gx.strokeRect(box.x * cv.width, box.y * cv.height, box.w * cv.width, box.h * cv.height);
                 gx.fillStyle = gx.strokeStyle;

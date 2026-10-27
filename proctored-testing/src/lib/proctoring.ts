@@ -17,7 +17,8 @@ export type ProctoringEvent =
   | 'HEAD_PITCH_DOWN'
   | 'DUCKING_DOWN'
   | 'SHOULDERS_OUT_OF_FRAME'
-  | 'FACE_OCCLUDED';
+  | 'FACE_OCCLUDED'
+  | 'POSSIBLE_EXTRA_FACE';
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 
@@ -84,8 +85,8 @@ export function calculateIntegrityScore(flags: DurationFlag[]): number {
       deduction += 25;
     } else if (f.event === 'MIC_MUTED') {
       deduction += 10;
-    } else if (f.event === 'FACE_OCCLUDED') {
-      // Review-only signal: minimal deduction (2 points) so honest candidates with lighting glare aren't hurt
+    } else if (f.event === 'FACE_OCCLUDED' || f.event === 'POSSIBLE_EXTRA_FACE') {
+      // Review-only signals: minimal deduction (2 points) for reviewer triage without unfairly penalizing candidates
       deduction += 2;
     } else {
       softDurationSecs += f.durationInSeconds;
