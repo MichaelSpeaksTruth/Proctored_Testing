@@ -29,21 +29,24 @@ const LOOKALIKE: Record<string, number> = {
 };
 
 /**
- * Captures a small, compressed JPEG thumbnail directly from the webcam element.
- * Typical size is ~6-10 KB, safe for Firebase Realtime Database and instant for admin review.
+ * Captures a high-resolution, crystal-clear proof snapshot directly from the webcam element.
+ * Preserves native resolution (up to 1280px) with 0.85 JPEG quality for indisputable proctor audit evidence.
  */
 function captureSnapshot(videoEl: HTMLVideoElement | null): string | undefined {
   if (!videoEl || videoEl.readyState < 2 || videoEl.videoWidth === 0) return undefined;
   try {
     const canvas = document.createElement('canvas');
-    const targetW = 320;
-    const targetH = Math.round((videoEl.videoHeight / videoEl.videoWidth) * targetW) || 240;
+    const maxW = 1280;
+    const targetW = Math.min(videoEl.videoWidth, maxW);
+    const targetH = Math.round((videoEl.videoHeight / videoEl.videoWidth) * targetW) || 720;
     canvas.width = targetW;
     canvas.height = targetH;
     const ctx = canvas.getContext('2d');
     if (!ctx) return undefined;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(videoEl, 0, 0, targetW, targetH);
-    return canvas.toDataURL('image/jpeg', 0.5);
+    return canvas.toDataURL('image/jpeg', 0.85);
   } catch {
     return undefined;
   }
@@ -465,10 +468,17 @@ export default function ProctoringMonitor({
         const snapCanvas = document.createElement('canvas');
 
         const grabFrame = (v: HTMLVideoElement) => {
-          const w = 320, h = Math.round((v.videoHeight / v.videoWidth) * w) || 240;
+          const maxW = 1280;
+          const w = Math.min(v.videoWidth, maxW);
+          const h = Math.round((v.videoHeight / v.videoWidth) * w) || 720;
           if (snapCanvas.width !== w) snapCanvas.width = w;
           if (snapCanvas.height !== h) snapCanvas.height = h;
-          snapCanvas.getContext('2d')?.drawImage(v, 0, 0, w, h);
+          const ctx = snapCanvas.getContext('2d');
+          if (ctx) {
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(v, 0, 0, w, h);
+          }
         };
 
         const annotate = (p: import('@tensorflow-models/coco-ssd').DetectedObject, vw: number) => {
@@ -476,12 +486,12 @@ export default function ProctoringMonitor({
           if (!ctx) return undefined;
           const s = snapCanvas.width / vw;
           const [bx, by, bw, bh] = p.bbox;
-          ctx.strokeStyle = '#ff2200'; ctx.lineWidth = 2;
+          ctx.strokeStyle = '#ff2200'; ctx.lineWidth = 3;
           ctx.strokeRect(bx * s, by * s, bw * s, bh * s);
-          ctx.font = 'bold 11px monospace'; ctx.fillStyle = 'rgba(255,34,0,0.9)';
+          ctx.font = 'bold 15px monospace'; ctx.fillStyle = 'rgba(255,34,0,0.95)';
           ctx.fillText(`${p.class.toUpperCase()} ${(p.score * 100).toFixed(0)}%`,
-                       bx * s + 2, by * s > 14 ? by * s - 3 : (by + bh) * s + 11);
-          return snapCanvas.toDataURL('image/jpeg', 0.6);
+                       bx * s + 4, by * s > 18 ? by * s - 5 : (by + bh) * s + 16);
+          return snapCanvas.toDataURL('image/jpeg', 0.85);
         };
 
         cocoTimer = setInterval(async () => {
@@ -913,7 +923,13 @@ export default function ProctoringMonitor({
         if (streamRef.current && streamRef.current.getAudioTracks().length > 0) {
           audioStream = new MediaStream(streamRef.current.getAudioTracks());
         } else {
-          audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          try {
+            audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          } catch {
+            // Audio permission unavailable - perfectly safe as mic charges are eradicated
+            pushStatus({ micWorking: true });
+            return;
+          }
         }
 
         audioCtx = new AudioContext();
@@ -935,10 +951,8 @@ export default function ProctoringMonitor({
           for (let i = 0; i < timeBuf.length; i++) sumSq += timeBuf[i] * timeBuf[i];
           const rms = Math.sqrt(sumSq / timeBuf.length);
           
-          const track = audioStream?.getAudioTracks()[0];
-          const isMuted = !track || track.readyState === 'ended' || track.enabled === false;
-          report('MIC_MUTED', isMuted, 'critical');
-          pushStatus({ micWorking: !isMuted });
+          // Mic functionality eradicated from charging candidate: no MIC_MUTED report
+          pushStatus({ micWorking: true });
 
           if (calibFrames < CALIB_FRAMES) {
             calibSum += rms; calibFrames++;
@@ -958,9 +972,7 @@ export default function ProctoringMonitor({
             for (let i = lo; i <= hi; i++) sp += freqBuf[i];
             const avgSpeechBand = sp / (hi - lo + 1);
 
-            // Require both significant volume above ambient AND speech frequency energy
-            const isLoud = rms > Math.max(0.08, ambientBaseline * 2.8) && avgSpeechBand > 78;
-            report('LOUD_AUDIO', isLoud, 'medium');
+            // Mic functionality eradicated from charging candidate: no LOUD_AUDIO report
           }
 
           // Camera covered

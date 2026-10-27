@@ -50,8 +50,7 @@ export function isHardViolation(event: ProctoringEvent): boolean {
     event === 'LEFT_FULLSCREEN' ||
     event === 'MULTIPLE_FACES' ||
     event === 'PHONE_DETECTED' ||
-    event === 'CAMERA_COVERED' ||
-    event === 'MIC_MUTED'
+    event === 'CAMERA_COVERED'
   );
 }
 
@@ -83,8 +82,9 @@ export function calculateIntegrityScore(flags: DurationFlag[]): number {
       }
     } else if (f.event === 'CAMERA_COVERED') {
       deduction += 25;
-    } else if (f.event === 'MIC_MUTED') {
-      deduction += 10;
+    } else if (f.event === 'MIC_MUTED' || f.event === 'LOUD_AUDIO') {
+      // Mic eradicated: 0 point deduction (no charge for mic/audio)
+      deduction += 0;
     } else if (f.event === 'FACE_OCCLUDED' || f.event === 'POSSIBLE_EXTRA_FACE') {
       // Review-only signals: minimal deduction (2 points) for reviewer triage without unfairly penalizing candidates
       deduction += 2;
