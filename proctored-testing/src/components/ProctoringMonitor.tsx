@@ -475,6 +475,9 @@ export default function ProctoringMonitor({
             let preds: import('@tensorflow-models/coco-ssd').DetectedObject[] = [];
             try { 
               preds = await model.detect(video); 
+              if (preds.length > 0) {
+                console.log('[Proctor COCO preds]:', preds.map(p => ({ class: p.class, score: Number(p.score.toFixed(3)), bbox: p.bbox.map(Math.round) })));
+              }
             } catch {
               /* ok */
             }
@@ -638,6 +641,7 @@ export default function ProctoringMonitor({
             g.sat = s.sat;
             g.active = s.sat > Math.max(GLOW_MIN_SAT, g.base * GLOW_RATIO);
             if (!g.active) g.base += (s.sat - g.base) * 0.02;
+            else g.base += (s.sat - g.base) * 0.002; // slow drift so permanent room brightening adapts
           }
 
           report('NO_FACE', count === 0, 'medium');
