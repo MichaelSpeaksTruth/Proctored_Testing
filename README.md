@@ -153,6 +153,28 @@ The **Participant Management** console (`/admin/participants`) provides granular
   - In cases of non-standard column arrangements, per-row dynamic cell scanning extracts valid email addresses and falls back gracefully to email prefix usernames when names are omitted.
 - **Per-Test Multi-Tenancy:** Candidates can be enrolled across multiple independent examinations simultaneously using RTDB indexed paths (`participants/{encodedEmail}/tests/{testId}`), allowing granular test-level revocation without deleting student master accounts.
 
+### 8.6 Standardized Date & Time Engine and High-Visibility UI Specification
+
+To eliminate ambiguity across locales and maximize readability on dark UI surfaces, all date and time displays throughout the platform adhere strictly to a standardized formatting and styling specification governed by `src/lib/dateUtils.ts`.
+
+- **Strict Formatting Rules:**
+  - **Numeric Format (`DD/MM/YYYY`):** Used in compact tables, desktop and mobile personnel registries, and telemetry lists (e.g., `27/10/2026`). Prevents ambiguous US `MM/DD/YYYY` interpretations.
+  - **Ordinal Format (`DD(st/nd/rd/th) MONTH YEAR`):** Used in audit timelines, test scheduling banners, question attribution footers, dispute modals, and student waiting rooms (e.g., `27th October 2026` or `27th Oct 2026`).
+  - **12-Hour Legible Time Format:** Formatted with padded two-digit hours, minutes, optional seconds, and clear meridian markers (`hh:mm AM/PM` / `hh:mm:ss AM/PM`).
+- **High-Visibility & Legibility Styling Policy:**
+  - **Pure White Contrast:** Date and time text everywhere renders in `#ffffff` (or `var(--white)`), eliminating hard-to-read muted gray (`--text-muted`) or dimmed (`--text-dim`) timestamps.
+  - **Typography Enhancements:** Employs medium to bold weights (`500` / `600` / `700`), monospace tracking for numerical telemetry, and subtle text-shadowing (`text-shadow: 0 0 2px rgba(255,255,255,0.25)`) against high-density black backgrounds.
+  - **Global CSS Utility Classes:** Enforced via `.timer`, `.datetime-text`, `.date-text`, `.time-text`, and `.timestamp-text` in `globals.css`.
+- **System-Wide Coverage:**
+  - **Global Audit Logs (`EventsAuditView.tsx`):** Ordinal dates with formatted time and subtle relative badges.
+  - **Evaluation & Leaderboard (`LeaderboardTable.tsx`):** Telemetry flag timestamps (`DD/MM/YYYY, HH:MM:SS AM/PM`) and candidate interview schedules.
+  - **Exam Control (`admin/control/page.tsx`):** Real-time formatted preview of auto-start schedules.
+  - **Personnel Management (`admin/personnel/page.tsx`):** "Approved On" and "Applied On" candidate records across table and mobile card views.
+  - **Question Setup & Admin L1 (`admin/setup`, `admin-l1`):** Question creation and last-edit attribution.
+  - **Candidate Waiting Room (`waiting-room/page.tsx`):** Prominent ordinal start time banner for students.
+  - **Dispute Resolution & TCC (`RaiseDisputeModal.tsx`, `TCCCom.tsx`):** Dispute event times, chat messages, activity heartbeats, and read timestamps.
+  - **Candidate Dashboard (`student-dashboard/page.tsx`):** Interview appointment time slots.
+
 ## 9. Precision Proctoring & Candidate Protection
 
 - **Separation of Hard Violations vs Soft Telemetry:** Natural actions like glancing down at rough paper, blinking, or screen corner reading (`HEAD_PITCH_DOWN`, `GAZE_AWAY`) are logged silently for review but **do not deduct student lives** or disrupt their exam.
