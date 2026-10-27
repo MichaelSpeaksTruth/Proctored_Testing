@@ -572,7 +572,7 @@ function ResultsContent() {
                       value={detailsForm.dateTime}
                       onChange={e => setDetailsForm(prev => ({ ...prev, dateTime: e.target.value }))}
                       className="input"
-                      placeholder="e.g. 10th Aug, 10:00 AM"
+                      placeholder="e.g. 10/08/2026, 10:00 AM or 10th August 2026, 10:00 AM"
                     />
                   </div>
                   <div className="flex gap-sm justify-end" style={{ marginTop: 'var(--space-lg)' }}>

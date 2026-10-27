@@ -6,6 +6,7 @@ import { ref, push, get, update, set } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 import BackButton from '@/components/BackButton';
+import { formatDate, formatDateTime } from '@/lib/dateUtils';
 import { Question } from '@/components/QuestionPanel';
 import { logAuditEvent } from '@/lib/auditLogger';
 import { generateQuestionTag } from '@/lib/adminUtils';
@@ -1049,14 +1050,14 @@ function SetupContent() {
                           {q.authorRole && <span> ({q.authorRole})</span>}
                         </span>
                         {q.createdAt && (
-                          <span>&middot; Added: {new Date(q.createdAt).toLocaleDateString()} {new Date(q.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span>&middot; Added: <strong style={{ color: '#ffffff', fontWeight: 600 }}>{formatDateTime(q.createdAt, 'ordinal')}</strong></span>
                         )}
                       </div>
 
                       {q.lastEditedBy && (
                         <div>
                           Last edited by <strong style={{ color: 'var(--text-secondary)' }}>{q.lastEditedBy}</strong>
-                          {q.lastEditedAt && <span> on {new Date(q.lastEditedAt).toLocaleDateString()}</span>}
+                          {q.lastEditedAt && <span> on <strong style={{ color: '#ffffff', fontWeight: 600 }}>{formatDate(q.lastEditedAt, 'ordinal')}</strong></span>}
                         </div>
                       )}
                     </div>

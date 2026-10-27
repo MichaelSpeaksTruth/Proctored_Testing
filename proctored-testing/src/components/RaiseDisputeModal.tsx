@@ -8,6 +8,7 @@ import {
 } from '@/lib/tccService';
 import { AuditEvent } from '@/lib/auditLogger';
 import { Users, AlertTriangle } from 'lucide-react';
+import { formatDateTime } from '@/lib/dateUtils';
 import { useRouter } from 'next/navigation';
 import BackButton from '@/components/BackButton';
 
@@ -247,8 +248,8 @@ export default function RaiseDisputeModal({
                 <span className="badge badge-gray" style={{ fontSize: '0.6875rem' }}>{event.actionLabel || event.action}</span>
                 <strong style={{ color: '#ffffff' }}>{event.targetTitle}</strong>
               </div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <span style={{ fontSize: '0.8125rem', color: '#ffffff', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+                {formatDateTime(event.timestamp, 'ordinal', false, true)}
               </span>
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>

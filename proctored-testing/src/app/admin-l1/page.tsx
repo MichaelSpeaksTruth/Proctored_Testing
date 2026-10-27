@@ -8,6 +8,7 @@ import RoleGuard from '@/components/RoleGuard';
 import EventsAuditView from '@/components/EventsAuditView';
 import LeaderboardTable, { LeaderboardEntry } from '@/components/LeaderboardTable';
 import ExcelExport from '@/components/ExcelExport';
+import { formatDate } from '@/lib/dateUtils';
 import { Question } from '@/components/QuestionPanel';
 import Image from 'next/image';
 import TCCCom from '@/components/TCCCom';
@@ -371,7 +372,7 @@ function AdminL1Content() {
         {/* TAB 0: TCC (TEAM COORDINATION CORNER) */}
         {activeTab === 'tcc' && (
           <div style={{ marginBottom: 'var(--space-xl)' }}>
-            <TCCCom />
+            <TCCCom embedded={true} />
           </div>
         )}
 
@@ -638,10 +639,10 @@ function AdminL1Content() {
                                     )}
                                   </div>
 
-                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                                     {q.createdAt && (
                                       <span>
-                                        Created: {new Date(q.createdAt).toLocaleDateString()}
+                                        Created: <strong style={{ color: '#ffffff', fontWeight: 600 }}>{formatDate(q.createdAt, 'ordinal')}</strong>
                                       </span>
                                     )}
                                     {q.lastEditedBy && (

@@ -23,6 +23,7 @@ import {
   clearUserNotifications,
   deleteTCCSession,
 } from '@/lib/tccService';
+import { formatDate, formatDateTime } from '@/lib/dateUtils';
 import {
   MessageSquare,
   Plus,
@@ -503,7 +504,7 @@ export default function TCCCom({
       if (diff < 60) return 'just now';
       if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
       if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-      return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      return formatDate(d, 'ordinal');
     } catch {
       return '';
     }
@@ -788,6 +789,7 @@ export default function TCCCom({
     >
       {/* ── TOP UNIFIED HEADER BAR (Clean, no nested duplicate) ────────────────── */}
       <header
+        className={`tcc-top-header ${mobileView === 'chat' ? 'chat-active-mobile' : ''}`}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -1074,8 +1076,8 @@ export default function TCCCom({
                               ? '@ TAG MENTION'
                               : 'SESSION INVITE'}
                           </span>
-                          <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }}>
-                            {formatTime(notif.timestamp)}
+                          <span style={{ fontSize: '0.75rem', color: '#ffffff', fontWeight: 600 }}>
+                            {formatDateTime(notif.timestamp, 'ordinal', false, true)}
                           </span>
                         </div>
                         <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--white)', marginBottom: 2 }}>
@@ -1107,8 +1109,8 @@ export default function TCCCom({
               onClick={() => setNewSessionModalOpen(true)}
               className="tcc-btn-cyber-new"
             >
-              <MessageSquarePlus size={16} />
-              <span>+ New Conversation</span>
+              <Plus size={15} strokeWidth={2.4} />
+              <span>New Conversation</span>
             </button>
 
             {/* Inset Search */}
@@ -1281,8 +1283,8 @@ export default function TCCCom({
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                        <span style={{ fontSize: '0.6875rem', color: 'rgba(255, 255, 255, 0.45)', fontFamily: 'var(--font-mono)' }}>
-                          {formatTime(s.lastActivity)}
+                        <span style={{ fontSize: '0.75rem', color: '#ffffff', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+                          {formatDateTime(s.lastActivity, 'numeric')}
                         </span>
                         {personnelProfile?.role === 'Admin Sr.' && (
                           <button
@@ -1367,20 +1369,20 @@ export default function TCCCom({
                   flexShrink: 0,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
-                  {/* Back button for mobile view */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                  {/* Back button for mobile view: smart, bold, intuitive, no desc */}
                   <button
                     type="button"
                     className="mobile-only back-btn-unified"
                     onClick={() => setMobileView('sidebar')}
-                    style={{ padding: '6px 10px', fontSize: '0.75rem', gap: 4 }}
+                    title="Back to Sessions"
+                    style={{ padding: '6px 9px', fontSize: '0.75rem', flexShrink: 0 }}
                   >
-                    <ArrowLeft size={14} />
-                    <span>Sessions</span>
+                    <ArrowLeft size={16} strokeWidth={2.4} />
                   </button>
 
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'nowrap' }}>
                       <span
                         className="badge"
                         style={{
@@ -1395,21 +1397,23 @@ export default function TCCCom({
                                 color: '#52b788',
                                 border: '1px solid rgba(45, 106, 79, 0.5)',
                               }),
-                          fontSize: '0.6875rem',
+                          fontSize: '0.625rem',
                           fontWeight: 700,
+                          padding: '1px 5px',
+                          flexShrink: 0,
                         }}
                       >
-                        {activeSession.type === 'dispute' ? '⚠️ DISPUTE CASE' : 'DISCUSSION SESSION'}
+                        {activeSession.type === 'dispute' ? 'DISPUTE' : 'SESSION'}
                       </span>
 
                       {activeSession.status === 'resolved' && (
-                        <span className="badge badge-green" style={{ fontSize: '0.6875rem', fontWeight: 600 }}>
-                          <CheckCircle2 size={12} style={{ display: 'inline', marginRight: 4 }} />
+                        <span className="badge badge-green" style={{ fontSize: '0.625rem', fontWeight: 600, padding: '1px 5px', flexShrink: 0 }}>
+                          <CheckCircle2 size={11} style={{ display: 'inline', marginRight: 3 }} />
                           Resolved
                         </span>
                       )}
 
-                      <span className="desktop-only" style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                      <span className="desktop-only" style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         Started by {activeSession.createdBy.name} ({activeSession.createdBy.role})
                       </span>
                     </div>
@@ -1691,8 +1695,8 @@ export default function TCCCom({
                               Active now
                             </span>
                           ) : p.lastSeen ? (
-                            <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }} title={`Last seen: ${p.lastSeen}`}>
-                              Seen {formatTime(p.lastSeen)}
+                            <span style={{ fontSize: '0.75rem', color: '#ffffff', fontWeight: 500 }} title={`Last seen: ${p.lastSeen ? formatDateTime(p.lastSeen, 'numeric') : ''}`}>
+                              Seen {p.lastSeen ? formatDateTime(p.lastSeen, 'numeric') : ''}
                             </span>
                           ) : (
                             <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }}>
@@ -1758,8 +1762,8 @@ export default function TCCCom({
                           }}
                         >
                           {msg.text}
-                          <div style={{ fontSize: '0.625rem', color: 'var(--text-muted)', marginTop: 3 }}>
-                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          <div style={{ fontSize: '0.75rem', color: '#ffffff', fontWeight: 600, marginTop: 4 }}>
+                            {formatDateTime(msg.timestamp, 'numeric')}
                           </div>
                         </div>
                       );
@@ -1823,8 +1827,8 @@ export default function TCCCom({
                           >
                             {msg.senderRole}
                           </span>
-                          <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-                            {formatTime(msg.timestamp)}
+                          <span style={{ fontSize: '0.75rem', color: '#ffffff', fontWeight: 600 }}>
+                            {formatDateTime(msg.timestamp, 'numeric')}
                           </span>
                         </div>
 
@@ -1833,7 +1837,7 @@ export default function TCCCom({
                             padding: '10px 14px',
                             borderRadius: 'var(--radius-md)',
                             background: isMine
-                              ? 'linear-gradient(135deg, rgba(45, 106, 79, 0.35) 0%, rgba(27, 67, 50, 0.45) 100%)'
+                              ? '#143828'
                               : isUserTagged
                               ? 'rgba(244, 162, 97, 0.08)'
                               : 'rgba(255, 255, 255, 0.04)',
@@ -2988,7 +2992,7 @@ export default function TCCCom({
                   className="btn btn-primary"
                   disabled={resolving || !resolutionNotes.trim()}
                   style={{
-                    background: 'linear-gradient(135deg, #2d6a4f 0%, #1b4332 100%)',
+                    background: '#1b4332',
                     borderColor: 'var(--accent-green-light)',
                   }}
                 >

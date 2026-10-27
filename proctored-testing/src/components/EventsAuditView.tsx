@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { auth, rtdb } from '@/lib/firebase';
 import { ref, get, remove, update } from 'firebase/database';
+import { formatDateTime } from '@/lib/dateUtils';
 import { onAuthStateChanged } from 'firebase/auth';
 import { AuditEvent } from '@/lib/auditLogger';
 import { isAdmin } from '@/lib/adminUtils';
@@ -370,14 +371,7 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
     try {
       const date = new Date(iso);
       return {
-        formatted: date.toLocaleString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        }),
+        formatted: formatDateTime(date, 'ordinal', false, true),
         relative: getRelativeTime(date),
       };
     } catch {
@@ -689,14 +683,15 @@ export default function EventsAuditView({ embeddedInAdmin = false }: EventsAudit
 
                   {/* Right: Timestamp & Controls */}
                   <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                    <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                    <div style={{ fontSize: '0.8125rem', color: '#ffffff', opacity: 0.85 }}>
                       <span title={time.formatted}>{time.relative}</span>
                     </div>
                     <div
                       style={{
-                        fontSize: '0.75rem',
+                        fontSize: '0.8125rem',
                         fontFamily: 'var(--font-mono)',
-                        color: 'var(--text-dim)',
+                        color: '#ffffff',
+                        fontWeight: 600,
                       }}
                     >
                       {time.formatted}

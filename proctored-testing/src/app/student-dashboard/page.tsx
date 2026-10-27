@@ -5,6 +5,7 @@ import { auth, rtdb } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, get } from 'firebase/database';
 import StudentGuard from '@/components/StudentGuard';
+import { parseDate, formatDateTime } from '@/lib/dateUtils';
 import { Trophy } from 'lucide-react';
 import ShootingStars from '@/components/ShootingStars';
 import BackButton from '@/components/BackButton';
@@ -158,7 +159,9 @@ function StudentDashboardContent() {
                     <div className="grid-3 interview-grid">
                       <div>
                         <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>Date & Time</div>
-                        <div style={{ fontWeight: 500, color: '#fff', fontSize: '1rem' }}>{result.dateTime || 'TBA'}</div>
+                        <div style={{ fontWeight: 600, color: '#ffffff', fontSize: '1rem', textShadow: '0 0 2px rgba(255, 255, 255, 0.4)' }}>
+                          {result.dateTime ? (parseDate(result.dateTime) ? formatDateTime(result.dateTime, 'ordinal') : result.dateTime) : 'TBA'}
+                        </div>
                       </div>
                       <div>
                         <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>Panel No.</div>

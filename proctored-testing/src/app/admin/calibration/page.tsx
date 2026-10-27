@@ -8,6 +8,7 @@ import { Monitor } from 'lucide-react';
 import { ProctoringEvent, DurationFlag } from '@/lib/proctoring';
 import Link from 'next/link';
 import BackButton from '@/components/BackButton';
+import { formatDateTime } from '@/lib/dateUtils';
 
 const EVENT_META: Record<ProctoringEvent, { label: string; color: string }> = {
   NO_FACE:            { label: 'No Face', color: '#f4a261' },
@@ -273,16 +274,16 @@ function CalibrationContent() {
                 ) : (
                   flags.slice().reverse().map(f => {
                     const meta = EVENT_META[f.flag.event] ?? { label: f.flag.event, color: '#888' };
-                    const time = new Date(f.flag.endTime).toLocaleTimeString();
+                    const time = formatDateTime(f.flag.endTime, 'numeric', true);
                     return (
                       <div key={f.id} style={{
                         marginBottom: 10, paddingBottom: 10,
                         borderBottom: '1px solid var(--border)',
                         display: 'grid',
-                        gridTemplateColumns: '80px 1fr auto',
+                        gridTemplateColumns: 'auto 1fr auto',
                         gap: 8, alignItems: 'center',
                       }}>
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{time}</span>
+                        <span style={{ color: '#ffffff', fontSize: '0.8125rem', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{time}</span>
                         <span style={{
                           fontWeight: 700, color: meta.color,
                           fontSize: '0.8125rem',

@@ -7,6 +7,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue } from 'firebase/database';
 import StudentGuard from '@/components/StudentGuard';
 import BackButton from '@/components/BackButton';
+import { formatDateTime } from '@/lib/dateUtils';
 import { Clock, CheckCircle, XCircle, Check } from 'lucide-react';
 import Image from 'next/image';
 
@@ -140,13 +141,10 @@ function WaitingRoomContent() {
                 </div>
 
                 {scheduledStart && testStatus === 'pending' && (
-                  <div style={{ marginTop: 'var(--space-sm)', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                  <div style={{ marginTop: 'var(--space-sm)', fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
                     Scheduled start:{' '}
-                    <strong style={{ color: 'var(--text-secondary)' }}>
-                      {new Date(scheduledStart).toLocaleString('en-IN', {
-                        dateStyle: 'medium',
-                        timeStyle: 'short',
-                      })}
+                    <strong style={{ color: '#ffffff', fontWeight: 700, fontSize: '1.05rem', textShadow: '0 0 2px rgba(255,255,255,0.4)' }}>
+                      {formatDateTime(scheduledStart, 'ordinal')}
                     </strong>
                   </div>
                 )}

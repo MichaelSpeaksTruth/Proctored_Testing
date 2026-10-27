@@ -2,6 +2,7 @@
 
 import { useState, Fragment } from 'react';
 import { calculateIntegrityScore, DurationFlag } from '@/lib/proctoring';
+import { formatDateTime } from '@/lib/dateUtils';
 
 export interface LeaderboardEntry {
   uid: string;
@@ -261,6 +262,15 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                             <strong>AI Proctoring Verdict:</strong> {entry.aiSummary}
                           </div>
                         )}
+
+                        {entry.dateTime && (
+                          <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                            <span style={{ fontSize: '0.8125rem', color: '#fbbf24', fontWeight: 600 }}>Interview Schedule: </span>
+                            <span style={{ fontSize: '0.8125rem', color: '#ffffff', fontWeight: 600 }}>{entry.dateTime}</span>
+                            {entry.venue && <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginLeft: 10 }}>· Venue: {entry.venue}</span>}
+                            {entry.panelNo && <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginLeft: 10 }}>· Panel: {entry.panelNo}</span>}
+                          </div>
+                        )}
                         
                         {entry.flags && entry.flags.length > 0 ? (
                           <div>
@@ -300,8 +310,8 @@ export default function LeaderboardTable({ entries, onAnalyze, analyzing, onDele
                                   </div>
 
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
-                                    <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
-                                      {new Date(f.startTime || f.timestamp || '').toLocaleTimeString()}
+                                    <span style={{ color: '#ffffff', fontSize: '0.8125rem', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+                                      {formatDateTime(f.startTime || f.timestamp, 'numeric', true)}
                                     </span>
 
                                     {/* Visual Evidence Snapshot Button */}

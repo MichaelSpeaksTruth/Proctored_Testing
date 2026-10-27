@@ -6,6 +6,7 @@ import { ref, set, get, update, onValue } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 import BackButton from '@/components/BackButton';
+import { formatDateTime } from '@/lib/dateUtils';
 
 interface TestOption { id: string; title: string; }
 
@@ -111,7 +112,7 @@ function ControlContent() {
       activeTestId: selectedTestId,
       scheduledStart,
     });
-    setMsg(`Test scheduled for ${new Date(scheduledStart).toLocaleString()}`);
+    setMsg(`Test scheduled for ${formatDateTime(scheduledStart, 'ordinal')}`);
     setLoading(false);
   };
 
@@ -187,6 +188,11 @@ function ControlContent() {
             <div className="form-group">
               <label htmlFor="scheduled-start">Schedule Auto-Start</label>
               <input id="scheduled-start" type="datetime-local" value={scheduledStart} onChange={e => setScheduledStart(e.target.value)} />
+              {scheduledStart && (
+                <div style={{ marginTop: 6, fontSize: '0.8125rem', color: '#ffffff', fontWeight: 500 }}>
+                  Scheduled: <strong style={{ color: '#ffffff' }}>{formatDateTime(scheduledStart, 'ordinal')}</strong>
+                </div>
+              )}
             </div>
             <button
               id="schedule-test-btn"

@@ -6,6 +6,7 @@ import { ref, get, set, remove } from 'firebase/database';
 import AdminGuard from '@/components/AdminGuard';
 import Link from 'next/link';
 import BackButton from '@/components/BackButton';
+import { formatDate } from '@/lib/dateUtils';
 import EventsAuditView from '@/components/EventsAuditView';
 import { logAuditEvent } from '@/lib/auditLogger';
 
@@ -324,6 +325,7 @@ function PersonnelManagement() {
                           <th>Roll Number</th>
                           <th>Position</th>
                           <th style={{ whiteSpace: 'nowrap' }}>Role Requested</th>
+                          <th>Applied On</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
@@ -335,6 +337,9 @@ function PersonnelManagement() {
                             <td>{req.rollNumber}</td>
                             <td>{req.position}</td>
                             <td style={{ whiteSpace: 'nowrap' }}>{renderRoleBadge(req.role)}</td>
+                            <td style={{ fontSize: '0.8125rem', color: '#ffffff', fontWeight: 500 }}>
+                              {req.appliedAt ? formatDate(req.appliedAt, 'numeric') : '—'}
+                            </td>
                             <td>
                               <div className="flex gap-sm">
                                 <button className="btn btn-success btn-sm" onClick={() => handleApprove(req)}>
@@ -381,11 +386,17 @@ function PersonnelManagement() {
                             fontSize: '0.78125rem',
                             color: 'var(--text-secondary)',
                             wordBreak: 'break-all',
-                            marginBottom: 10,
+                            marginBottom: 8,
                           }}
                         >
                           {req.email}
                         </div>
+
+                        {req.appliedAt && (
+                          <div style={{ fontSize: '0.75rem', color: '#ffffff', fontWeight: 500, marginBottom: 10 }}>
+                            Applied: {formatDate(req.appliedAt, 'numeric')}
+                          </div>
+                        )}
 
                         <div className="flex gap-sm">
                           <button
@@ -443,8 +454,8 @@ function PersonnelManagement() {
                             <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>{person.email}</td>
                             <td>{person.position || '—'}</td>
                             <td style={{ whiteSpace: 'nowrap' }}>{renderRoleBadge(person.role)}</td>
-                            <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                              {person.approvedAt ? new Date(person.approvedAt).toLocaleDateString() : '—'}
+                            <td style={{ fontSize: '0.8125rem', color: '#ffffff', fontWeight: 500 }}>
+                              {person.approvedAt ? formatDate(person.approvedAt, 'numeric') : '—'}
                             </td>
                             <td>
                               <button className="btn btn-danger btn-sm" onClick={() => handleRevoke(person.id, person.name)}>
@@ -494,8 +505,8 @@ function PersonnelManagement() {
                         </div>
 
                         <div className="flex justify-between items-center" style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4 }}>
-                          <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-                            {person.approvedAt ? `Approved: ${new Date(person.approvedAt).toLocaleDateString()}` : ''}
+                          <span style={{ fontSize: '0.75rem', color: '#ffffff', fontWeight: 500 }}>
+                            {person.approvedAt ? `Approved: ${formatDate(person.approvedAt, 'numeric')}` : ''}
                           </span>
                           <button
                             className="btn btn-danger btn-sm"
