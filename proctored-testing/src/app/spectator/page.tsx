@@ -7,6 +7,8 @@ import RoleGuard from '@/components/RoleGuard';
 import ExcelExport from '@/components/ExcelExport';
 import LeaderboardTable, { LeaderboardEntry } from '@/components/LeaderboardTable';
 import BackButton from '@/components/BackButton';
+import LiveStatsView from '@/components/LiveStatsView';
+import { Radio, Award } from 'lucide-react';
 
 interface TestOption { id: string; title: string; }
 
@@ -16,6 +18,7 @@ function SpectatorContent() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [resultsDeclared, setResultsDeclared] = useState(false);
+  const [viewMode, setViewMode] = useState<'live' | 'results'>('live');
   
   // Interviewer Mode states
   const [isInterviewerMode, setIsInterviewerMode] = useState(false);
@@ -145,8 +148,47 @@ function SpectatorContent() {
             Sign Out
           </button>
         </div>
-        
-        {/* Test Selector */}
+
+        {/* View Mode Navigation Tabs */}
+        <div
+          className="flex gap-sm"
+          style={{
+            marginBottom: 'var(--space-md)',
+            borderBottom: '1px solid var(--border)',
+            paddingBottom: 'var(--space-sm)',
+          }}
+        >
+          <button
+            className={`btn btn-sm ${viewMode === 'live' ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setViewMode('live')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              borderRadius: 4,
+              color: viewMode === 'live' ? undefined : '#52b788',
+              borderColor: viewMode === 'live' ? undefined : 'rgba(64, 145, 108, 0.4)',
+            }}
+          >
+            <Radio size={14} />
+            <span>Live Stats (Active Exam)</span>
+          </button>
+
+          <button
+            className={`btn btn-sm ${viewMode === 'results' ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setViewMode('results')}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 4 }}
+          >
+            <Award size={14} />
+            <span>Leaderboard &amp; Results</span>
+          </button>
+        </div>
+
+        {viewMode === 'live' ? (
+          <LiveStatsView userRole="Spectator" />
+        ) : (
+          <>
+            {/* Test Selector */}
         <div className="card" style={{ marginBottom: 'var(--space-lg)', padding: '14px 16px' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
@@ -222,6 +264,8 @@ function SpectatorContent() {
               entries={filteredLeaderboard}
             />
           </div>
+        )}
+          </>
         )}
       </div>
     </main>

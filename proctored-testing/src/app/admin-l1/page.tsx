@@ -13,7 +13,8 @@ import { Question } from '@/components/QuestionPanel';
 import Image from 'next/image';
 import TCCCom from '@/components/TCCCom';
 import BackButton from '@/components/BackButton';
-import { MessageSquareQuote } from 'lucide-react';
+import LiveStatsView from '@/components/LiveStatsView';
+import { MessageSquareQuote, Radio } from 'lucide-react';
 
 interface Section {
   id: string;
@@ -43,7 +44,7 @@ interface TestOption {
 
 function AdminL1Content() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'events' | 'tests' | 'spectator' | 'participants' | 'tcc'>('events');
+  const [activeTab, setActiveTab] = useState<'livestats' | 'events' | 'tests' | 'spectator' | 'participants' | 'tcc'>('livestats');
 
   // Tests & Questions state
   const [tests, setTests] = useState<TestDraft[]>([]);
@@ -427,6 +428,22 @@ function AdminL1Content() {
           }}
         >
           <button
+            className={`btn btn-sm ${activeTab === 'livestats' ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setActiveTab('livestats')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              whiteSpace: 'nowrap',
+              borderRadius: 4,
+              color: activeTab === 'livestats' ? undefined : '#52b788',
+              borderColor: activeTab === 'livestats' ? undefined : 'rgba(64, 145, 108, 0.4)',
+            }}
+          >
+            <Radio size={14} />
+            <span>Live Stats (Active Exam)</span>
+          </button>
+          <button
             className={`btn btn-sm ${activeTab === 'events' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setActiveTab('events')}
             style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}
@@ -471,6 +488,13 @@ function AdminL1Content() {
             <span>Team Coordination Corner (TCC)</span>
           </button>
         </div>
+
+        {/* TAB -1: LIVE STATS (ACTIVE EXAM TELEMETRY) */}
+        {activeTab === 'livestats' && (
+          <div style={{ marginBottom: 'var(--space-xl)' }}>
+            <LiveStatsView userRole="Admin L1" />
+          </div>
+        )}
 
         {/* TAB 0: TCC (TEAM COORDINATION CORNER) */}
         {activeTab === 'tcc' && (

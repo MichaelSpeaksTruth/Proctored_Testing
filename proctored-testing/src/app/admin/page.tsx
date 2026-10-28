@@ -16,6 +16,7 @@ import {
   FileText,
   ChevronRight,
   MessageSquareQuote,
+  Radio,
 } from 'lucide-react';
 
 interface TabItem {
@@ -26,6 +27,12 @@ interface TabItem {
 }
 
 const ADMIN_TABS: TabItem[] = [
+  {
+    label: 'Live Stats',
+    href: '/admin/live-stats',
+    icon: <Radio size={18} color="#4ade80" />,
+    desc: 'Real-time test takers, active telemetry, proof snapshots',
+  },
   {
     label: 'Team Coordination Corner',
     href: '/tcc',

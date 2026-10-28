@@ -177,6 +177,32 @@ To eliminate ambiguity across locales and maximize readability on dark UI surfac
   - **Dispute Resolution & TCC (`RaiseDisputeModal.tsx`, `TCCCom.tsx`):** Dispute event times, chat messages, activity heartbeats, and read timestamps.
   - **Candidate Dashboard (`student-dashboard/page.tsx`):** Interview appointment time slots.
 
+### 8.7 Live Stats & Real-Time Examination Monitoring
+
+The **Live Stats** engine delivers real-time, mission-critical operational telemetry for active examinations, accessible exclusively to **Admin Sr.**, **Admin L1**, and **Spectators**.
+
+- **Scope & Gating:**
+  - **Live Exam Gating:** Active only while an examination is marked `active` in `testState`. If no exam is live, the console gracefully renders an idle operational standby notice.
+  - **Role-Based Protection:** Securely gated on the server via `/api/live-stats` using the Firebase Admin SDK (`getAdminAuth()`, `getAdminDb()`). Unauthorized accounts and regular test-takers receive an immediate `403 Forbidden` response.
+- **Zero-Downtime Decoupled Architecture:**
+  - **Untouched Candidate Runtime:** Does not alter candidate-side test runner bundles (`app/test/page.tsx`, `ProctoringMonitor.tsx`), guaranteeing that active test-takers face zero chunk invalidations, camera renegotiations, or page reloads mid-exam.
+  - **Preserved Database Security Rules:** Operates with administrative service-account bypass privileges on the server, ensuring production `database.rules.json` remain untouched and student answer/flag writes suffer zero lock contention.
+- **Real-Time Telemetry & Candidate Roster:**
+  - **Live Metric HUD:** Displays real-time counts for Total Registered, In-Test (Currently Active), Submissions Completed, and Flagged Candidates.
+  - **Candidate State Classification:** Tracks candidates dynamically across `[TAKING TEST]` (pulsing active status), `[SUBMITTED]` (completed answers received), and `[NOT STARTED]`.
+  - **Heartbeat & Last Seen Tracker:** Computes exact relative time elapsed since the candidate's latest proctoring event or interaction (`Just now`, `12s ago`, `3m ago`).
+  - **Live Infraction Counters:** Aggregates and badges severity distributions (`HIGH`, `MED`, `LOW`) with real-time incident descriptions.
+- **Visual Evidence Inspection & Proof Drawer:**
+  - Evaluators can click `INSPECT` or `PROOFS` on any candidate card to inspect full infraction timelines.
+  - Features captured high-resolution camera proof frames with timestamps, violation durations, AI device detection metadata, and full-screen preview with offline download capability.
+- **Mission Control UI Standards:**
+  - Built to project standards with sharp 4px geometry (`--radius-sm`), solid high-contrast dark surfaces (`#050505`, `#0f0f0f`), and zero rounded pill buttons or gradients.
+  - Features configurable polling intervals (`OFF`, `5s`, `10s`, `30s`) and a manual `SYNC NOW` trigger.
+- **Omnipresent Role Access:**
+  - **Admin Sr.:** Embedded card on Admin Dashboard and direct dedicated route at `/admin/live-stats`.
+  - **Admin L1:** Primary tab **"Live Stats (Active Exam)"** on the supervisory console (`/admin-l1`).
+  - **Spectators:** Top view-mode switcher toggling between **"Live Stats (Active Exam)"** and **"Leaderboard & Results"** (`/spectator`).
+
 ## 9. Precision Proctoring & Candidate Protection
 
 - **Separation of Hard Violations vs Soft Telemetry:** Natural actions like glancing down at rough paper, blinking, or screen corner reading (`HEAD_PITCH_DOWN`, `GAZE_AWAY`) are logged silently for review but **do not deduct student lives** or disrupt their exam.
