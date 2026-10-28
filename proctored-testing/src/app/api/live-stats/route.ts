@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     const activeTestId = testState.activeTestId || requestedTestId;
     const isLive = testState.status === 'active' && Boolean(activeTestId);
 
-    // If no live exam is running and no specific live state exists, return safe idle state
+    // If no live exam is running, return idle state
     if (!isLive) {
       return NextResponse.json({
         success: true,
@@ -77,10 +77,23 @@ export async function POST(req: NextRequest) {
     const testData = testSnap.val() || {};
     const testTitle = testData.title || 'Live Examination';
 
-    // 5. Fetch registered participants
+    // 5. Fetch registered participants directory
     const participantsSnap = await db.ref('participants').once('value');
     const participantsVal = participantsSnap.val() || {};
     const decodeEmail = (k: string) => k.replace(/,/g, '.');
+
+    // Index participants by email and by UID for fast lookups
+    const uidToParticipant = new Map<string, any>();
+    const emailToParticipant = new Map<string, any>();
+
+    for (const [key, pData] of Object.entries<any>(participantsVal)) {
+      if (!pData) continue;
+      const pEmail = (pData.email || decodeEmail(key)).trim().toLowerCase();
+      emailToParticipant.set(pEmail, pData);
+      if (pData.uid) {
+        uidToParticipant.set(pData.uid, pData);
+      }
+    }
 
     // Also check test-specific registered participants
     const testParticipants = testData.participants || {};
@@ -89,15 +102,104 @@ export async function POST(req: NextRequest) {
     const submissionsSnap = await db.ref(`submissions/${activeTestId}`).once('value');
     const submissionsVal = submissionsSnap.val() || {};
 
-    // 7. Fetch proctoring flags
+    // 7. Fetch proctoring flags for all users
     const flagsSnap = await db.ref('proctoringFlags').once('value');
     const allFlags = flagsSnap.val() || {};
 
-    // Map all known candidates: build a unified dictionary by email and UID
+    // ── GATHER ALL RELEVANT UIDS FOR BATCH RESOLUTION ─────────
+    const allUids = new Set<string>();
+
+    for (const subUid of Object.keys(submissionsVal)) {
+      if (subUid) allUids.add(subUid);
+    }
+    for (const fUid of Object.keys(allFlags)) {
+      const userFlagNode = allFlags[fUid];
+      // Check if candidate has flags for this active test
+      if (userFlagNode?.[activeTestId] || userFlagNode?.flags) {
+        allUids.add(fUid);
+      }
+    }
+    for (const [pUid, pVal] of Object.entries<any>(testParticipants)) {
+      if (pVal && pVal.TermsAgreeRecord) {
+        allUids.add(pUid);
+      }
+    }
+
+    // Query Firebase Admin Auth in chunks of 100 to retrieve display names and emails
+    const authUsersMap = new Map<string, { email: string; displayName?: string }>();
+    const uidArray = Array.from(allUids);
+
+    for (let i = 0; i < uidArray.length; i += 100) {
+      const chunk = uidArray.slice(i, i + 100).map(uid => ({ uid }));
+      try {
+        const authResult = await getAdminAuth().getUsers(chunk);
+        for (const u of authResult.users) {
+          authUsersMap.set(u.uid, {
+            email: (u.email || '').toLowerCase(),
+            displayName: u.displayName || undefined,
+          });
+        }
+      } catch (authErr) {
+        console.warn('Batch auth user lookup note:', authErr);
+      }
+    }
+
+    // Helper: Resolve best name, email, and roll number for any UID
+    const resolveIdentity = (uid: string, fallbackEmail = '', fallbackName = '') => {
+      let resolvedEmail = fallbackEmail.toLowerCase();
+      let resolvedName = fallbackName;
+      let resolvedRoll = '';
+
+      // 1. Check RTDB participants table by UID
+      const fromUidPart = uidToParticipant.get(uid);
+      if (fromUidPart) {
+        if (fromUidPart.email) resolvedEmail = fromUidPart.email.toLowerCase();
+        if (fromUidPart.name) resolvedName = fromUidPart.name;
+        resolvedRoll = fromUidPart.rollNumber || fromUidPart.roll || '';
+      }
+
+      // 2. Check Firebase Admin Auth
+      const authUser = authUsersMap.get(uid);
+      if (authUser) {
+        if (!resolvedEmail && authUser.email) resolvedEmail = authUser.email;
+        if (!resolvedName && authUser.displayName) resolvedName = authUser.displayName;
+      }
+
+      // 3. Check RTDB participants table by email
+      if (resolvedEmail) {
+        const fromEmailPart = emailToParticipant.get(resolvedEmail);
+        if (fromEmailPart) {
+          if (fromEmailPart.name) resolvedName = fromEmailPart.name;
+          if (!resolvedRoll) resolvedRoll = fromEmailPart.rollNumber || fromEmailPart.roll || '';
+        }
+      }
+
+      // 4. Fallback if name is still missing
+      if (!resolvedName && resolvedEmail) {
+        const prefix = resolvedEmail.split('@')[0];
+        // Clean up common formats e.g. "kartikey.bora" -> "Kartikey Bora"
+        resolvedName = prefix
+          .replace(/[._-]/g, ' ')
+          .replace(/\b\w/g, c => c.toUpperCase());
+      }
+
+      if (!resolvedName) {
+        resolvedName = `Candidate (${uid.substring(0, 6)})`;
+      }
+
+      return {
+        email: resolvedEmail || `candidate_${uid.substring(0, 6)}`,
+        name: resolvedName,
+        roll: resolvedRoll,
+      };
+    };
+
+    // Candidate dictionary keyed by UID (or email if UID unknown)
     const candidateMap = new Map<string, {
       uid: string;
       email: string;
       name: string;
+      roll: string;
       status: 'active' | 'submitted' | 'not_started';
       startedAt: string | null;
       submittedAt: string | null;
@@ -119,10 +221,10 @@ export async function POST(req: NextRequest) {
       }>;
     }>();
 
-    // A. Add participants registered for this test
+    // A. Add registered participants assigned to this test
     for (const [key, pData] of Object.entries<any>(participantsVal)) {
-      const pEmail = decodeEmail(key).toLowerCase();
-      // Check if participant is allowed and assigned to this test (or assigned globally)
+      if (!pData) continue;
+      const pEmail = (pData.email || decodeEmail(key)).toLowerCase();
       const isAssigned = pData.allowed !== false && (
         !pData.tests ||
         Object.keys(pData.tests).length === 0 ||
@@ -130,10 +232,13 @@ export async function POST(req: NextRequest) {
       );
 
       if (isAssigned) {
-        candidateMap.set(pEmail, {
-          uid: pData.uid || '',
+        const pUid = pData.uid || '';
+        const mapKey = pUid || pEmail;
+        candidateMap.set(mapKey, {
+          uid: pUid,
           email: pEmail,
           name: pData.name || pEmail.split('@')[0],
+          roll: pData.rollNumber || pData.roll || '',
           status: 'not_started',
           startedAt: null,
           submittedAt: null,
@@ -149,31 +254,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // B. Check submissions to mark submitted candidates & add any submitted UIDs
+    // B. Link submissions
     for (const [subUid, sub] of Object.entries<any>(submissionsVal)) {
-      const subEmail = (sub.email || '').toLowerCase();
-      let record = subEmail ? candidateMap.get(subEmail) : null;
+      const subEmail = (sub?.email || '').toLowerCase();
+      let record = candidateMap.get(subUid);
 
-      if (!record) {
-        // Find by UID if email not found
-        for (const r of candidateMap.values()) {
-          if (r.uid === subUid) {
-            record = r;
-            break;
-          }
-        }
+      if (!record && subEmail) {
+        record = candidateMap.get(subEmail);
       }
 
+      const ident = resolveIdentity(subUid, subEmail, sub?.name);
+
       if (!record) {
-        // Create new record for this submitted student
         record = {
           uid: subUid,
-          email: subEmail || `student_${subUid.substring(0, 6)}@exam.local`,
-          name: sub.name || subEmail.split('@')[0] || 'Candidate',
+          email: ident.email,
+          name: ident.name,
+          roll: ident.roll,
           status: 'submitted',
           startedAt: null,
-          submittedAt: sub.submittedAt || null,
-          lastSeen: sub.submittedAt || null,
+          submittedAt: sub?.submittedAt || null,
+          lastSeen: sub?.submittedAt || null,
           flagCount: 0,
           highFlags: 0,
           mediumFlags: 0,
@@ -182,55 +283,89 @@ export async function POST(req: NextRequest) {
           latestSnapshot: null,
           flags: [],
         };
-        candidateMap.set(record.email, record);
+        candidateMap.set(subUid, record);
       } else {
         record.uid = subUid;
         record.status = 'submitted';
-        record.submittedAt = sub.submittedAt || null;
-        if (sub.name) record.name = sub.name;
+        record.submittedAt = sub?.submittedAt || record.submittedAt;
+        if (ident.name) record.name = ident.name;
+        if (ident.email) record.email = ident.email;
+        if (ident.roll) record.roll = ident.roll;
+        if (sub?.submittedAt && (!record.lastSeen || sub.submittedAt > record.lastSeen)) {
+          record.lastSeen = sub.submittedAt;
+        }
       }
     }
 
-    // C. Inspect terms agreements in test object (testData.participants)
+    // C. Inspect terms agreements in test participants
     for (const [pUid, pVal] of Object.entries<any>(testParticipants)) {
       if (pVal && pVal.TermsAgreeRecord) {
         const parts = String(pVal.TermsAgreeRecord).split(',');
         const agreedTime = parts[1] || null;
 
-        // Match record by uid
-        for (const r of candidateMap.values()) {
-          if (r.uid === pUid) {
-            if (r.status !== 'submitted') {
-              r.status = 'active';
-            }
-            if (agreedTime && (!r.startedAt || agreedTime < r.startedAt)) {
-              r.startedAt = agreedTime;
-            }
-            if (agreedTime && (!r.lastSeen || agreedTime > r.lastSeen)) {
-              r.lastSeen = agreedTime;
-            }
-            break;
+        let record = candidateMap.get(pUid);
+        if (!record) {
+          const ident = resolveIdentity(pUid);
+          record = candidateMap.get(ident.email);
+        }
+
+        if (!record) {
+          const ident = resolveIdentity(pUid);
+          record = {
+            uid: pUid,
+            email: ident.email,
+            name: ident.name,
+            roll: ident.roll,
+            status: 'active',
+            startedAt: agreedTime,
+            submittedAt: null,
+            lastSeen: agreedTime,
+            flagCount: 0,
+            highFlags: 0,
+            mediumFlags: 0,
+            lowFlags: 0,
+            latestEvent: null,
+            latestSnapshot: null,
+            flags: [],
+          };
+          candidateMap.set(pUid, record);
+        } else {
+          record.uid = pUid;
+          if (record.status !== 'submitted') {
+            record.status = 'active';
+          }
+          if (agreedTime && (!record.startedAt || agreedTime < record.startedAt)) {
+            record.startedAt = agreedTime;
+          }
+          if (agreedTime && (!record.lastSeen || agreedTime > record.lastSeen)) {
+            record.lastSeen = agreedTime;
           }
         }
       }
     }
 
-    // D. Scan proctoringFlags for active exam infractions & real-time presence
+    // D. Scan proctoringFlags for active exam infractions & captured proof frames
     for (const [fUid, fData] of Object.entries<any>(allFlags)) {
+      // Check flags under specific test or top-level flags
       const testFlagsObj = fData?.[activeTestId]?.flags || fData?.flags;
       if (!testFlagsObj) continue;
 
       const flagEntries = Object.entries<any>(testFlagsObj);
       if (flagEntries.length === 0) continue;
 
-      // Match student record
-      let student = Array.from(candidateMap.values()).find(c => c.uid === fUid);
+      const ident = resolveIdentity(fUid);
+
+      let student = candidateMap.get(fUid);
+      if (!student && ident.email) {
+        student = candidateMap.get(ident.email);
+      }
+
       if (!student) {
-        // Check if student email is stored in flag data or create provisional entry
         student = {
           uid: fUid,
-          email: `candidate_${fUid.substring(0, 6)}`,
-          name: `Candidate (${fUid.substring(0, 6)})`,
+          email: ident.email,
+          name: ident.name,
+          roll: ident.roll,
           status: 'active',
           startedAt: null,
           submittedAt: null,
@@ -243,23 +378,37 @@ export async function POST(req: NextRequest) {
           latestSnapshot: null,
           flags: [],
         };
-        candidateMap.set(student.email, student);
+        candidateMap.set(fUid, student);
+      } else {
+        student.uid = fUid;
+        if (ident.name && student.name.startsWith('Candidate (')) student.name = ident.name;
+        if (ident.email && student.email.startsWith('candidate_')) student.email = ident.email;
+        if (ident.roll) student.roll = ident.roll;
       }
 
       if (student.status !== 'submitted') {
         student.status = 'active';
       }
 
-      // Process flags
-      const sortedFlags = flagEntries.map(([fKey, flagVal]) => ({
-        id: fKey,
-        event: flagVal.event || 'Infraction',
-        severity: flagVal.severity || 'medium',
-        timestamp: flagVal.timestamp || flagVal.createdAt || new Date().toISOString(),
-        duration: flagVal.duration,
-        snapshot: flagVal.snapshot,
-        detection: flagVal.detection,
-      })).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      // Process and normalize flags
+      // IMPORTANT: In RTDB, snapshots are stored as evidenceSnapshot (or snapshot)
+      // Timestamps are stored as startTime (or timestamp / createdAt)
+      // Durations are stored as durationInSeconds (or duration)
+      const sortedFlags = flagEntries.map(([fKey, flagVal]) => {
+        const rawSnapshot = flagVal.evidenceSnapshot || flagVal.snapshot || flagVal.evidence || flagVal.proof || null;
+        const rawTime = flagVal.startTime || flagVal.timestamp || flagVal.createdAt || flagVal.endTime || new Date().toISOString();
+        const rawDuration = flagVal.durationInSeconds ?? flagVal.duration ?? 0;
+
+        return {
+          id: fKey,
+          event: flagVal.event || 'Infraction',
+          severity: (flagVal.severity || 'medium').toLowerCase(),
+          timestamp: rawTime,
+          duration: rawDuration,
+          snapshot: rawSnapshot,
+          detection: flagVal.detection || null,
+        };
+      }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
       student.flags = sortedFlags;
       student.flagCount = sortedFlags.length;
@@ -269,6 +418,8 @@ export async function POST(req: NextRequest) {
 
       if (sortedFlags.length > 0) {
         student.latestEvent = sortedFlags[0].event;
+
+        // Find the most recent flag that contains a captured proof snapshot
         const flagWithSnapshot = sortedFlags.find(f => f.snapshot);
         if (flagWithSnapshot) {
           student.latestSnapshot = flagWithSnapshot.snapshot || null;
@@ -283,7 +434,7 @@ export async function POST(req: NextRequest) {
 
     const candidateList = Array.from(candidateMap.values());
 
-    // Sort: Active candidates with high flags first, then other active, then submitted, then not started
+    // Sort: Active candidates with infractions first, then active, then submitted, then not started
     candidateList.sort((a, b) => {
       const statusWeight = (s: string) => (s === 'active' ? 3 : s === 'submitted' ? 2 : 1);
       const diff = statusWeight(b.status) - statusWeight(a.status);

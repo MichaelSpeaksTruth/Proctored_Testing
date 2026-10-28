@@ -18,6 +18,7 @@ import {
   X,
   Download,
   Radio,
+  Maximize2,
 } from 'lucide-react';
 
 export interface ProctorFlag {
@@ -26,7 +27,7 @@ export interface ProctorFlag {
   severity: string;
   timestamp: string | number;
   duration?: number;
-  snapshot?: string;
+  snapshot?: string | null;
   detection?: any;
 }
 
@@ -34,6 +35,7 @@ export interface CandidateStats {
   uid: string;
   email: string;
   name: string;
+  roll?: string;
   status: 'active' | 'submitted' | 'not_started';
   startedAt: string | null;
   submittedAt: string | null;
@@ -166,6 +168,7 @@ export default function LiveStatsView({ userRole }: { userRole?: string }) {
         !q ||
         c.name.toLowerCase().includes(q) ||
         c.email.toLowerCase().includes(q) ||
+        (c.roll && c.roll.toLowerCase().includes(q)) ||
         c.uid.toLowerCase().includes(q);
 
       if (!matches) return false;
@@ -390,7 +393,7 @@ export default function LiveStatsView({ userRole }: { userRole?: string }) {
           <Search size={14} color="#666" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
           <input
             type="text"
-            placeholder="Search candidate name, email, or UID..."
+            placeholder="Search candidate name, email, roll, or UID..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             style={{
@@ -492,12 +495,12 @@ export default function LiveStatsView({ userRole }: { userRole?: string }) {
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))',
-          gap: 10,
+          gap: 12,
         }}>
           {filteredCandidates.map(c => {
             const isHighRisk = c.highFlags > 0;
             const isMediumRisk = c.mediumFlags > 0;
-            const hasSnapshots = c.flags.some(f => f.snapshot);
+            const hasSnapshots = Boolean(c.latestSnapshot) || c.flags.some(f => Boolean(f.snapshot));
 
             return (
               <div
@@ -579,12 +582,78 @@ export default function LiveStatsView({ userRole }: { userRole?: string }) {
                   <div style={{ marginBottom: 10 }}>
                     <div style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary, #f5f5f5)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <User size={13} color="#777" />
-                      {c.name}
+                      <span>{c.name}</span>
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #aaa)', marginTop: 2, wordBreak: 'break-all', fontFamily: 'var(--font-mono, monospace)' }}>
                       {c.email}
                     </div>
+                    {c.roll && (
+                      <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 1, fontFamily: 'var(--font-mono, monospace)' }}>
+                        Roll: {c.roll}
+                      </div>
+                    )}
                   </div>
+
+                  {/* ── LIVE PROCTORING SNAPSHOT PROOF FRAME ─────── */}
+                  {c.latestSnapshot && (
+                    <div
+                      onClick={() => setActiveSnapshotModal({
+                        src: c.latestSnapshot!,
+                        event: c.latestEvent || 'Active Infraction Proof',
+                        timestamp: c.lastSeen || new Date().toISOString(),
+                        candidateName: c.name,
+                      })}
+                      style={{
+                        width: '100%',
+                        height: 128,
+                        background: '#000',
+                        border: '1px solid #282828',
+                        borderRadius: 3,
+                        marginBottom: 10,
+                        overflow: 'hidden',
+                        position: 'relative',
+                        cursor: 'pointer',
+                      }}
+                      title="Click to view full resolution snapshot"
+                    >
+                      <img
+                        src={c.latestSnapshot}
+                        alt="Latest Camera Snapshot"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      <div style={{
+                        position: 'absolute',
+                        bottom: 4,
+                        right: 6,
+                        background: 'rgba(0,0,0,0.8)',
+                        color: '#f5f5f5',
+                        fontSize: '0.625rem',
+                        padding: '2px 6px',
+                        borderRadius: 2,
+                        fontFamily: 'var(--font-mono, monospace)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}>
+                        <Maximize2 size={10} />
+                        ZOOM PROOF
+                      </div>
+                      <div style={{
+                        position: 'absolute',
+                        top: 4,
+                        left: 6,
+                        background: 'rgba(0,0,0,0.75)',
+                        color: '#52b788',
+                        fontSize: '0.6rem',
+                        padding: '1px 5px',
+                        borderRadius: 2,
+                        fontFamily: 'var(--font-mono, monospace)',
+                        textTransform: 'uppercase',
+                      }}>
+                        📷 CAPTURED PROOF
+                      </div>
+                    </div>
+                  )}
 
                   {/* Telemetry Flags Block */}
                   <div style={{
@@ -714,7 +783,7 @@ export default function LiveStatsView({ userRole }: { userRole?: string }) {
             border: '1px solid var(--border-light, #252525)',
             borderRadius: 4,
             width: '100%',
-            maxWidth: 760,
+            maxWidth: 780,
             maxHeight: '88vh',
             display: 'flex',
             flexDirection: 'column',
@@ -732,7 +801,7 @@ export default function LiveStatsView({ userRole }: { userRole?: string }) {
                   Proctoring Telemetry: {inspectCandidate.name}
                 </h3>
                 <span style={{ fontSize: '0.75rem', color: '#888', fontFamily: 'var(--font-mono, monospace)' }}>
-                  {inspectCandidate.email} • UID: {inspectCandidate.uid}
+                  {inspectCandidate.email} {inspectCandidate.roll ? `• Roll: ${inspectCandidate.roll}` : ''} • UID: {inspectCandidate.uid}
                 </span>
               </div>
               <button
@@ -810,8 +879,8 @@ export default function LiveStatsView({ userRole }: { userRole?: string }) {
                             candidateName: inspectCandidate.name,
                           })}
                           style={{
-                            width: 80,
-                            height: 56,
+                            width: 100,
+                            height: 70,
                             borderRadius: 2,
                             overflow: 'hidden',
                             position: 'relative',
@@ -827,11 +896,24 @@ export default function LiveStatsView({ userRole }: { userRole?: string }) {
                             alt="Infraction Evidence"
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                           />
+                          <div style={{
+                            position: 'absolute',
+                            bottom: 2,
+                            right: 4,
+                            background: 'rgba(0,0,0,0.8)',
+                            padding: '1px 4px',
+                            borderRadius: 2,
+                            fontSize: '0.55rem',
+                            color: '#fff',
+                            fontFamily: 'var(--font-mono, monospace)',
+                          }}>
+                            ZOOM
+                          </div>
                         </div>
                       ) : (
                         <div style={{
-                          width: 80,
-                          height: 56,
+                          width: 100,
+                          height: 70,
                           borderRadius: 2,
                           background: '#121212',
                           border: '1px dashed #242424',
@@ -842,8 +924,10 @@ export default function LiveStatsView({ userRole }: { userRole?: string }) {
                           fontSize: '0.625rem',
                           fontFamily: 'var(--font-mono, monospace)',
                           flexShrink: 0,
+                          textAlign: 'center',
+                          padding: 4,
                         }}>
-                          NO PROOF
+                          NO CAMERA CAPTURE
                         </div>
                       )}
 
@@ -869,7 +953,7 @@ export default function LiveStatsView({ userRole }: { userRole?: string }) {
 
                         <div style={{ fontSize: '0.72rem', color: '#777', fontFamily: 'var(--font-mono, monospace)', display: 'flex', gap: 12 }}>
                           <span>Time: {formatDateTime(f.timestamp)}</span>
-                          {f.duration && <span>Duration: {f.duration}s</span>}
+                          {f.duration !== undefined && f.duration > 0 && <span>Duration: {f.duration}s</span>}
                         </div>
 
                         {f.detection && (
